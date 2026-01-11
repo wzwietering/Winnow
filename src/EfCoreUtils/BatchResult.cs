@@ -5,10 +5,10 @@
 /// </summary>
 public class BatchResult
 {
-    public IReadOnlyList<int> SuccessfulIds { get; init; } = Array.Empty<int>();
+    public IReadOnlyList<int> SuccessfulIds { get; init; } = [];
     public int SuccessCount => SuccessfulIds.Count;
 
-    public IReadOnlyList<BatchFailure> Failures { get; init; } = Array.Empty<BatchFailure>();
+    public IReadOnlyList<BatchFailure> Failures { get; init; } = [];
     public IReadOnlyList<int> FailedIds => Failures.Select(f => f.EntityId).ToList();
     public int FailureCount => Failures.Count;
 

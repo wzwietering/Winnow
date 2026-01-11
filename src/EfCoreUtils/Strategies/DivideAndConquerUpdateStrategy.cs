@@ -4,13 +4,22 @@ namespace EfCoreUtils.Strategies;
 
 internal class DivideAndConquerUpdateStrategy<TEntity> : IBatchUpdateStrategy<TEntity> where TEntity : class
 {
-    public BatchResult Execute(List<TEntity> entities, BatchStrategyContext<TEntity> context)
+    public BatchResult Execute(List<TEntity> entities, BatchStrategyContext<TEntity> context, BatchOptions options)
     {
         var successfulIds = new List<int>();
         var failures = new List<BatchFailure>();
 
+        // Validate navigation properties BEFORE detaching
+        if (options.ValidateNavigationProperties)
+        {
+            foreach (var entity in entities)
+            {
+                context.ValidateNoModifiedNavigationProperties(entity);
+            }
+        }
+
         context.DetachAllEntities(entities);
-        ProcessBatch(entities, context, successfulIds, failures);
+        ProcessBatch(entities, context, options, successfulIds, failures);
 
         return DivideAndConquerUpdateStrategy<TEntity>.CreateResult(successfulIds, failures);
     }
@@ -18,6 +27,7 @@ internal class DivideAndConquerUpdateStrategy<TEntity> : IBatchUpdateStrategy<TE
     private void ProcessBatch(
         List<TEntity> entities,
         BatchStrategyContext<TEntity> context,
+        BatchOptions options,
         List<int> successfulIds,
         List<BatchFailure> failures)
     {
@@ -28,21 +38,22 @@ internal class DivideAndConquerUpdateStrategy<TEntity> : IBatchUpdateStrategy<TE
 
         if (entities.Count == 1)
         {
-            DivideAndConquerUpdateStrategy<TEntity>.ProcessSingleEntity(entities[0], context, successfulIds, failures);
+            DivideAndConquerUpdateStrategy<TEntity>.ProcessSingleEntity(entities[0], context, options, successfulIds, failures);
             return;
         }
 
-        if (DivideAndConquerUpdateStrategy<TEntity>.TryBatchUpdate(entities, context, successfulIds))
+        if (DivideAndConquerUpdateStrategy<TEntity>.TryBatchUpdate(entities, context, options, successfulIds))
         {
             return;
         }
 
-        SplitAndRecurse(entities, context, successfulIds, failures);
+        SplitAndRecurse(entities, context, options, successfulIds, failures);
     }
 
     private static void ProcessSingleEntity(
         TEntity entity,
         BatchStrategyContext<TEntity> context,
+        BatchOptions options,
         List<int> successfulIds,
         List<BatchFailure> failures)
     {
@@ -66,6 +77,7 @@ internal class DivideAndConquerUpdateStrategy<TEntity> : IBatchUpdateStrategy<TE
     private static bool TryBatchUpdate(
         List<TEntity> entities,
         BatchStrategyContext<TEntity> context,
+        BatchOptions options,
         List<int> successfulIds)
     {
         try
@@ -113,6 +125,7 @@ internal class DivideAndConquerUpdateStrategy<TEntity> : IBatchUpdateStrategy<TE
     private void SplitAndRecurse(
         List<TEntity> entities,
         BatchStrategyContext<TEntity> context,
+        BatchOptions options,
         List<int> successfulIds,
         List<BatchFailure> failures)
     {
@@ -120,8 +133,8 @@ internal class DivideAndConquerUpdateStrategy<TEntity> : IBatchUpdateStrategy<TE
         var firstHalf = entities.Take(midpoint).ToList();
         var secondHalf = entities.Skip(midpoint).ToList();
 
-        ProcessBatch(firstHalf, context, successfulIds, failures);
-        ProcessBatch(secondHalf, context, successfulIds, failures);
+        ProcessBatch(firstHalf, context, options, successfulIds, failures);
+        ProcessBatch(secondHalf, context, options, successfulIds, failures);
     }
 
     private static void HandleFailure(

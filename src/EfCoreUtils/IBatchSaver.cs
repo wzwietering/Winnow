@@ -11,6 +11,12 @@ public interface IBatchSaver<TEntity> where TEntity : class
 public class BatchOptions
 {
     public BatchStrategy Strategy { get; set; } = BatchStrategy.OneByOne;
+
+    /// <summary>
+    /// When true (default), validates that navigation properties are not modified.
+    /// Set to false to allow navigation properties to be loaded but ignored.
+    /// </summary>
+    public bool ValidateNavigationProperties { get; set; } = true;
 }
 
 public enum BatchStrategy

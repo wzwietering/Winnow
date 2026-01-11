@@ -98,4 +98,80 @@ public class TestDataBuilder
             context.SaveChanges();
         }
     }
+
+    public List<CustomerOrder> CreateValidCustomerOrders(int count, int itemsPerOrder = 3)
+    {
+        var orders = new List<CustomerOrder>();
+        for (int i = 1; i <= count; i++)
+        {
+            var items = CreateOrderItems(i, itemsPerOrder);
+            var totalAmount = items.Sum(item => item.Subtotal);
+
+            orders.Add(new CustomerOrder
+            {
+                Id = i,
+                OrderNumber = $"ORD-{i:D6}",
+                CustomerId = 1000 + i,
+                CustomerName = $"Customer {i}",
+                Status = CustomerOrderStatus.Pending,
+                TotalAmount = totalAmount,
+                OrderDate = DateTimeOffset.UtcNow.AddDays(-i),
+                OrderItems = items
+            });
+        }
+        return orders;
+    }
+
+    private List<OrderItem> CreateOrderItems(int orderId, int count)
+    {
+        var items = new List<OrderItem>();
+        for (int i = 1; i <= count; i++)
+        {
+            var quantity = i + 1;
+            var unitPrice = 10.00m + i;
+            items.Add(new OrderItem
+            {
+                Id = (orderId * 100) + i,
+                CustomerOrderId = orderId,
+                ProductId = 1000 + i,
+                ProductName = $"Product {i}",
+                Quantity = quantity,
+                UnitPrice = unitPrice,
+                Subtotal = quantity * unitPrice
+            });
+        }
+        return items;
+    }
+
+    public List<CustomerOrder> CreateOrdersWithInvalidTotalAmount(int totalCount, int invalidCount)
+    {
+        var orders = CreateValidCustomerOrders(totalCount);
+        for (int i = 0; i < invalidCount && i < orders.Count; i++)
+        {
+            orders[i].TotalAmount = -100.00m;
+        }
+        return orders;
+    }
+
+    public List<CustomerOrder> CreateOrdersWithInvalidItems(int totalCount, int invalidCount)
+    {
+        var orders = CreateValidCustomerOrders(totalCount);
+        for (int i = 0; i < invalidCount && i < orders.Count; i++)
+        {
+            var firstItem = orders[i].OrderItems.FirstOrDefault();
+            if (firstItem != null)
+            {
+                firstItem.Quantity = -5;
+            }
+        }
+        return orders;
+    }
+
+    public void SeedCustomerOrders(TestDbContext context, int orderCount, int itemsPerOrder = 3)
+    {
+        var orders = CreateValidCustomerOrders(orderCount, itemsPerOrder);
+        context.CustomerOrders.AddRange(orders);
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+    }
 }

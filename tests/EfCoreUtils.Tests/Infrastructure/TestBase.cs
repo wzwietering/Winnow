@@ -28,6 +28,12 @@ public abstract class TestBase : IDisposable
         context.ChangeTracker.Clear();
     }
 
+    protected void SeedCustomerOrders(TestDbContext context, int orderCount, int itemsPerOrder = 3)
+    {
+        var builder = new TestDataBuilder();
+        builder.SeedCustomerOrders(context, orderCount, itemsPerOrder);
+    }
+
     protected void CleanupContext(TestDbContext context)
     {
         context.Database.EnsureDeleted();

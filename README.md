@@ -79,3 +79,69 @@ The `BatchResult` class provides detailed tracking:
 - `DatabaseRoundTrips`: Number of database calls made
 - `Duration`: Total time taken
 - `IsCompleteSuccess`, `IsPartialSuccess`, `IsCompleteFailure`: Status helpers
+
+## Working With Navigation Properties
+
+### Parent-Only Updates (Supported in Phase 1)
+
+BatchSaver is designed for high-volume parent-only updates:
+
+```csharp
+// ✅ BEST: Don't load children (optimal performance)
+var orders = context.CustomerOrders.ToList();
+orders.ForEach(o => o.Status = Status.Shipped);
+var result = saver.UpdateBatch(orders);
+
+// ⚠️ WORKS: Children loaded but ignored (wastes memory)
+var orders = context.CustomerOrders
+    .Include(o => o.OrderItems) // Loaded but not updated
+    .ToList();
+var result = saver.UpdateBatch(orders); // Only parent updates
+```
+
+### What Happens If You Modify Children?
+
+By default, BatchSaver detects and rejects modified navigation properties:
+
+```csharp
+var orders = context.CustomerOrders.Include(o => o.OrderItems).ToList();
+orders[0].OrderItems[0].Quantity = 10; // Modify child
+
+// Throws: "Entity CustomerOrder has modified navigation properties: OrderItems..."
+var result = saver.UpdateBatch(orders);
+```
+
+To disable validation (advanced):
+```csharp
+var result = saver.UpdateBatch(orders, new BatchOptions
+{
+    ValidateNavigationProperties = false // Children silently ignored
+});
+```
+
+### Entity Graph Updates (Future: Phase 2)
+
+To update parent + children together:
+```csharp
+// For now, use standard EF Core
+foreach (var order in orders)
+{
+    order.Status = Status.Processing;
+    order.OrderItems[0].Quantity += 1;
+}
+context.SaveChanges();
+
+// Future: BatchSaver will support graph updates
+// var result = saver.UpdateGraphBatch(orders);
+```
+
+### Performance: Include() Overhead
+
+Loading navigation properties has overhead even if not updated:
+
+| Scenario | Time | Memory |
+|----------|------|--------|
+| Without .Include() | Baseline | Baseline |
+| With .Include() (3 items/order) | +15-20% | +3x entities |
+
+**Recommendation**: Only use `.Include()` if you need the child data for business logic.

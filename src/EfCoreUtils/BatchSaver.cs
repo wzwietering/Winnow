@@ -7,11 +7,28 @@ public class BatchSaver<TEntity>(DbContext context) : IBatchSaver<TEntity> where
 {
     private readonly DbContext _context = context ?? throw new ArgumentNullException(nameof(context));
 
+    /// <summary>
+    /// Updates a batch of entities using the default strategy (OneByOne).
+    /// Only properties of TEntity are updated. Navigation properties are NOT updated
+    /// even if loaded with .Include(). For entity graph updates, use standard EF Core SaveChanges().
+    /// </summary>
+    /// <param name="entities">The entities to update</param>
+    /// <returns>Result containing successful IDs, failures, and performance metrics</returns>
+    /// <exception cref="InvalidOperationException">Thrown when navigation properties are modified and ValidateNavigationProperties is true</exception>
     public BatchResult UpdateBatch(IEnumerable<TEntity> entities)
     {
         return UpdateBatch(entities, new BatchOptions());
     }
 
+    /// <summary>
+    /// Updates a batch of entities using the specified strategy and options.
+    /// Only properties of TEntity are updated. Navigation properties are NOT updated
+    /// even if loaded with .Include(). For entity graph updates, use standard EF Core SaveChanges().
+    /// </summary>
+    /// <param name="entities">The entities to update</param>
+    /// <param name="options">Batch operation options</param>
+    /// <returns>Result containing successful IDs, failures, and performance metrics</returns>
+    /// <exception cref="InvalidOperationException">Thrown when navigation properties are modified and ValidateNavigationProperties is true</exception>
     public BatchResult UpdateBatch(IEnumerable<TEntity> entities, BatchOptions options)
     {
         ArgumentNullException.ThrowIfNull(entities);
@@ -26,7 +43,7 @@ public class BatchSaver<TEntity>(DbContext context) : IBatchSaver<TEntity> where
 
         var strategyContext = new BatchStrategyContext<TEntity>(_context);
         var strategy = BatchStrategyFactory.CreateStrategy<TEntity>(options.Strategy);
-        var result = strategy.Execute(entityList, strategyContext);
+        var result = strategy.Execute(entityList, strategyContext, options);
 
         stopwatch.Stop();
 
@@ -48,8 +65,8 @@ public class BatchSaver<TEntity>(DbContext context) : IBatchSaver<TEntity> where
         stopwatch.Stop();
         return new BatchResult
         {
-            SuccessfulIds = Array.Empty<int>(),
-            Failures = Array.Empty<BatchFailure>(),
+            SuccessfulIds = [],
+            Failures = [],
             Duration = stopwatch.Elapsed,
             DatabaseRoundTrips = 0
         };

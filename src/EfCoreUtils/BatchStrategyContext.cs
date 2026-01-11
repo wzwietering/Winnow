@@ -67,7 +67,102 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
     {
         foreach (var entity in entities)
         {
-            DetachEntity(entity);
+            DetachEntityGraph(entity);
+        }
+    }
+
+    private void DetachEntityGraph(TEntity entity)
+    {
+        var entry = _context.Entry(entity);
+
+        // Detach navigation properties first
+        foreach (var navigation in entry.Navigations)
+        {
+            if (navigation.CurrentValue != null)
+            {
+                if (navigation.Metadata.IsCollection)
+                {
+                    var collection = navigation.CurrentValue as System.Collections.IEnumerable;
+                    if (collection != null)
+                    {
+                        foreach (var item in collection)
+                        {
+                            var itemEntry = _context.Entry(item);
+                            if (itemEntry.State != EntityState.Detached)
+                            {
+                                itemEntry.State = EntityState.Detached;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    var navEntry = _context.Entry(navigation.CurrentValue);
+                    if (navEntry.State != EntityState.Detached)
+                    {
+                        navEntry.State = EntityState.Detached;
+                    }
+                }
+            }
+        }
+
+        // Then detach the parent entity
+        DetachEntity(entity);
+    }
+
+    internal void ValidateNoModifiedNavigationProperties(TEntity entity)
+    {
+        var entry = _context.Entry(entity);
+        var modifiedNavigations = new List<string>();
+
+        foreach (var navigation in entry.Navigations)
+        {
+            if (navigation.CurrentValue == null)
+            {
+                continue;
+            }
+
+            // Check collection navigations
+            if (navigation.Metadata.IsCollection)
+            {
+                var collection = navigation.CurrentValue as System.Collections.IEnumerable;
+                if (collection != null)
+                {
+                    foreach (var item in collection)
+                    {
+                        var itemEntry = _context.Entry(item);
+                        if (itemEntry.State == EntityState.Added ||
+                            itemEntry.State == EntityState.Deleted ||
+                            itemEntry.State == EntityState.Modified)
+                        {
+                            modifiedNavigations.Add($"{navigation.Metadata.Name} (collection items)");
+                            break;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // Check reference navigation
+                var navEntry = _context.Entry(navigation.CurrentValue);
+                if (navEntry.State == EntityState.Modified ||
+                    navEntry.State == EntityState.Added ||
+                    navEntry.State == EntityState.Deleted)
+                {
+                    modifiedNavigations.Add(navigation.Metadata.Name);
+                }
+            }
+        }
+
+        if (modifiedNavigations.Any())
+        {
+            var entityId = GetEntityId(entity);
+            throw new InvalidOperationException(
+                $"Entity {typeof(TEntity).Name} (Id={entityId}) has modified navigation properties: " +
+                $"{string.Join(", ", modifiedNavigations)}. " +
+                $"BatchSaver<{typeof(TEntity).Name}> only updates parent entities. " +
+                $"To update entity graphs, use standard EF Core SaveChanges() or set " +
+                $"BatchOptions.ValidateNavigationProperties = false to suppress this check.");
         }
     }
 }

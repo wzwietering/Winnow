@@ -4,16 +4,25 @@ namespace EfCoreUtils.Strategies;
 
 internal class OneByOneUpdateStrategy<TEntity> : IBatchUpdateStrategy<TEntity> where TEntity : class
 {
-    public BatchResult Execute(List<TEntity> entities, BatchStrategyContext<TEntity> context)
+    public BatchResult Execute(List<TEntity> entities, BatchStrategyContext<TEntity> context, BatchOptions options)
     {
         var successfulIds = new List<int>();
         var failures = new List<BatchFailure>();
+
+        // Validate navigation properties BEFORE detaching
+        if (options.ValidateNavigationProperties)
+        {
+            foreach (var entity in entities)
+            {
+                context.ValidateNoModifiedNavigationProperties(entity);
+            }
+        }
 
         context.DetachAllEntities(entities);
 
         foreach (var entity in entities)
         {
-            ProcessSingleEntity(entity, context, successfulIds, failures);
+            ProcessSingleEntity(entity, context, options, successfulIds, failures);
         }
 
         return OneByOneUpdateStrategy<TEntity>.CreateResult(successfulIds, failures);
@@ -22,6 +31,7 @@ internal class OneByOneUpdateStrategy<TEntity> : IBatchUpdateStrategy<TEntity> w
     private void ProcessSingleEntity(
         TEntity entity,
         BatchStrategyContext<TEntity> context,
+        BatchOptions options,
         List<int> successfulIds,
         List<BatchFailure> failures)
     {
