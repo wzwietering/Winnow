@@ -193,7 +193,7 @@ public class BatchSaverGraphTests : TestBase
         using var context = CreateContext();
 
         var saver = new BatchSaver<CustomerOrder>(context);
-        var result = saver.UpdateGraphBatch(new List<CustomerOrder>());
+        var result = saver.UpdateGraphBatch([]);
 
         result.IsCompleteSuccess.ShouldBeFalse();
         result.SuccessCount.ShouldBe(0);
@@ -230,5 +230,160 @@ public class BatchSaverGraphTests : TestBase
         result.ChildIdsByParentId.ShouldNotBeNull();
         result.ChildIdsByParentId.Count.ShouldBe(100);
         result.DatabaseRoundTrips.ShouldBe(100); // OneByOne = 100 round trips
+    }
+
+    // ========== Orphan Detection Tests ==========
+
+    [Fact]
+    public void UpdateGraphBatch_OrphanThrow_ThrowsWhenChildRemoved()
+    {
+        using var context = CreateContext();
+        SeedCustomerOrders(context, 3, itemsPerOrder: 3);
+
+        var orders = context.CustomerOrders.Include(o => o.OrderItems).ToList();
+        var removedItemId = orders[0].OrderItems.First().Id;
+
+        // Remove a child from the collection
+        orders[0].OrderItems.Remove(orders[0].OrderItems.First());
+
+        var saver = new BatchSaver<CustomerOrder>(context);
+        var ex = Should.Throw<InvalidOperationException>(() =>
+            saver.UpdateGraphBatch(orders)); // Default is OrphanBehavior.Throw
+
+        ex.Message.ShouldContain("orphaned");
+        ex.Message.ShouldContain(removedItemId.ToString());
+    }
+
+    [Fact]
+    public void UpdateGraphBatch_OrphanDelete_RemovesChildFromDatabase()
+    {
+        using var context = CreateContext();
+        SeedCustomerOrders(context, 3, itemsPerOrder: 3);
+
+        var orders = context.CustomerOrders.Include(o => o.OrderItems).ToList();
+        var removedItemId = orders[0].OrderItems.First().Id;
+
+        // Remove a child from the collection
+        orders[0].OrderItems.Remove(orders[0].OrderItems.First());
+        orders[0].Status = CustomerOrderStatus.Processing;
+
+        var saver = new BatchSaver<CustomerOrder>(context);
+        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        {
+            OrphanedChildBehavior = OrphanBehavior.Delete
+        });
+
+        // Debug: check failures
+        if (result.Failures.Any())
+        {
+            var failureMessages = string.Join("; ", result.Failures.Select(f => $"Id={f.EntityId}: {f.ErrorMessage} ({f.Reason})"));
+            throw new Exception($"Unexpected failures: {failureMessages}");
+        }
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        // Verify child was deleted from database
+        context.ChangeTracker.Clear();
+        var deletedItem = context.OrderItems.Find(removedItemId);
+        deletedItem.ShouldBeNull();
+
+        // Verify remaining children still exist
+        var verifyOrder = context.CustomerOrders.Include(o => o.OrderItems).First(o => o.Id == orders[0].Id);
+        verifyOrder.OrderItems.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public void UpdateGraphBatch_OrphanDetach_LeavesChildInDatabase()
+    {
+        using var context = CreateContext();
+        SeedCustomerOrders(context, 3, itemsPerOrder: 3);
+
+        var orders = context.CustomerOrders.Include(o => o.OrderItems).ToList();
+        var removedItemId = orders[0].OrderItems.First().Id;
+
+        // Remove a child from the collection
+        orders[0].OrderItems.Remove(orders[0].OrderItems.First());
+        orders[0].Status = CustomerOrderStatus.Processing;
+
+        var saver = new BatchSaver<CustomerOrder>(context);
+        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        {
+            OrphanedChildBehavior = OrphanBehavior.Detach
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        // Verify child still exists in database (orphaned but not deleted)
+        context.ChangeTracker.Clear();
+        var orphanedItem = context.OrderItems.Find(removedItemId);
+        orphanedItem.ShouldNotBeNull();
+    }
+
+    [Fact]
+    public void UpdateGraphBatch_OrphanDelete_AllChildrenRemoved()
+    {
+        using var context = CreateContext();
+        SeedCustomerOrders(context, 3, itemsPerOrder: 3);
+
+        var orders = context.CustomerOrders.Include(o => o.OrderItems).ToList();
+        var removedItemIds = orders[0].OrderItems.Select(i => i.Id).ToList();
+
+        // Remove ALL children from the collection
+        orders[0].OrderItems.Clear();
+        orders[0].Status = CustomerOrderStatus.Completed;
+
+        var saver = new BatchSaver<CustomerOrder>(context);
+        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        {
+            OrphanedChildBehavior = OrphanBehavior.Delete
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        // Verify all children were deleted from database
+        context.ChangeTracker.Clear();
+        foreach (var itemId in removedItemIds)
+        {
+            var deletedItem = context.OrderItems.Find(itemId);
+            deletedItem.ShouldBeNull();
+        }
+
+        // Verify order still exists
+        var verifyOrder = context.CustomerOrders.Include(o => o.OrderItems).First(o => o.Id == orders[0].Id);
+        verifyOrder.OrderItems.Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public void UpdateGraphBatch_OrphanDelete_MultipleOrphansFromMultipleGraphs()
+    {
+        using var context = CreateContext();
+        SeedCustomerOrders(context, 3, itemsPerOrder: 3);
+
+        var orders = context.CustomerOrders.Include(o => o.OrderItems).ToList();
+        var removedItem1 = orders[0].OrderItems.First();
+        var removedItem2 = orders[1].OrderItems.First();
+
+        // Remove one child from each of two orders
+        orders[0].OrderItems.Remove(removedItem1);
+        orders[1].OrderItems.Remove(removedItem2);
+
+        var saver = new BatchSaver<CustomerOrder>(context);
+        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        {
+            OrphanedChildBehavior = OrphanBehavior.Delete
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        // Verify both orphans were deleted
+        context.ChangeTracker.Clear();
+        context.OrderItems.Find(removedItem1.Id).ShouldBeNull();
+        context.OrderItems.Find(removedItem2.Id).ShouldBeNull();
+
+        // Verify remaining children
+        var verifyOrder0 = context.CustomerOrders.Include(o => o.OrderItems).First(o => o.Id == orders[0].Id);
+        var verifyOrder1 = context.CustomerOrders.Include(o => o.OrderItems).First(o => o.Id == orders[1].Id);
+        verifyOrder0.OrderItems.Count.ShouldBe(2);
+        verifyOrder1.OrderItems.Count.ShouldBe(2);
     }
 }

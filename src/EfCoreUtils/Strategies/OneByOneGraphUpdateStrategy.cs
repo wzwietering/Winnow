@@ -12,6 +12,12 @@ internal class OneByOneGraphUpdateStrategy<TEntity> : IBatchGraphUpdateStrategy<
         var failures = new List<BatchFailure>();
         var childIdsByParentId = new Dictionary<int, IReadOnlyList<int>>();
 
+        // Capture original child IDs BEFORE detaching (required for orphan detection)
+        context.CaptureAllOriginalChildIds(entities);
+
+        // Validate orphans BEFORE detaching (if OrphanBehavior.Throw)
+        ValidateAllOrphans(entities, context, options);
+
         context.DetachAllEntities(entities);
 
         foreach (var entity in entities)
@@ -20,6 +26,17 @@ internal class OneByOneGraphUpdateStrategy<TEntity> : IBatchGraphUpdateStrategy<
         }
 
         return CreateResult(successfulIds, failures, childIdsByParentId);
+    }
+
+    private static void ValidateAllOrphans(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity> context,
+        GraphBatchOptions options)
+    {
+        foreach (var entity in entities)
+        {
+            context.ValidateNoOrphanedChildren(entity, options);
+        }
     }
 
     private void ProcessSingleGraph(
@@ -36,6 +53,9 @@ internal class OneByOneGraphUpdateStrategy<TEntity> : IBatchGraphUpdateStrategy<
         {
             context.AttachEntityGraphAsModified(entity);
 
+            // Handle orphaned children (delete if OrphanBehavior.Delete)
+            context.HandleOrphanedChildren(entity, options);
+
             var childIds = context.GetChildIds(entity);
             context.Context.SaveChanges();
             context.IncrementRoundTrip();
@@ -49,7 +69,7 @@ internal class OneByOneGraphUpdateStrategy<TEntity> : IBatchGraphUpdateStrategy<
         }
         finally
         {
-            context.DetachEntity(entity);
+            context.DetachEntityWithOrphans(entity);
         }
     }
 
