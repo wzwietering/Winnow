@@ -138,4 +138,120 @@ public class StrategyComparisonNavigationTests : TestBase
         var saver = new BatchSaver<CustomerOrder>(context);
         return saver.UpdateBatch(orders, options);
     }
+
+    // ========== Graph Strategy Comparison Tests ==========
+
+    [Fact]
+    public void CompareGraphStrategies_0PercentFailure()
+    {
+        var (oneByOne, divideConquer) = CompareGraphStrategies(100, 0, "Graph 0% Failure");
+
+        divideConquer.DatabaseRoundTrips.ShouldBeLessThan(oneByOne.DatabaseRoundTrips);
+        oneByOne.SuccessCount.ShouldBe(100);
+        divideConquer.SuccessCount.ShouldBe(100);
+        divideConquer.DatabaseRoundTrips.ShouldBe(1);
+    }
+
+    [Fact]
+    public void CompareGraphStrategies_1PercentFailure()
+    {
+        var (oneByOne, divideConquer) = CompareGraphStrategies(100, 1, "Graph 1% Failure");
+
+        divideConquer.DatabaseRoundTrips.ShouldBeLessThan(oneByOne.DatabaseRoundTrips);
+        oneByOne.SuccessCount.ShouldBe(99);
+        divideConquer.SuccessCount.ShouldBe(99);
+    }
+
+    [Fact]
+    public void CompareGraphStrategies_5PercentFailure()
+    {
+        var (oneByOne, divideConquer) = CompareGraphStrategies(100, 5, "Graph 5% Failure");
+
+        oneByOne.SuccessCount.ShouldBe(95);
+        divideConquer.SuccessCount.ShouldBe(95);
+    }
+
+    [Fact]
+    public void CompareGraphStrategies_25PercentFailure()
+    {
+        var (oneByOne, divideConquer) = CompareGraphStrategies(100, 25, "Graph 25% Failure");
+
+        oneByOne.SuccessCount.ShouldBe(75);
+        divideConquer.SuccessCount.ShouldBe(75);
+    }
+
+    [Fact]
+    public void CompareGraphStrategies_100PercentFailure()
+    {
+        var (oneByOne, divideConquer) = CompareGraphStrategies(32, 32, "Graph 100% Failure");
+
+        oneByOne.FailureCount.ShouldBe(32);
+        divideConquer.FailureCount.ShouldBe(32);
+        divideConquer.DatabaseRoundTrips.ShouldBeGreaterThan(oneByOne.DatabaseRoundTrips);
+    }
+
+    private (BatchResult OneByOne, BatchResult DivideAndConquer) CompareGraphStrategies(
+        int orderCount,
+        int invalidCount,
+        string scenarioName)
+    {
+        // Test OneByOne strategy
+        using var context1 = CreateContext();
+        SeedCustomerOrders(context1, orderCount, itemsPerOrder: 3);
+
+        var ordersForOneByOne = context1.CustomerOrders
+            .Include(o => o.OrderItems)
+            .Take(orderCount)
+            .ToList();
+
+        ApplyGraphUpdates(ordersForOneByOne, invalidCount);
+        context1.ChangeTracker.DetectChanges();
+
+        var oneByOneResult = RunGraphWithStrategy(context1, ordersForOneByOne, BatchStrategy.OneByOne);
+
+        // Test DivideAndConquer with fresh context
+        using var context2 = CreateContext();
+        SeedCustomerOrders(context2, orderCount, itemsPerOrder: 3);
+
+        var ordersForDivideConquer = context2.CustomerOrders
+            .Include(o => o.OrderItems)
+            .Take(orderCount)
+            .ToList();
+
+        ApplyGraphUpdates(ordersForDivideConquer, invalidCount);
+        context2.ChangeTracker.DetectChanges();
+
+        var divideConquerResult = RunGraphWithStrategy(context2, ordersForDivideConquer, BatchStrategy.DivideAndConquer);
+
+        Console.WriteLine($"{scenarioName}:");
+        Console.WriteLine($"  OneByOne: {oneByOneResult.Duration.TotalMilliseconds}ms, {oneByOneResult.DatabaseRoundTrips} round trips");
+        Console.WriteLine($"  DivideAndConquer: {divideConquerResult.Duration.TotalMilliseconds}ms, {divideConquerResult.DatabaseRoundTrips} round trips");
+
+        return (oneByOneResult, divideConquerResult);
+    }
+
+    private static void ApplyGraphUpdates(List<CustomerOrder> orders, int invalidCount)
+    {
+        for (int i = 0; i < invalidCount && i < orders.Count; i++)
+        {
+            orders[i].TotalAmount = -100.00m;
+        }
+
+        for (int i = invalidCount; i < orders.Count; i++)
+        {
+            orders[i].Status = CustomerOrderStatus.Processing;
+            foreach (var item in orders[i].OrderItems)
+            {
+                item.Quantity += 1;
+                item.Subtotal = item.Quantity * item.UnitPrice;
+            }
+        }
+    }
+
+    private static BatchResult RunGraphWithStrategy(TestDbContext context, List<CustomerOrder> orders, BatchStrategy strategy)
+    {
+        var options = new GraphBatchOptions { Strategy = strategy };
+        var saver = new BatchSaver<CustomerOrder>(context);
+        return saver.UpdateGraphBatch(orders, options);
+    }
 }

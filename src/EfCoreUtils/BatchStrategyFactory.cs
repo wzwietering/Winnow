@@ -21,8 +21,7 @@ internal static class BatchStrategyFactory
         return strategy switch
         {
             BatchStrategy.OneByOne => new OneByOneGraphUpdateStrategy<TEntity>(),
-            BatchStrategy.DivideAndConquer => throw new NotImplementedException(
-                "DivideAndConquer strategy for graph updates is not yet implemented. Use OneByOne."),
+            BatchStrategy.DivideAndConquer => new DivideAndConquerGraphUpdateStrategy<TEntity>(),
             _ => throw new ArgumentException($"Unknown strategy: {strategy}")
         };
     }
