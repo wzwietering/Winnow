@@ -82,8 +82,7 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
             {
                 if (navigation.Metadata.IsCollection)
                 {
-                    var collection = navigation.CurrentValue as System.Collections.IEnumerable;
-                    if (collection != null)
+                    if (navigation.CurrentValue is System.Collections.IEnumerable collection)
                     {
                         foreach (var item in collection)
                         {
@@ -125,8 +124,7 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
             // Check collection navigations
             if (navigation.Metadata.IsCollection)
             {
-                var collection = navigation.CurrentValue as System.Collections.IEnumerable;
-                if (collection != null)
+                if (navigation.CurrentValue is System.Collections.IEnumerable collection)
                 {
                     foreach (var item in collection)
                     {
@@ -154,7 +152,7 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
             }
         }
 
-        if (modifiedNavigations.Any())
+        if (modifiedNavigations.Count != 0)
         {
             var entityId = GetEntityId(entity);
             throw new InvalidOperationException(
@@ -163,6 +161,84 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
                 $"BatchSaver<{typeof(TEntity).Name}> only updates parent entities. " +
                 $"To update entity graphs, use standard EF Core SaveChanges() or set " +
                 $"BatchOptions.ValidateNavigationProperties = false to suppress this check.");
+        }
+    }
+
+    // ========== Graph Update Methods (Phase 2) ==========
+
+    internal void AttachEntityGraphAsModified(TEntity entity)
+    {
+        var entry = _context.Entry(entity);
+        entry.State = EntityState.Modified;
+
+        foreach (var navigation in entry.Navigations)
+        {
+            if (navigation.CurrentValue == null || !navigation.Metadata.IsCollection)
+            {
+                continue;
+            }
+
+            AttachCollectionChildrenAsModified(navigation);
+        }
+    }
+
+    private void AttachCollectionChildrenAsModified(
+        Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation)
+    {
+        if (navigation.CurrentValue is not System.Collections.IEnumerable collection)
+        {
+            return;
+        }
+
+        foreach (var item in collection)
+        {
+            var itemEntry = _context.Entry(item);
+            if (itemEntry.State == EntityState.Detached)
+            {
+                itemEntry.State = EntityState.Modified;
+            }
+        }
+    }
+
+    internal List<int> GetChildIds(TEntity entity)
+    {
+        var childIds = new List<int>();
+        var entry = _context.Entry(entity);
+
+        foreach (var navigation in entry.Navigations)
+        {
+            if (navigation.CurrentValue == null || !navigation.Metadata.IsCollection)
+            {
+                continue;
+            }
+
+            AddChildIdsFromCollection(navigation, childIds);
+        }
+
+        return childIds;
+    }
+
+    private void AddChildIdsFromCollection(
+        Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation,
+        List<int> childIds)
+    {
+        if (navigation.CurrentValue is not System.Collections.IEnumerable collection)
+        {
+            return;
+        }
+
+        foreach (var item in collection)
+        {
+            var itemEntry = _context.Entry(item);
+            var keyProperty = itemEntry.Metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
+            if (keyProperty?.ClrType == typeof(int))
+            {
+                var keyValue = itemEntry.Property(keyProperty.Name).CurrentValue;
+                if (keyValue is int id)
+                {
+                    childIds.Add(id);
+                }
+            }
         }
     }
 }

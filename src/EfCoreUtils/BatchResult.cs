@@ -18,6 +18,12 @@ public class BatchResult
     public TimeSpan Duration { get; init; }
     public int DatabaseRoundTrips { get; init; }
 
+    /// <summary>
+    /// For graph operations only: Maps each successful parent ID to its child IDs.
+    /// Null for parent-only UpdateBatch operations.
+    /// </summary>
+    public IReadOnlyDictionary<int, IReadOnlyList<int>>? ChildIdsByParentId { get; init; }
+
     public bool IsCompleteSuccess => FailureCount == 0 && SuccessCount > 0;
     public bool IsCompleteFailure => SuccessCount == 0 && FailureCount > 0;
     public bool IsPartialSuccess => SuccessCount > 0 && FailureCount > 0;

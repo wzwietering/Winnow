@@ -60,6 +60,60 @@ public class BatchSaver<TEntity>(DbContext context) : IBatchSaver<TEntity> where
         return Task.FromResult(UpdateBatch(entities, options));
     }
 
+    /// <summary>
+    /// Updates a batch of entity graphs (parent + children) using the default options.
+    /// Each graph succeeds or fails as a unit - if any entity in a graph fails, the entire graph rolls back.
+    /// </summary>
+    /// <param name="entities">The parent entities with their navigation properties loaded</param>
+    /// <returns>Result containing successful IDs, failures, child IDs by parent, and performance metrics</returns>
+    public BatchResult UpdateGraphBatch(IEnumerable<TEntity> entities)
+    {
+        return UpdateGraphBatch(entities, new GraphBatchOptions());
+    }
+
+    /// <summary>
+    /// Updates a batch of entity graphs (parent + children) using the specified options.
+    /// Each graph succeeds or fails as a unit - if any entity in a graph fails, the entire graph rolls back.
+    /// </summary>
+    /// <param name="entities">The parent entities with their navigation properties loaded</param>
+    /// <param name="options">Graph batch operation options</param>
+    /// <returns>Result containing successful IDs, failures, child IDs by parent, and performance metrics</returns>
+    public BatchResult UpdateGraphBatch(IEnumerable<TEntity> entities, GraphBatchOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyGraphResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity>(_context);
+        var strategy = BatchStrategyFactory.CreateGraphStrategy<TEntity>(options.Strategy);
+        var result = strategy.Execute(entityList, strategyContext, options);
+
+        stopwatch.Stop();
+
+        return EnrichGraphResultWithMetrics(result, stopwatch, strategyContext);
+    }
+
+    public Task<BatchResult> UpdateGraphBatchAsync(
+        IEnumerable<TEntity> entities,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(UpdateGraphBatch(entities));
+    }
+
+    public Task<BatchResult> UpdateGraphBatchAsync(
+        IEnumerable<TEntity> entities,
+        GraphBatchOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(UpdateGraphBatch(entities, options));
+    }
+
     private BatchResult CreateEmptyResult(Stopwatch stopwatch)
     {
         stopwatch.Stop();
@@ -83,6 +137,34 @@ public class BatchSaver<TEntity>(DbContext context) : IBatchSaver<TEntity> where
             Failures = result.Failures,
             Duration = stopwatch.Elapsed,
             DatabaseRoundTrips = context.RoundTripCounter
+        };
+    }
+
+    private BatchResult CreateEmptyGraphResult(Stopwatch stopwatch)
+    {
+        stopwatch.Stop();
+        return new BatchResult
+        {
+            SuccessfulIds = [],
+            Failures = [],
+            Duration = stopwatch.Elapsed,
+            DatabaseRoundTrips = 0,
+            ChildIdsByParentId = new Dictionary<int, IReadOnlyList<int>>()
+        };
+    }
+
+    private BatchResult EnrichGraphResultWithMetrics(
+        BatchResult result,
+        Stopwatch stopwatch,
+        BatchStrategyContext<TEntity> context)
+    {
+        return new BatchResult
+        {
+            SuccessfulIds = result.SuccessfulIds,
+            Failures = result.Failures,
+            Duration = stopwatch.Elapsed,
+            DatabaseRoundTrips = context.RoundTripCounter,
+            ChildIdsByParentId = result.ChildIdsByParentId
         };
     }
 }
