@@ -107,7 +107,7 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
         }
     }
 
-    private void DetachEntityGraph(TEntity entity)
+    internal void DetachEntityGraph(TEntity entity)
     {
         var entry = _context.Entry(entity);
 
@@ -120,7 +120,9 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
                 {
                     if (navigation.CurrentValue is System.Collections.IEnumerable collection)
                     {
-                        foreach (var item in collection)
+                        // Create a snapshot to avoid collection modification during iteration
+                        var items = collection.Cast<object>().ToList();
+                        foreach (var item in items)
                         {
                             var itemEntry = _context.Entry(item);
                             if (itemEntry.State != EntityState.Detached)
@@ -200,7 +202,96 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
         }
     }
 
-    // ========== Graph Update Methods (Phase 2) ==========
+    internal void ValidateNoPopulatedNavigationProperties(TEntity entity)
+    {
+        var entry = _context.Entry(entity);
+        var populatedNavigations = new List<string>();
+
+        foreach (var navigation in entry.Navigations)
+        {
+            if (navigation.CurrentValue == null)
+            {
+                continue;
+            }
+
+            if (navigation.Metadata.IsCollection)
+            {
+                if (navigation.CurrentValue is System.Collections.IEnumerable collection)
+                {
+                    var hasItems = collection.Cast<object>().Any();
+                    if (hasItems)
+                    {
+                        populatedNavigations.Add($"{navigation.Metadata.Name} (collection)");
+                    }
+                }
+            }
+            else
+            {
+                populatedNavigations.Add(navigation.Metadata.Name);
+            }
+        }
+
+        if (populatedNavigations.Count != 0)
+        {
+            throw new InvalidOperationException(
+                $"Entity {typeof(TEntity).Name} has populated navigation properties: " +
+                $"{string.Join(", ", populatedNavigations)}. " +
+                $"Use InsertGraphBatch to insert parent with children, or clear the navigations.");
+        }
+    }
+
+    internal void AttachEntityGraphAsAdded(TEntity entity)
+    {
+        var entry = _context.Entry(entity);
+        entry.State = EntityState.Added;
+
+        foreach (var navigation in entry.Navigations)
+        {
+            if (navigation.CurrentValue == null || !navigation.Metadata.IsCollection)
+            {
+                continue;
+            }
+
+            AttachCollectionChildrenAsAdded(navigation);
+        }
+    }
+
+    private void AttachCollectionChildrenAsAdded(
+        Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation)
+    {
+        if (navigation.CurrentValue is not System.Collections.IEnumerable collection)
+        {
+            return;
+        }
+
+        foreach (var item in collection)
+        {
+            var itemEntry = _context.Entry(item);
+            if (itemEntry.State == EntityState.Detached)
+            {
+                itemEntry.State = EntityState.Added;
+            }
+        }
+    }
+
+    internal InsertBatchFailure CreateInsertBatchFailure(int entityIndex, Exception exception)
+    {
+        var reason = exception switch
+        {
+            InvalidOperationException => FailureReason.ValidationError,
+            DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
+            DbUpdateException => FailureReason.DatabaseConstraint,
+            _ => FailureReason.UnknownError
+        };
+
+        return new InsertBatchFailure
+        {
+            EntityIndex = entityIndex,
+            ErrorMessage = exception.Message,
+            Reason = reason,
+            Exception = exception
+        };
+    }
 
     internal void AttachEntityGraphAsModified(TEntity entity)
     {

@@ -25,4 +25,26 @@ internal static class BatchStrategyFactory
             _ => throw new ArgumentException($"Unknown strategy: {strategy}")
         };
     }
+
+    internal static IBatchInsertStrategy<TEntity> CreateInsertStrategy<TEntity>(BatchStrategy strategy)
+        where TEntity : class
+    {
+        return strategy switch
+        {
+            BatchStrategy.OneByOne => new OneByOneInsertStrategy<TEntity>(),
+            BatchStrategy.DivideAndConquer => new DivideAndConquerInsertStrategy<TEntity>(),
+            _ => throw new ArgumentException($"Unknown strategy: {strategy}")
+        };
+    }
+
+    internal static IBatchInsertGraphStrategy<TEntity> CreateInsertGraphStrategy<TEntity>(BatchStrategy strategy)
+        where TEntity : class
+    {
+        return strategy switch
+        {
+            BatchStrategy.OneByOne => new OneByOneInsertGraphStrategy<TEntity>(),
+            BatchStrategy.DivideAndConquer => new DivideAndConquerInsertGraphStrategy<TEntity>(),
+            _ => throw new ArgumentException($"Unknown strategy: {strategy}")
+        };
+    }
 }

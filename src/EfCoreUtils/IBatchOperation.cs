@@ -37,3 +37,40 @@ internal interface IBatchOperation<TEntity> where TEntity : class
     /// </summary>
     BatchResult CreateResult();
 }
+
+/// <summary>
+/// Defines operation-specific behavior for insert batch processing strategies.
+/// Unlike IBatchOperation, tracks entities by index since they don't have IDs before insertion.
+/// </summary>
+internal interface IBatchInsertOperation<TEntity> where TEntity : class
+{
+    /// <summary>
+    /// Validates all entities before processing. Called once at the start.
+    /// </summary>
+    void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity> context);
+
+    /// <summary>
+    /// Prepares a single entity for the insert operation.
+    /// </summary>
+    void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity> context);
+
+    /// <summary>
+    /// Records a successful insert after SaveChanges succeeds.
+    /// </summary>
+    void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity> context);
+
+    /// <summary>
+    /// Records a failed insert after SaveChanges fails.
+    /// </summary>
+    void RecordFailure(TEntity entity, int index, Exception ex, BatchStrategyContext<TEntity> context);
+
+    /// <summary>
+    /// Cleans up after processing an entity (e.g., detaches from context).
+    /// </summary>
+    void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity> context);
+
+    /// <summary>
+    /// Creates the final result from tracked successes and failures.
+    /// </summary>
+    InsertBatchResult CreateResult();
+}

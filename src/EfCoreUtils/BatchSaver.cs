@@ -114,6 +114,106 @@ public class BatchSaver<TEntity>(DbContext context) : IBatchSaver<TEntity> where
         return Task.FromResult(UpdateGraphBatch(entities, options));
     }
 
+    // === INSERT OPERATIONS ===
+
+    /// <summary>
+    /// Inserts a batch of entities using the default strategy (OneByOne).
+    /// </summary>
+    public InsertBatchResult InsertBatch(IEnumerable<TEntity> entities)
+    {
+        return InsertBatch(entities, new InsertBatchOptions());
+    }
+
+    /// <summary>
+    /// Inserts a batch of entities using the specified strategy and options.
+    /// </summary>
+    public InsertBatchResult InsertBatch(IEnumerable<TEntity> entities, InsertBatchOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyInsertResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity>(_context);
+        var strategy = BatchStrategyFactory.CreateInsertStrategy<TEntity>(options.Strategy);
+        var result = strategy.Execute(entityList, strategyContext, options);
+
+        stopwatch.Stop();
+
+        return EnrichInsertResultWithMetrics(result, stopwatch, strategyContext);
+    }
+
+    public Task<InsertBatchResult> InsertBatchAsync(
+        IEnumerable<TEntity> entities,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(InsertBatch(entities));
+    }
+
+    public Task<InsertBatchResult> InsertBatchAsync(
+        IEnumerable<TEntity> entities,
+        InsertBatchOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(InsertBatch(entities, options));
+    }
+
+    /// <summary>
+    /// Inserts a batch of entity graphs (parent + children) using the default options.
+    /// Each graph succeeds or fails as a unit.
+    /// </summary>
+    public InsertBatchResult InsertGraphBatch(IEnumerable<TEntity> entities)
+    {
+        return InsertGraphBatch(entities, new InsertGraphBatchOptions());
+    }
+
+    /// <summary>
+    /// Inserts a batch of entity graphs (parent + children) using the specified options.
+    /// Each graph succeeds or fails as a unit.
+    /// </summary>
+    public InsertBatchResult InsertGraphBatch(IEnumerable<TEntity> entities, InsertGraphBatchOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyInsertGraphResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity>(_context);
+        var strategy = BatchStrategyFactory.CreateInsertGraphStrategy<TEntity>(options.Strategy);
+        var result = strategy.Execute(entityList, strategyContext, options);
+
+        stopwatch.Stop();
+
+        return EnrichInsertGraphResultWithMetrics(result, stopwatch, strategyContext);
+    }
+
+    public Task<InsertBatchResult> InsertGraphBatchAsync(
+        IEnumerable<TEntity> entities,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(InsertGraphBatch(entities));
+    }
+
+    public Task<InsertBatchResult> InsertGraphBatchAsync(
+        IEnumerable<TEntity> entities,
+        InsertGraphBatchOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(InsertGraphBatch(entities, options));
+    }
+
+    // === PRIVATE HELPERS ===
+
     private BatchResult CreateEmptyResult(Stopwatch stopwatch)
     {
         stopwatch.Stop();
@@ -161,6 +261,60 @@ public class BatchSaver<TEntity>(DbContext context) : IBatchSaver<TEntity> where
         return new BatchResult
         {
             SuccessfulIds = result.SuccessfulIds,
+            Failures = result.Failures,
+            Duration = stopwatch.Elapsed,
+            DatabaseRoundTrips = context.RoundTripCounter,
+            ChildIdsByParentId = result.ChildIdsByParentId
+        };
+    }
+
+    private InsertBatchResult CreateEmptyInsertResult(Stopwatch stopwatch)
+    {
+        stopwatch.Stop();
+        return new InsertBatchResult
+        {
+            InsertedEntities = [],
+            Failures = [],
+            Duration = stopwatch.Elapsed,
+            DatabaseRoundTrips = 0
+        };
+    }
+
+    private InsertBatchResult EnrichInsertResultWithMetrics(
+        InsertBatchResult result,
+        Stopwatch stopwatch,
+        BatchStrategyContext<TEntity> context)
+    {
+        return new InsertBatchResult
+        {
+            InsertedEntities = result.InsertedEntities,
+            Failures = result.Failures,
+            Duration = stopwatch.Elapsed,
+            DatabaseRoundTrips = context.RoundTripCounter
+        };
+    }
+
+    private InsertBatchResult CreateEmptyInsertGraphResult(Stopwatch stopwatch)
+    {
+        stopwatch.Stop();
+        return new InsertBatchResult
+        {
+            InsertedEntities = [],
+            Failures = [],
+            Duration = stopwatch.Elapsed,
+            DatabaseRoundTrips = 0,
+            ChildIdsByParentId = new Dictionary<int, IReadOnlyList<int>>()
+        };
+    }
+
+    private InsertBatchResult EnrichInsertGraphResultWithMetrics(
+        InsertBatchResult result,
+        Stopwatch stopwatch,
+        BatchStrategyContext<TEntity> context)
+    {
+        return new InsertBatchResult
+        {
+            InsertedEntities = result.InsertedEntities,
             Failures = result.Failures,
             Duration = stopwatch.Elapsed,
             DatabaseRoundTrips = context.RoundTripCounter,
