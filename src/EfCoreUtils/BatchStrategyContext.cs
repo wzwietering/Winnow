@@ -531,4 +531,116 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
             }
         }
     }
+
+    // ========== Delete Operation Methods ==========
+
+    internal void AttachEntityAsDeleted(TEntity entity)
+    {
+        _context.Entry(entity).State = EntityState.Deleted;
+    }
+
+    internal void AttachEntityGraphAsDeleted(TEntity entity)
+    {
+        var entry = _context.Entry(entity);
+
+        // Mark children as Deleted FIRST (to respect FK constraints)
+        foreach (var navigation in entry.Navigations)
+        {
+            if (navigation.CurrentValue == null || !navigation.Metadata.IsCollection)
+            {
+                continue;
+            }
+
+            MarkCollectionChildrenAsDeleted(navigation);
+        }
+
+        // Then mark parent as Deleted
+        entry.State = EntityState.Deleted;
+    }
+
+    private void MarkCollectionChildrenAsDeleted(
+        Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation)
+    {
+        if (navigation.CurrentValue is not System.Collections.IEnumerable collection)
+        {
+            return;
+        }
+
+        // Create a snapshot to avoid collection modification during iteration
+        var items = collection.Cast<object>().ToList();
+        foreach (var item in items)
+        {
+            var itemEntry = _context.Entry(item);
+            itemEntry.State = EntityState.Deleted;
+        }
+    }
+
+    internal void ValidateNoPopulatedNavigationPropertiesForDelete(TEntity entity)
+    {
+        var entry = _context.Entry(entity);
+        var populatedNavigations = new List<string>();
+
+        foreach (var navigation in entry.Navigations)
+        {
+            if (navigation.CurrentValue == null)
+            {
+                continue;
+            }
+
+            if (navigation.Metadata.IsCollection)
+            {
+                if (navigation.CurrentValue is System.Collections.IEnumerable collection)
+                {
+                    var hasItems = collection.Cast<object>().Any();
+                    if (hasItems)
+                    {
+                        populatedNavigations.Add($"{navigation.Metadata.Name} (collection)");
+                    }
+                }
+            }
+            else
+            {
+                populatedNavigations.Add(navigation.Metadata.Name);
+            }
+        }
+
+        if (populatedNavigations.Count != 0)
+        {
+            var entityId = GetEntityId(entity);
+            throw new InvalidOperationException(
+                $"Entity {typeof(TEntity).Name} (Id={entityId}) has populated navigation properties: " +
+                $"{string.Join(", ", populatedNavigations)}. " +
+                $"Use DeleteGraphBatch to delete parent with children, or remove Include().");
+        }
+    }
+
+    internal void ValidateCascadeBehavior(TEntity entity, DeleteGraphBatchOptions options)
+    {
+        if (options.CascadeBehavior != DeleteCascadeBehavior.Throw)
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+        var entityId = GetEntityId(entity);
+
+        foreach (var navigation in entry.Navigations)
+        {
+            if (navigation.CurrentValue == null || !navigation.Metadata.IsCollection)
+            {
+                continue;
+            }
+
+            if (navigation.CurrentValue is System.Collections.IEnumerable collection)
+            {
+                var childCount = collection.Cast<object>().Count();
+                if (childCount > 0)
+                {
+                    throw new InvalidOperationException(
+                        $"Entity {typeof(TEntity).Name} (Id={entityId}) has {childCount} child(ren) in '{navigation.Metadata.Name}'. " +
+                        $"Set DeleteGraphBatchOptions.CascadeBehavior to Cascade or ParentOnly to proceed.");
+                }
+            }
+        }
+    }
 }

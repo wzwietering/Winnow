@@ -212,6 +212,104 @@ public class BatchSaver<TEntity>(DbContext context) : IBatchSaver<TEntity> where
         return Task.FromResult(InsertGraphBatch(entities, options));
     }
 
+    // === DELETE OPERATIONS ===
+
+    /// <summary>
+    /// Deletes a batch of entities using the default strategy (OneByOne).
+    /// </summary>
+    public BatchResult DeleteBatch(IEnumerable<TEntity> entities)
+    {
+        return DeleteBatch(entities, new DeleteBatchOptions());
+    }
+
+    /// <summary>
+    /// Deletes a batch of entities using the specified strategy and options.
+    /// </summary>
+    public BatchResult DeleteBatch(IEnumerable<TEntity> entities, DeleteBatchOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity>(_context);
+        var strategy = BatchStrategyFactory.CreateDeleteStrategy<TEntity>(options.Strategy);
+        var result = strategy.Execute(entityList, strategyContext, options);
+
+        stopwatch.Stop();
+
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
+    }
+
+    public Task<BatchResult> DeleteBatchAsync(
+        IEnumerable<TEntity> entities,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(DeleteBatch(entities));
+    }
+
+    public Task<BatchResult> DeleteBatchAsync(
+        IEnumerable<TEntity> entities,
+        DeleteBatchOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(DeleteBatch(entities, options));
+    }
+
+    /// <summary>
+    /// Deletes a batch of entity graphs (parent + children) using the default options.
+    /// Each graph succeeds or fails as a unit.
+    /// </summary>
+    public BatchResult DeleteGraphBatch(IEnumerable<TEntity> entities)
+    {
+        return DeleteGraphBatch(entities, new DeleteGraphBatchOptions());
+    }
+
+    /// <summary>
+    /// Deletes a batch of entity graphs (parent + children) using the specified options.
+    /// Each graph succeeds or fails as a unit.
+    /// </summary>
+    public BatchResult DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyGraphResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity>(_context);
+        var strategy = BatchStrategyFactory.CreateDeleteGraphStrategy<TEntity>(options.Strategy);
+        var result = strategy.Execute(entityList, strategyContext, options);
+
+        stopwatch.Stop();
+
+        return EnrichGraphResultWithMetrics(result, stopwatch, strategyContext);
+    }
+
+    public Task<BatchResult> DeleteGraphBatchAsync(
+        IEnumerable<TEntity> entities,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(DeleteGraphBatch(entities));
+    }
+
+    public Task<BatchResult> DeleteGraphBatchAsync(
+        IEnumerable<TEntity> entities,
+        DeleteGraphBatchOptions options,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(DeleteGraphBatch(entities, options));
+    }
+
     // === PRIVATE HELPERS ===
 
     private BatchResult CreateEmptyResult(Stopwatch stopwatch)

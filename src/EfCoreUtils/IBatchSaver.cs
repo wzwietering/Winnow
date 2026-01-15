@@ -31,6 +31,24 @@ public interface IBatchSaver<TEntity> where TEntity : class
     InsertBatchResult InsertGraphBatch(IEnumerable<TEntity> entities, InsertGraphBatchOptions options);
     Task<InsertBatchResult> InsertGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
     Task<InsertBatchResult> InsertGraphBatchAsync(IEnumerable<TEntity> entities, InsertGraphBatchOptions options, CancellationToken cancellationToken = default);
+
+    // === DELETE OPERATIONS ===
+
+    /// <summary>
+    /// Delete entities individually with failure isolation.
+    /// </summary>
+    BatchResult DeleteBatch(IEnumerable<TEntity> entities);
+    BatchResult DeleteBatch(IEnumerable<TEntity> entities, DeleteBatchOptions options);
+    Task<BatchResult> DeleteBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    Task<BatchResult> DeleteBatchAsync(IEnumerable<TEntity> entities, DeleteBatchOptions options, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Delete entity graphs (parent + children) with failure isolation.
+    /// </summary>
+    BatchResult DeleteGraphBatch(IEnumerable<TEntity> entities);
+    BatchResult DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options);
+    Task<BatchResult> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    Task<BatchResult> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default);
 }
 
 public class BatchOptions
