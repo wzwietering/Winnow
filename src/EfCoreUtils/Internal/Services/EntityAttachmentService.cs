@@ -11,15 +11,9 @@ internal class EntityAttachmentService<TEntity, TKey>
 
     private readonly DbContext _context;
 
-    internal EntityAttachmentService(DbContext context)
-    {
-        _context = context;
-    }
+    internal EntityAttachmentService(DbContext context) => _context = context;
 
-    internal void AttachEntityAsDeleted(TEntity entity)
-    {
-        _context.Entry(entity).State = EntityState.Deleted;
-    }
+    internal void AttachEntityAsDeleted(TEntity entity) => _context.Entry(entity).State = EntityState.Deleted;
 
     internal void AttachEntityGraphAsAdded(TEntity entity)
     {

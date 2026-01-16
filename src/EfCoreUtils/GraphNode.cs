@@ -39,10 +39,7 @@ public class GraphNode<TKey> where TKey : notnull, IEquatable<TKey>
     /// <summary>
     /// Returns only immediate child IDs.
     /// </summary>
-    public IReadOnlyList<TKey> GetChildIds()
-    {
-        return Children.Select(c => c.EntityId).ToList();
-    }
+    public IReadOnlyList<TKey> GetChildIds() => Children.Select(c => c.EntityId).ToList();
 
     private static void CollectDescendantIds(GraphNode<TKey> node, List<TKey> result)
     {

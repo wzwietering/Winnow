@@ -14,10 +14,7 @@ internal class DeleteOperation<TEntity, TKey> : IBatchOperation<TEntity, TKey>
     private readonly List<TKey> _successfulIds = [];
     private readonly List<BatchFailure<TKey>> _failures = [];
 
-    internal DeleteOperation(DeleteBatchOptions options)
-    {
-        _options = options;
-    }
+    internal DeleteOperation(DeleteBatchOptions options) => _options = options;
 
     public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
@@ -32,10 +29,7 @@ internal class DeleteOperation<TEntity, TKey> : IBatchOperation<TEntity, TKey>
         }
     }
 
-    public void PrepareEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
-    {
-        context.AttachEntityAsDeleted(entity);
-    }
+    public void PrepareEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.AttachEntityAsDeleted(entity);
 
     public void RecordSuccess(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
     {
@@ -50,17 +44,11 @@ internal class DeleteOperation<TEntity, TKey> : IBatchOperation<TEntity, TKey>
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
-    {
-        context.Context.Entry(entity).State = EntityState.Detached;
-    }
+    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.Context.Entry(entity).State = EntityState.Detached;
 
-    public BatchResult<TKey> CreateResult()
+    public BatchResult<TKey> CreateResult() => new()
     {
-        return new BatchResult<TKey>
-        {
-            SuccessfulIds = _successfulIds,
-            Failures = _failures
-        };
-    }
+        SuccessfulIds = _successfulIds,
+        Failures = _failures
+    };
 }

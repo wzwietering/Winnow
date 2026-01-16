@@ -8,9 +8,7 @@ namespace EfCoreUtils.Internal;
 internal static class BatchResultFactory
 {
     internal static BatchResult<TKey> CreateEmpty<TKey>(TimeSpan duration, bool includeGraph = false)
-        where TKey : notnull, IEquatable<TKey>
-    {
-        return new BatchResult<TKey>
+        where TKey : notnull, IEquatable<TKey> => new()
         {
             SuccessfulIds = [],
             Failures = [],
@@ -19,15 +17,12 @@ internal static class BatchResultFactory
             GraphHierarchy = includeGraph ? [] : null,
             TraversalInfo = includeGraph ? CreateEmptyTraversalInfo<TKey>() : null
         };
-    }
 
     internal static BatchResult<TKey> Enrich<TKey>(
         BatchResult<TKey> result,
         TimeSpan duration,
         int roundTrips)
-        where TKey : notnull, IEquatable<TKey>
-    {
-        return new BatchResult<TKey>
+        where TKey : notnull, IEquatable<TKey> => new()
         {
             SuccessfulIds = result.SuccessfulIds,
             Failures = result.Failures,
@@ -36,12 +31,9 @@ internal static class BatchResultFactory
             GraphHierarchy = result.GraphHierarchy,
             TraversalInfo = result.TraversalInfo
         };
-    }
 
     internal static InsertBatchResult<TKey> CreateEmptyInsert<TKey>(TimeSpan duration, bool includeGraph = false)
-        where TKey : notnull, IEquatable<TKey>
-    {
-        return new InsertBatchResult<TKey>
+        where TKey : notnull, IEquatable<TKey> => new()
         {
             InsertedEntities = [],
             Failures = [],
@@ -50,15 +42,12 @@ internal static class BatchResultFactory
             GraphHierarchy = includeGraph ? [] : null,
             TraversalInfo = includeGraph ? CreateEmptyTraversalInfo<TKey>() : null
         };
-    }
 
     internal static InsertBatchResult<TKey> EnrichInsert<TKey>(
         InsertBatchResult<TKey> result,
         TimeSpan duration,
         int roundTrips)
-        where TKey : notnull, IEquatable<TKey>
-    {
-        return new InsertBatchResult<TKey>
+        where TKey : notnull, IEquatable<TKey> => new()
         {
             InsertedEntities = result.InsertedEntities,
             Failures = result.Failures,
@@ -67,18 +56,14 @@ internal static class BatchResultFactory
             GraphHierarchy = result.GraphHierarchy,
             TraversalInfo = result.TraversalInfo
         };
-    }
 
     private static GraphTraversalResult<TKey> CreateEmptyTraversalInfo<TKey>()
-        where TKey : notnull, IEquatable<TKey>
-    {
-        return new GraphTraversalResult<TKey>
+        where TKey : notnull, IEquatable<TKey> => new()
         {
             MaxDepthReached = 0,
             TotalEntitiesTraversed = 0,
             EntitiesByDepth = new Dictionary<int, int>()
         };
-    }
 
     internal static BatchFailure<TKey> CreateBatchFailure<TKey>(TKey entityId, Exception exception)
         where TKey : notnull, IEquatable<TKey>
@@ -105,14 +90,11 @@ internal static class BatchResultFactory
         };
     }
 
-    private static FailureReason DetermineFailureReason(Exception exception)
+    private static FailureReason DetermineFailureReason(Exception exception) => exception switch
     {
-        return exception switch
-        {
-            InvalidOperationException => FailureReason.ValidationError,
-            DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
-            DbUpdateException => FailureReason.DatabaseConstraint,
-            _ => FailureReason.UnknownError
-        };
-    }
+        InvalidOperationException => FailureReason.ValidationError,
+        DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
+        DbUpdateException => FailureReason.DatabaseConstraint,
+        _ => FailureReason.UnknownError
+    };
 }

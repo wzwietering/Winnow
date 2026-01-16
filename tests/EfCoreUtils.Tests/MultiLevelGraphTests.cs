@@ -518,22 +518,16 @@ public class MultiLevelGraphTests : TestBase
         };
     }
 
-    private static List<ItemReservation> CreateReservations(int count)
-    {
-        return Enumerable.Range(1, count)
+    private static List<ItemReservation> CreateReservations(int count) => Enumerable.Range(1, count)
             .Select(i => CreateValidReservation(i))
             .ToList();
-    }
 
-    private static ItemReservation CreateValidReservation(int index)
+    private static ItemReservation CreateValidReservation(int index) => new()
     {
-        return new ItemReservation
-        {
-            WarehouseLocation = $"Warehouse-{index}",
-            ReservedQuantity = index * 10,
-            ReservedAt = DateTimeOffset.UtcNow
-        };
-    }
+        WarehouseLocation = $"Warehouse-{index}",
+        ReservedQuantity = index * 10,
+        ReservedAt = DateTimeOffset.UtcNow
+    };
 
     private void SeedThreeLevelOrders(TestDbContext context, int orderCount, int itemsPerOrder, int reservationsPerItem)
     {

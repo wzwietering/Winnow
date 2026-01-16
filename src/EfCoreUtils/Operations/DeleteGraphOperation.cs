@@ -19,10 +19,7 @@ internal class DeleteGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
     private int _maxDepthReached;
     private readonly Dictionary<int, int> _entitiesByDepth = [];
 
-    internal DeleteGraphOperation(DeleteGraphBatchOptions options)
-    {
-        _options = options;
-    }
+    internal DeleteGraphOperation(DeleteGraphBatchOptions options) => _options = options;
 
     public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
@@ -81,21 +78,15 @@ internal class DeleteGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
-    {
-        context.DetachEntityGraphRecursive(entity, _options.MaxDepth);
-    }
+    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.DetachEntityGraphRecursive(entity, _options.MaxDepth);
 
-    public BatchResult<TKey> CreateResult()
+    public BatchResult<TKey> CreateResult() => new()
     {
-        return new BatchResult<TKey>
-        {
-            SuccessfulIds = _successfulIds,
-            Failures = _failures,
-            GraphHierarchy = _graphHierarchy,
-            TraversalInfo = CreateTraversalInfo()
-        };
-    }
+        SuccessfulIds = _successfulIds,
+        Failures = _failures,
+        GraphHierarchy = _graphHierarchy,
+        TraversalInfo = CreateTraversalInfo()
+    };
 
     private void AggregateStats(GraphTraversalResult<TKey> stats)
     {
@@ -109,24 +100,18 @@ internal class DeleteGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
         }
     }
 
-    private GraphTraversalResult<TKey> CreateTraversalInfo()
+    private GraphTraversalResult<TKey> CreateTraversalInfo() => new()
     {
-        return new GraphTraversalResult<TKey>
-        {
-            MaxDepthReached = _maxDepthReached,
-            TotalEntitiesTraversed = _totalEntitiesTraversed,
-            EntitiesByDepth = _entitiesByDepth
-        };
-    }
+        MaxDepthReached = _maxDepthReached,
+        TotalEntitiesTraversed = _totalEntitiesTraversed,
+        EntitiesByDepth = _entitiesByDepth
+    };
 
-    private static FailureReason ClassifyException(Exception ex)
+    private static FailureReason ClassifyException(Exception ex) => ex switch
     {
-        return ex switch
-        {
-            InvalidOperationException => FailureReason.ValidationError,
-            Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
-            Microsoft.EntityFrameworkCore.DbUpdateException => FailureReason.DatabaseConstraint,
-            _ => FailureReason.UnknownError
-        };
-    }
+        InvalidOperationException => FailureReason.ValidationError,
+        Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
+        Microsoft.EntityFrameworkCore.DbUpdateException => FailureReason.DatabaseConstraint,
+        _ => FailureReason.UnknownError
+    };
 }

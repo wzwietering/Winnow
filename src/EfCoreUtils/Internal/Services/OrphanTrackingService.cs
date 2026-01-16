@@ -39,13 +39,10 @@ internal class OrphanTrackingService<TEntity, TKey>
 
     // ========== Performance Optimization ==========
 
-    private Dictionary<IEntityType, List<EntityEntry>> GetOrBuildDeletedIndex()
-    {
-        return _deletedEntriesIndex ??= _context.ChangeTracker.Entries()
+    private Dictionary<IEntityType, List<EntityEntry>> GetOrBuildDeletedIndex() => _deletedEntriesIndex ??= _context.ChangeTracker.Entries()
             .Where(e => e.State == EntityState.Deleted)
             .GroupBy(e => e.Metadata)
             .ToDictionary(g => g.Key, g => g.ToList());
-    }
 
     private void InvalidateDeletedIndex() => _deletedEntriesIndex = null;
 

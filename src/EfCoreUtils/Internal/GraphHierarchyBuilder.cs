@@ -57,16 +57,13 @@ internal class GraphHierarchyBuilder<TKey>
         };
     }
 
-    private GraphNode<TKey> CreateGraphNode(EntityEntry entry, int depth, List<GraphNode<TKey>> children)
+    private GraphNode<TKey> CreateGraphNode(EntityEntry entry, int depth, List<GraphNode<TKey>> children) => new()
     {
-        return new GraphNode<TKey>
-        {
-            EntityId = _getEntityId(entry),
-            EntityType = entry.Metadata.ClrType.Name,
-            Depth = depth,
-            Children = children
-        };
-    }
+        EntityId = _getEntityId(entry),
+        EntityType = entry.Metadata.ClrType.Name,
+        Depth = depth,
+        Children = children
+    };
 
     private List<GraphNode<TKey>> BuildChildNodes(
         EntityEntry entry, int currentDepth, int maxDepth,
@@ -108,13 +105,10 @@ internal class GraphHierarchyBuilder<TKey>
         depthCounts[depth] = count + 1;
     }
 
-    private static GraphTraversalResult<TKey> CreateTraversalStats(Dictionary<int, int> depthCounts)
+    private static GraphTraversalResult<TKey> CreateTraversalStats(Dictionary<int, int> depthCounts) => new()
     {
-        return new GraphTraversalResult<TKey>
-        {
-            MaxDepthReached = depthCounts.Count > 0 ? depthCounts.Keys.Max() : 0,
-            TotalEntitiesTraversed = depthCounts.Values.Sum(),
-            EntitiesByDepth = depthCounts
-        };
-    }
+        MaxDepthReached = depthCounts.Count > 0 ? depthCounts.Keys.Max() : 0,
+        TotalEntitiesTraversed = depthCounts.Values.Sum(),
+        EntitiesByDepth = depthCounts
+    };
 }

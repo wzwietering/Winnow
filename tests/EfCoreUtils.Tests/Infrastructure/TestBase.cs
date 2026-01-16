@@ -40,8 +40,5 @@ public abstract class TestBase : IDisposable
         context.Dispose();
     }
 
-    public virtual void Dispose()
-    {
-        GC.SuppressFinalize(this);
-    }
+    public virtual void Dispose() => GC.SuppressFinalize(this);
 }

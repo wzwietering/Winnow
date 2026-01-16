@@ -54,8 +54,5 @@ internal class EntityKeyService<TEntity, TKey>
             $"Could not retrieve key value for entity {entry.Metadata.ClrType.Name}.");
     }
 
-    internal (string Type, TKey Id) CreateEntityKey(EntityEntry entry)
-    {
-        return (entry.Metadata.ClrType.Name, GetEntityIdFromEntry(entry));
-    }
+    internal (string Type, TKey Id) CreateEntityKey(EntityEntry entry) => (entry.Metadata.ClrType.Name, GetEntityIdFromEntry(entry));
 }

@@ -18,10 +18,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
     /// <param name="entities">The entities to update</param>
     /// <returns>Result containing successful IDs, failures, and performance metrics</returns>
     /// <exception cref="InvalidOperationException">Thrown when navigation properties are modified and ValidateNavigationProperties is true</exception>
-    public BatchResult<TKey> UpdateBatch(IEnumerable<TEntity> entities)
-    {
-        return UpdateBatch(entities, new BatchOptions());
-    }
+    public BatchResult<TKey> UpdateBatch(IEnumerable<TEntity> entities) => UpdateBatch(entities, new BatchOptions());
 
     /// <summary>
     /// Updates a batch of entities using the specified strategy and options.
@@ -53,15 +50,9 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
         return EnrichResultWithMetrics(result, stopwatch, strategyContext);
     }
 
-    public Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(UpdateBatch(entities));
-    }
+    public Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) => Task.FromResult(UpdateBatch(entities));
 
-    public Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(UpdateBatch(entities, options));
-    }
+    public Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default) => Task.FromResult(UpdateBatch(entities, options));
 
     /// <summary>
     /// Updates a batch of entity graphs (parent + children) using the default options.
@@ -69,10 +60,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
     /// </summary>
     /// <param name="entities">The parent entities with their navigation properties loaded</param>
     /// <returns>Result containing successful IDs, failures, child IDs by parent, and performance metrics</returns>
-    public BatchResult<TKey> UpdateGraphBatch(IEnumerable<TEntity> entities)
-    {
-        return UpdateGraphBatch(entities, new GraphBatchOptions());
-    }
+    public BatchResult<TKey> UpdateGraphBatch(IEnumerable<TEntity> entities) => UpdateGraphBatch(entities, new GraphBatchOptions());
 
     /// <summary>
     /// Updates a batch of entity graphs (parent + children) using the specified options.
@@ -104,28 +92,19 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
     public Task<BatchResult<TKey>> UpdateGraphBatchAsync(
         IEnumerable<TEntity> entities,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(UpdateGraphBatch(entities));
-    }
+        CancellationToken cancellationToken = default) => Task.FromResult(UpdateGraphBatch(entities));
 
     public Task<BatchResult<TKey>> UpdateGraphBatchAsync(
         IEnumerable<TEntity> entities,
         GraphBatchOptions options,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(UpdateGraphBatch(entities, options));
-    }
+        CancellationToken cancellationToken = default) => Task.FromResult(UpdateGraphBatch(entities, options));
 
     // === INSERT OPERATIONS ===
 
     /// <summary>
     /// Inserts a batch of entities using the default strategy (OneByOne).
     /// </summary>
-    public InsertBatchResult<TKey> InsertBatch(IEnumerable<TEntity> entities)
-    {
-        return InsertBatch(entities, new InsertBatchOptions());
-    }
+    public InsertBatchResult<TKey> InsertBatch(IEnumerable<TEntity> entities) => InsertBatch(entities, new InsertBatchOptions());
 
     /// <summary>
     /// Inserts a batch of entities using the specified strategy and options.
@@ -153,27 +132,18 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
     public Task<InsertBatchResult<TKey>> InsertBatchAsync(
         IEnumerable<TEntity> entities,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(InsertBatch(entities));
-    }
+        CancellationToken cancellationToken = default) => Task.FromResult(InsertBatch(entities));
 
     public Task<InsertBatchResult<TKey>> InsertBatchAsync(
         IEnumerable<TEntity> entities,
         InsertBatchOptions options,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(InsertBatch(entities, options));
-    }
+        CancellationToken cancellationToken = default) => Task.FromResult(InsertBatch(entities, options));
 
     /// <summary>
     /// Inserts a batch of entity graphs (parent + children) using the default options.
     /// Each graph succeeds or fails as a unit.
     /// </summary>
-    public InsertBatchResult<TKey> InsertGraphBatch(IEnumerable<TEntity> entities)
-    {
-        return InsertGraphBatch(entities, new InsertGraphBatchOptions());
-    }
+    public InsertBatchResult<TKey> InsertGraphBatch(IEnumerable<TEntity> entities) => InsertGraphBatch(entities, new InsertGraphBatchOptions());
 
     /// <summary>
     /// Inserts a batch of entity graphs (parent + children) using the specified options.
@@ -202,28 +172,19 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
     public Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(
         IEnumerable<TEntity> entities,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(InsertGraphBatch(entities));
-    }
+        CancellationToken cancellationToken = default) => Task.FromResult(InsertGraphBatch(entities));
 
     public Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(
         IEnumerable<TEntity> entities,
         InsertGraphBatchOptions options,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(InsertGraphBatch(entities, options));
-    }
+        CancellationToken cancellationToken = default) => Task.FromResult(InsertGraphBatch(entities, options));
 
     // === DELETE OPERATIONS ===
 
     /// <summary>
     /// Deletes a batch of entities using the default strategy (OneByOne).
     /// </summary>
-    public BatchResult<TKey> DeleteBatch(IEnumerable<TEntity> entities)
-    {
-        return DeleteBatch(entities, new DeleteBatchOptions());
-    }
+    public BatchResult<TKey> DeleteBatch(IEnumerable<TEntity> entities) => DeleteBatch(entities, new DeleteBatchOptions());
 
     /// <summary>
     /// Deletes a batch of entities using the specified strategy and options.
@@ -251,27 +212,18 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
     public Task<BatchResult<TKey>> DeleteBatchAsync(
         IEnumerable<TEntity> entities,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(DeleteBatch(entities));
-    }
+        CancellationToken cancellationToken = default) => Task.FromResult(DeleteBatch(entities));
 
     public Task<BatchResult<TKey>> DeleteBatchAsync(
         IEnumerable<TEntity> entities,
         DeleteBatchOptions options,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(DeleteBatch(entities, options));
-    }
+        CancellationToken cancellationToken = default) => Task.FromResult(DeleteBatch(entities, options));
 
     /// <summary>
     /// Deletes a batch of entity graphs (parent + children) using the default options.
     /// Each graph succeeds or fails as a unit.
     /// </summary>
-    public BatchResult<TKey> DeleteGraphBatch(IEnumerable<TEntity> entities)
-    {
-        return DeleteGraphBatch(entities, new DeleteGraphBatchOptions());
-    }
+    public BatchResult<TKey> DeleteGraphBatch(IEnumerable<TEntity> entities) => DeleteGraphBatch(entities, new DeleteGraphBatchOptions());
 
     /// <summary>
     /// Deletes a batch of entity graphs (parent + children) using the specified options.
@@ -300,18 +252,12 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
     public Task<BatchResult<TKey>> DeleteGraphBatchAsync(
         IEnumerable<TEntity> entities,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(DeleteGraphBatch(entities));
-    }
+        CancellationToken cancellationToken = default) => Task.FromResult(DeleteGraphBatch(entities));
 
     public Task<BatchResult<TKey>> DeleteGraphBatchAsync(
         IEnumerable<TEntity> entities,
         DeleteGraphBatchOptions options,
-        CancellationToken cancellationToken = default)
-    {
-        return Task.FromResult(DeleteGraphBatch(entities, options));
-    }
+        CancellationToken cancellationToken = default) => Task.FromResult(DeleteGraphBatch(entities, options));
 
     // === PRIVATE HELPERS ===
 
@@ -324,10 +270,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
     private static BatchResult<TKey> EnrichResultWithMetrics(
         BatchResult<TKey> result,
         Stopwatch stopwatch,
-        BatchStrategyContext<TEntity, TKey> context)
-    {
-        return BatchResultFactory.Enrich(result, stopwatch.Elapsed, context.RoundTripCounter);
-    }
+        BatchStrategyContext<TEntity, TKey> context) => BatchResultFactory.Enrich(result, stopwatch.Elapsed, context.RoundTripCounter);
 
     private BatchResult<TKey> CreateEmptyGraphResult(Stopwatch stopwatch)
     {
@@ -338,10 +281,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
     private static BatchResult<TKey> EnrichGraphResultWithMetrics(
         BatchResult<TKey> result,
         Stopwatch stopwatch,
-        BatchStrategyContext<TEntity, TKey> context)
-    {
-        return BatchResultFactory.Enrich(result, stopwatch.Elapsed, context.RoundTripCounter);
-    }
+        BatchStrategyContext<TEntity, TKey> context) => BatchResultFactory.Enrich(result, stopwatch.Elapsed, context.RoundTripCounter);
 
     private InsertBatchResult<TKey> CreateEmptyInsertResult(Stopwatch stopwatch)
     {
@@ -352,10 +292,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
     private static InsertBatchResult<TKey> EnrichInsertResultWithMetrics(
         InsertBatchResult<TKey> result,
         Stopwatch stopwatch,
-        BatchStrategyContext<TEntity, TKey> context)
-    {
-        return BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
-    }
+        BatchStrategyContext<TEntity, TKey> context) => BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
 
     private InsertBatchResult<TKey> CreateEmptyInsertGraphResult(Stopwatch stopwatch)
     {
@@ -366,8 +303,5 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
     private static InsertBatchResult<TKey> EnrichInsertGraphResultWithMetrics(
         InsertBatchResult<TKey> result,
         Stopwatch stopwatch,
-        BatchStrategyContext<TEntity, TKey> context)
-    {
-        return BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
-    }
+        BatchStrategyContext<TEntity, TKey> context) => BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
 }

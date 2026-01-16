@@ -18,20 +18,14 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
     private int _maxDepthReached;
     private readonly Dictionary<int, int> _entitiesByDepth = [];
 
-    internal InsertGraphOperation(InsertGraphBatchOptions options)
-    {
-        _options = options;
-    }
+    internal InsertGraphOperation(InsertGraphBatchOptions options) => _options = options;
 
     public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
         // No validation needed for graph inserts - we expect children
     }
 
-    public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
-    {
-        context.AttachEntityGraphAsAddedRecursive(entity, _options.MaxDepth);
-    }
+    public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context) => context.AttachEntityGraphAsAddedRecursive(entity, _options.MaxDepth);
 
     public void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
     {
@@ -61,21 +55,15 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
-    {
-        context.DetachEntityGraphRecursive(entity, _options.MaxDepth);
-    }
+    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.DetachEntityGraphRecursive(entity, _options.MaxDepth);
 
-    public InsertBatchResult<TKey> CreateResult()
+    public InsertBatchResult<TKey> CreateResult() => new()
     {
-        return new InsertBatchResult<TKey>
-        {
-            InsertedEntities = _insertedEntities,
-            Failures = _failures,
-            GraphHierarchy = _graphHierarchy,
-            TraversalInfo = CreateTraversalInfo()
-        };
-    }
+        InsertedEntities = _insertedEntities,
+        Failures = _failures,
+        GraphHierarchy = _graphHierarchy,
+        TraversalInfo = CreateTraversalInfo()
+    };
 
     private void AggregateStats(GraphTraversalResult<TKey> stats)
     {
@@ -89,24 +77,18 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
         }
     }
 
-    private GraphTraversalResult<TKey> CreateTraversalInfo()
+    private GraphTraversalResult<TKey> CreateTraversalInfo() => new()
     {
-        return new GraphTraversalResult<TKey>
-        {
-            MaxDepthReached = _maxDepthReached,
-            TotalEntitiesTraversed = _totalEntitiesTraversed,
-            EntitiesByDepth = _entitiesByDepth
-        };
-    }
+        MaxDepthReached = _maxDepthReached,
+        TotalEntitiesTraversed = _totalEntitiesTraversed,
+        EntitiesByDepth = _entitiesByDepth
+    };
 
-    private static FailureReason ClassifyException(Exception ex)
+    private static FailureReason ClassifyException(Exception ex) => ex switch
     {
-        return ex switch
-        {
-            InvalidOperationException => FailureReason.ValidationError,
-            Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
-            Microsoft.EntityFrameworkCore.DbUpdateException => FailureReason.DatabaseConstraint,
-            _ => FailureReason.UnknownError
-        };
-    }
+        InvalidOperationException => FailureReason.ValidationError,
+        Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
+        Microsoft.EntityFrameworkCore.DbUpdateException => FailureReason.DatabaseConstraint,
+        _ => FailureReason.UnknownError
+    };
 }

@@ -58,10 +58,7 @@ public class TestDataBuilder
         return products;
     }
 
-    public List<Product> CreateMixedValidityProducts(int totalCount, int invalidCount)
-    {
-        return CreateProductsWithInvalidPrices(totalCount, invalidCount);
-    }
+    public List<Product> CreateMixedValidityProducts(int totalCount, int invalidCount) => CreateProductsWithInvalidPrices(totalCount, invalidCount);
 
     public List<Product> CreateProductsForConcurrencyTest(int count)
     {
