@@ -1,0 +1,80 @@
+namespace EfCoreUtils.Internal;
+
+/// <summary>
+/// Factory for creating batch result objects with consistent structure.
+/// </summary>
+internal static class BatchResultFactory
+{
+    internal static BatchResult<TKey> CreateEmpty<TKey>(TimeSpan duration, bool includeGraph = false)
+        where TKey : notnull, IEquatable<TKey>
+    {
+        return new BatchResult<TKey>
+        {
+            SuccessfulIds = [],
+            Failures = [],
+            Duration = duration,
+            DatabaseRoundTrips = 0,
+            GraphHierarchy = includeGraph ? [] : null,
+            TraversalInfo = includeGraph ? CreateEmptyTraversalInfo<TKey>() : null
+        };
+    }
+
+    internal static BatchResult<TKey> Enrich<TKey>(
+        BatchResult<TKey> result,
+        TimeSpan duration,
+        int roundTrips)
+        where TKey : notnull, IEquatable<TKey>
+    {
+        return new BatchResult<TKey>
+        {
+            SuccessfulIds = result.SuccessfulIds,
+            Failures = result.Failures,
+            Duration = duration,
+            DatabaseRoundTrips = roundTrips,
+            GraphHierarchy = result.GraphHierarchy,
+            TraversalInfo = result.TraversalInfo
+        };
+    }
+
+    internal static InsertBatchResult<TKey> CreateEmptyInsert<TKey>(TimeSpan duration, bool includeGraph = false)
+        where TKey : notnull, IEquatable<TKey>
+    {
+        return new InsertBatchResult<TKey>
+        {
+            InsertedEntities = [],
+            Failures = [],
+            Duration = duration,
+            DatabaseRoundTrips = 0,
+            GraphHierarchy = includeGraph ? [] : null,
+            TraversalInfo = includeGraph ? CreateEmptyTraversalInfo<TKey>() : null
+        };
+    }
+
+    internal static InsertBatchResult<TKey> EnrichInsert<TKey>(
+        InsertBatchResult<TKey> result,
+        TimeSpan duration,
+        int roundTrips)
+        where TKey : notnull, IEquatable<TKey>
+    {
+        return new InsertBatchResult<TKey>
+        {
+            InsertedEntities = result.InsertedEntities,
+            Failures = result.Failures,
+            Duration = duration,
+            DatabaseRoundTrips = roundTrips,
+            GraphHierarchy = result.GraphHierarchy,
+            TraversalInfo = result.TraversalInfo
+        };
+    }
+
+    private static GraphTraversalResult<TKey> CreateEmptyTraversalInfo<TKey>()
+        where TKey : notnull, IEquatable<TKey>
+    {
+        return new GraphTraversalResult<TKey>
+        {
+            MaxDepthReached = 0,
+            TotalEntitiesTraversed = 0,
+            EntitiesByDepth = new Dictionary<int, int>()
+        };
+    }
+}

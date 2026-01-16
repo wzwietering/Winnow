@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using EfCoreUtils.Internal;
 using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreUtils;
@@ -317,122 +318,56 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
     private BatchResult<TKey> CreateEmptyResult(Stopwatch stopwatch)
     {
         stopwatch.Stop();
-        return new BatchResult<TKey>
-        {
-            SuccessfulIds = [],
-            Failures = [],
-            Duration = stopwatch.Elapsed,
-            DatabaseRoundTrips = 0
-        };
+        return BatchResultFactory.CreateEmpty<TKey>(stopwatch.Elapsed);
     }
 
-    private BatchResult<TKey> EnrichResultWithMetrics(
+    private static BatchResult<TKey> EnrichResultWithMetrics(
         BatchResult<TKey> result,
         Stopwatch stopwatch,
         BatchStrategyContext<TEntity, TKey> context)
     {
-        return new BatchResult<TKey>
-        {
-            SuccessfulIds = result.SuccessfulIds,
-            Failures = result.Failures,
-            Duration = stopwatch.Elapsed,
-            DatabaseRoundTrips = context.RoundTripCounter
-        };
+        return BatchResultFactory.Enrich(result, stopwatch.Elapsed, context.RoundTripCounter);
     }
 
     private BatchResult<TKey> CreateEmptyGraphResult(Stopwatch stopwatch)
     {
         stopwatch.Stop();
-        return new BatchResult<TKey>
-        {
-            SuccessfulIds = [],
-            Failures = [],
-            Duration = stopwatch.Elapsed,
-            DatabaseRoundTrips = 0,
-            GraphHierarchy = [],
-            TraversalInfo = new GraphTraversalResult<TKey>
-            {
-                MaxDepthReached = 0,
-                TotalEntitiesTraversed = 0,
-                EntitiesByDepth = new Dictionary<int, int>()
-            }
-        };
+        return BatchResultFactory.CreateEmpty<TKey>(stopwatch.Elapsed, includeGraph: true);
     }
 
-    private BatchResult<TKey> EnrichGraphResultWithMetrics(
+    private static BatchResult<TKey> EnrichGraphResultWithMetrics(
         BatchResult<TKey> result,
         Stopwatch stopwatch,
         BatchStrategyContext<TEntity, TKey> context)
     {
-        return new BatchResult<TKey>
-        {
-            SuccessfulIds = result.SuccessfulIds,
-            Failures = result.Failures,
-            Duration = stopwatch.Elapsed,
-            DatabaseRoundTrips = context.RoundTripCounter,
-            GraphHierarchy = result.GraphHierarchy,
-            TraversalInfo = result.TraversalInfo
-        };
+        return BatchResultFactory.Enrich(result, stopwatch.Elapsed, context.RoundTripCounter);
     }
 
     private InsertBatchResult<TKey> CreateEmptyInsertResult(Stopwatch stopwatch)
     {
         stopwatch.Stop();
-        return new InsertBatchResult<TKey>
-        {
-            InsertedEntities = [],
-            Failures = [],
-            Duration = stopwatch.Elapsed,
-            DatabaseRoundTrips = 0
-        };
+        return BatchResultFactory.CreateEmptyInsert<TKey>(stopwatch.Elapsed);
     }
 
-    private InsertBatchResult<TKey> EnrichInsertResultWithMetrics(
+    private static InsertBatchResult<TKey> EnrichInsertResultWithMetrics(
         InsertBatchResult<TKey> result,
         Stopwatch stopwatch,
         BatchStrategyContext<TEntity, TKey> context)
     {
-        return new InsertBatchResult<TKey>
-        {
-            InsertedEntities = result.InsertedEntities,
-            Failures = result.Failures,
-            Duration = stopwatch.Elapsed,
-            DatabaseRoundTrips = context.RoundTripCounter
-        };
+        return BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
     }
 
     private InsertBatchResult<TKey> CreateEmptyInsertGraphResult(Stopwatch stopwatch)
     {
         stopwatch.Stop();
-        return new InsertBatchResult<TKey>
-        {
-            InsertedEntities = [],
-            Failures = [],
-            Duration = stopwatch.Elapsed,
-            DatabaseRoundTrips = 0,
-            GraphHierarchy = [],
-            TraversalInfo = new GraphTraversalResult<TKey>
-            {
-                MaxDepthReached = 0,
-                TotalEntitiesTraversed = 0,
-                EntitiesByDepth = new Dictionary<int, int>()
-            }
-        };
+        return BatchResultFactory.CreateEmptyInsert<TKey>(stopwatch.Elapsed, includeGraph: true);
     }
 
-    private InsertBatchResult<TKey> EnrichInsertGraphResultWithMetrics(
+    private static InsertBatchResult<TKey> EnrichInsertGraphResultWithMetrics(
         InsertBatchResult<TKey> result,
         Stopwatch stopwatch,
         BatchStrategyContext<TEntity, TKey> context)
     {
-        return new InsertBatchResult<TKey>
-        {
-            InsertedEntities = result.InsertedEntities,
-            Failures = result.Failures,
-            Duration = stopwatch.Elapsed,
-            DatabaseRoundTrips = context.RoundTripCounter,
-            GraphHierarchy = result.GraphHierarchy,
-            TraversalInfo = result.TraversalInfo
-        };
+        return BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
     }
 }

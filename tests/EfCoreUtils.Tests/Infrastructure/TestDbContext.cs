@@ -168,72 +168,29 @@ public class TestDbContext : DbContext
 
     private void ValidateEntities()
     {
-        ValidateProducts();
-        ValidateProductLongs();
-        ValidateProductGuids();
-        ValidateProductStrings();
+        ValidateProductEntities<Product>();
+        ValidateProductEntities<ProductLong>();
+        ValidateProductEntities<ProductGuid>();
+        ValidateProductEntities<ProductString>();
         ValidateCustomerOrders();
         ValidateOrderItems();
         ValidateItemReservations();
     }
 
-    private void ValidateProducts()
+    private void ValidateProductEntities<TProduct>() where TProduct : class, IProductEntity
     {
-        var products = ChangeTracker.Entries<Product>()
+        var products = ChangeTracker.Entries<TProduct>()
             .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
             .Select(e => e.Entity);
+
+        var typeName = typeof(TProduct).Name;
 
         foreach (var product in products)
         {
             if (product.Price <= 0)
-                throw new InvalidOperationException($"Product {product.Id}: Price must be greater than 0");
+                throw new InvalidOperationException($"{typeName} {product.DisplayId}: Price must be greater than 0");
             if (product.Stock < 0)
-                throw new InvalidOperationException($"Product {product.Id}: Stock cannot be negative");
-        }
-    }
-
-    private void ValidateProductLongs()
-    {
-        var products = ChangeTracker.Entries<ProductLong>()
-            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
-            .Select(e => e.Entity);
-
-        foreach (var product in products)
-        {
-            if (product.Price <= 0)
-                throw new InvalidOperationException($"ProductLong {product.Id}: Price must be greater than 0");
-            if (product.Stock < 0)
-                throw new InvalidOperationException($"ProductLong {product.Id}: Stock cannot be negative");
-        }
-    }
-
-    private void ValidateProductGuids()
-    {
-        var products = ChangeTracker.Entries<ProductGuid>()
-            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
-            .Select(e => e.Entity);
-
-        foreach (var product in products)
-        {
-            if (product.Price <= 0)
-                throw new InvalidOperationException($"ProductGuid {product.Id}: Price must be greater than 0");
-            if (product.Stock < 0)
-                throw new InvalidOperationException($"ProductGuid {product.Id}: Stock cannot be negative");
-        }
-    }
-
-    private void ValidateProductStrings()
-    {
-        var products = ChangeTracker.Entries<ProductString>()
-            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
-            .Select(e => e.Entity);
-
-        foreach (var product in products)
-        {
-            if (product.Price <= 0)
-                throw new InvalidOperationException($"ProductString {product.Id}: Price must be greater than 0");
-            if (product.Stock < 0)
-                throw new InvalidOperationException($"ProductString {product.Id}: Stock cannot be negative");
+                throw new InvalidOperationException($"{typeName} {product.DisplayId}: Stock cannot be negative");
         }
     }
 

@@ -1,3 +1,4 @@
+using EfCoreUtils.Internal;
 using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreUtils;
@@ -17,11 +18,16 @@ internal class BatchStrategyContext<TEntity, TKey>
     private readonly Dictionary<(string Type, TKey Id), List<object>>
         _deletedChildrenByParentRecursive = [];
 
+    private GraphHierarchyBuilder<TKey>? _graphBuilder;
+
     internal BatchStrategyContext(DbContext context)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _roundTripCounter = 0;
     }
+
+    private GraphHierarchyBuilder<TKey> GraphBuilder =>
+        _graphBuilder ??= new GraphHierarchyBuilder<TKey>(_context, GetEntityIdFromEntry);
 
     internal DbContext Context => _context;
     internal int RoundTripCounter => _roundTripCounter;
@@ -450,7 +456,7 @@ internal class BatchStrategyContext<TEntity, TKey>
         }
 
         // Get the foreign key property name that links to the parent
-        var fkProperty = GetForeignKeyProperty(navigation);
+        var fkProperty = NavigationPropertyHelper.GetForeignKeyProperty(navigation);
         if (fkProperty == null)
         {
             return;
@@ -478,16 +484,6 @@ internal class BatchStrategyContext<TEntity, TKey>
                 deletedChildren.Add(trackedEntry.Entity);
             }
         }
-    }
-
-    private static Microsoft.EntityFrameworkCore.Metadata.IProperty? GetForeignKeyProperty(
-        Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation)
-    {
-        if (navigation.Metadata is Microsoft.EntityFrameworkCore.Metadata.INavigation navMetadata)
-        {
-            return navMetadata.ForeignKey.Properties.FirstOrDefault();
-        }
-        return null;
     }
 
     internal List<TKey> GetOrphanedChildIds(TEntity entity)
@@ -668,26 +664,6 @@ internal class BatchStrategyContext<TEntity, TKey>
         }
     }
 
-    // ========== Shared Helper Methods for Recursive Traversal ==========
-
-    private static bool IsTraversableCollection(
-        Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation)
-    {
-        return navigation.CurrentValue != null &&
-               navigation.Metadata.IsCollection &&
-               navigation.CurrentValue is System.Collections.IEnumerable;
-    }
-
-    private static IEnumerable<object> GetCollectionItems(
-        Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation)
-    {
-        if (navigation.CurrentValue is System.Collections.IEnumerable collection)
-        {
-            return collection.Cast<object>().ToList();
-        }
-        return [];
-    }
-
     private TKey GetEntityIdFromEntry(
         Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
     {
@@ -708,112 +684,8 @@ internal class BatchStrategyContext<TEntity, TKey>
             $"Could not retrieve key value for entity {entry.Metadata.ClrType.Name}.");
     }
 
-    // ========== BuildGraphHierarchy Methods ==========
-
     internal (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) BuildGraphHierarchy(
-        TEntity entity, int maxDepth)
-    {
-        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        var depthCounts = new Dictionary<int, int>();
-
-        var rootNode = BuildNodeRecursive(entity, 0, maxDepth, visited, depthCounts);
-        var stats = CreateTraversalStats(depthCounts);
-
-        return (rootNode, stats);
-    }
-
-    private GraphNode<TKey> BuildNodeRecursive(
-        object entity, int currentDepth, int maxDepth,
-        HashSet<object> visited, Dictionary<int, int> depthCounts)
-    {
-        if (!visited.Add(entity))
-        {
-            return CreateSkippedNode(entity, currentDepth);
-        }
-
-        IncrementDepthCount(depthCounts, currentDepth);
-        var entry = _context.Entry(entity);
-        var children = BuildChildNodes(entry, currentDepth, maxDepth, visited, depthCounts);
-
-        return CreateGraphNode(entry, currentDepth, children);
-    }
-
-    private GraphNode<TKey> CreateSkippedNode(object entity, int depth)
-    {
-        var entry = _context.Entry(entity);
-        return new GraphNode<TKey>
-        {
-            EntityId = GetEntityIdFromEntry(entry),
-            EntityType = entry.Metadata.ClrType.Name,
-            Depth = depth,
-            Children = []
-        };
-    }
-
-    private GraphNode<TKey> CreateGraphNode(
-        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
-        int depth, List<GraphNode<TKey>> children)
-    {
-        return new GraphNode<TKey>
-        {
-            EntityId = GetEntityIdFromEntry(entry),
-            EntityType = entry.Metadata.ClrType.Name,
-            Depth = depth,
-            Children = children
-        };
-    }
-
-    private List<GraphNode<TKey>> BuildChildNodes(
-        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
-        int currentDepth, int maxDepth,
-        HashSet<object> visited, Dictionary<int, int> depthCounts)
-    {
-        if (currentDepth >= maxDepth)
-        {
-            return [];
-        }
-
-        var children = new List<GraphNode<TKey>>();
-        foreach (var navigation in entry.Navigations)
-        {
-            if (!IsTraversableCollection(navigation))
-            {
-                continue;
-            }
-
-            AddChildNodesFromNavigation(navigation, currentDepth, maxDepth, visited, depthCounts, children);
-        }
-        return children;
-    }
-
-    private void AddChildNodesFromNavigation(
-        Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation,
-        int currentDepth, int maxDepth,
-        HashSet<object> visited, Dictionary<int, int> depthCounts,
-        List<GraphNode<TKey>> children)
-    {
-        foreach (var item in GetCollectionItems(navigation))
-        {
-            var childNode = BuildNodeRecursive(item, currentDepth + 1, maxDepth, visited, depthCounts);
-            children.Add(childNode);
-        }
-    }
-
-    private static void IncrementDepthCount(Dictionary<int, int> depthCounts, int depth)
-    {
-        depthCounts.TryGetValue(depth, out var count);
-        depthCounts[depth] = count + 1;
-    }
-
-    private static GraphTraversalResult<TKey> CreateTraversalStats(Dictionary<int, int> depthCounts)
-    {
-        return new GraphTraversalResult<TKey>
-        {
-            MaxDepthReached = depthCounts.Count > 0 ? depthCounts.Keys.Max() : 0,
-            TotalEntitiesTraversed = depthCounts.Values.Sum(),
-            EntitiesByDepth = depthCounts
-        };
-    }
+        TEntity entity, int maxDepth) => GraphBuilder.Build(entity, maxDepth);
 
     // ========== Recursive Attachment Methods ==========
 
@@ -876,12 +748,12 @@ internal class BatchStrategyContext<TEntity, TKey>
     {
         foreach (var navigation in entry.Navigations)
         {
-            if (!IsTraversableCollection(navigation))
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
             {
                 continue;
             }
 
-            foreach (var item in GetCollectionItems(navigation))
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
                 if (targetState == EntityState.Added)
                 {
@@ -928,12 +800,12 @@ internal class BatchStrategyContext<TEntity, TKey>
     {
         foreach (var navigation in entry.Navigations)
         {
-            if (!IsTraversableCollection(navigation))
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
             {
                 continue;
             }
 
-            foreach (var item in GetCollectionItems(navigation))
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
                 AttachAsDeletedRecursive(item, currentDepth + 1, maxDepth, visited);
             }
@@ -977,12 +849,12 @@ internal class BatchStrategyContext<TEntity, TKey>
     {
         foreach (var navigation in entry.Navigations)
         {
-            if (!IsTraversableCollection(navigation))
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
             {
                 continue;
             }
 
-            foreach (var item in GetCollectionItems(navigation))
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
                 DetachRecursive(item, currentDepth + 1, maxDepth, visited);
             }
@@ -1024,12 +896,12 @@ internal class BatchStrategyContext<TEntity, TKey>
         // Recurse into children
         foreach (var navigation in entry.Navigations)
         {
-            if (!IsTraversableCollection(navigation))
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
             {
                 continue;
             }
 
-            foreach (var item in GetCollectionItems(navigation))
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
                 CaptureChildIdsRecursive(item, currentDepth + 1, maxDepth, visited);
             }
@@ -1050,12 +922,12 @@ internal class BatchStrategyContext<TEntity, TKey>
 
         foreach (var navigation in entry.Navigations)
         {
-            if (!IsTraversableCollection(navigation))
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
             {
                 continue;
             }
 
-            foreach (var item in GetCollectionItems(navigation))
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
                 var childEntry = _context.Entry(item);
                 var childKey = CreateEntityKey(childEntry);
@@ -1103,7 +975,7 @@ internal class BatchStrategyContext<TEntity, TKey>
             return;
         }
 
-        var fkProperty = GetForeignKeyProperty(navigation);
+        var fkProperty = NavigationPropertyHelper.GetForeignKeyProperty(navigation);
         if (fkProperty == null)
         {
             return;
@@ -1188,12 +1060,12 @@ internal class BatchStrategyContext<TEntity, TKey>
         // Recurse into children
         foreach (var navigation in entry.Navigations)
         {
-            if (!IsTraversableCollection(navigation))
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
             {
                 continue;
             }
 
-            foreach (var item in GetCollectionItems(navigation))
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
                 CollectOrphansRecursive(item, currentDepth + 1, maxDepth, visited, orphans);
             }
@@ -1228,12 +1100,12 @@ internal class BatchStrategyContext<TEntity, TKey>
 
         foreach (var navigation in entry.Navigations)
         {
-            if (!IsTraversableCollection(navigation))
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
             {
                 continue;
             }
 
-            foreach (var item in GetCollectionItems(navigation))
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
                 var childEntry = _context.Entry(item);
                 currentIds.Add(CreateEntityKey(childEntry));
@@ -1304,12 +1176,12 @@ internal class BatchStrategyContext<TEntity, TKey>
         // Recurse into children
         foreach (var navigation in entry.Navigations)
         {
-            if (!IsTraversableCollection(navigation))
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
             {
                 continue;
             }
 
-            foreach (var item in GetCollectionItems(navigation))
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
                 DetachOrphansAtAllLevels(item, currentDepth + 1, maxDepth, visited);
             }
@@ -1354,12 +1226,12 @@ internal class BatchStrategyContext<TEntity, TKey>
         // Recurse into children
         foreach (var navigation in entry.Navigations)
         {
-            if (!IsTraversableCollection(navigation))
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
             {
                 continue;
             }
 
-            foreach (var item in GetCollectionItems(navigation))
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
                 DeleteOrphansAtAllLevels(item, currentDepth + 1, maxDepth, visited);
             }
@@ -1442,12 +1314,12 @@ internal class BatchStrategyContext<TEntity, TKey>
         // Recurse into children
         foreach (var navigation in entry.Navigations)
         {
-            if (!IsTraversableCollection(navigation))
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
             {
                 continue;
             }
 
-            foreach (var item in GetCollectionItems(navigation))
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
                 ValidateCascadeRecursive(item, currentDepth + 1, maxDepth, visited);
             }

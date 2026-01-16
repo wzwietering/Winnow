@@ -9,7 +9,7 @@ public class GraphNode<TKey> where TKey : notnull, IEquatable<TKey>
     /// <summary>
     /// The ID of the entity this node represents.
     /// </summary>
-    public TKey EntityId { get; init; } = default!;
+    public required TKey EntityId { get; init; }
 
     /// <summary>
     /// The CLR type name of the entity.
