@@ -19,7 +19,7 @@ public class BatchSaverInsertTests : TestBase
             LastModified = DateTimeOffset.UtcNow
         };
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.InsertBatch([product]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -43,7 +43,7 @@ public class BatchSaverInsertTests : TestBase
             LastModified = DateTimeOffset.UtcNow
         }).ToList();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.InsertBatch(products);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -63,7 +63,7 @@ public class BatchSaverInsertTests : TestBase
     {
         using var context = CreateContext();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.InsertBatch([]);
 
         result.SuccessCount.ShouldBe(0);
@@ -83,7 +83,7 @@ public class BatchSaverInsertTests : TestBase
             new Product { Name = "Valid 2", Price = 20.00m, Stock = 100, LastModified = DateTimeOffset.UtcNow }
         };
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.InsertBatch(products);
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -107,7 +107,7 @@ public class BatchSaverInsertTests : TestBase
             new Product { Name = "P5", Price = 20.00m, Stock = 100, LastModified = DateTimeOffset.UtcNow }
         };
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.InsertBatch(products);
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -134,7 +134,7 @@ public class BatchSaverInsertTests : TestBase
             LastModified = DateTimeOffset.UtcNow
         }).ToList();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.InsertBatch(products);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -168,7 +168,7 @@ public class BatchSaverInsertTests : TestBase
             ]
         };
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
 
         Should.Throw<InvalidOperationException>(() => saver.InsertBatch([order]))
             .Message.ShouldContain("populated navigation properties");
@@ -200,7 +200,7 @@ public class BatchSaverInsertTests : TestBase
             ]
         };
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var options = new InsertBatchOptions { ValidateNavigationProperties = false };
 
         var result = saver.InsertBatch([order], options);
@@ -221,7 +221,7 @@ public class BatchSaverInsertTests : TestBase
             LastModified = DateTimeOffset.UtcNow
         }).ToList();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.InsertBatch(products, new InsertBatchOptions { Strategy = BatchStrategy.OneByOne });
 
         result.DatabaseRoundTrips.ShouldBe(5);
@@ -240,7 +240,7 @@ public class BatchSaverInsertTests : TestBase
             LastModified = DateTimeOffset.UtcNow
         }).ToList();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.InsertBatch(products, new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -261,7 +261,7 @@ public class BatchSaverInsertTests : TestBase
             new Product { Name = "P4", Price = 20.00m, Stock = 100, LastModified = DateTimeOffset.UtcNow }
         };
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.InsertBatch(products, new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -281,7 +281,7 @@ public class BatchSaverInsertTests : TestBase
             new Product { Name = "P2", Price = -5.00m, Stock = 100, LastModified = DateTimeOffset.UtcNow }
         };
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.InsertBatch(products);
 
         result.IsCompleteFailure.ShouldBeTrue();
@@ -302,7 +302,7 @@ public class BatchSaverInsertTests : TestBase
             new Product { Name = "P4", Price = 20.00m, Stock = 100, LastModified = DateTimeOffset.UtcNow }
         };
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.InsertBatch(products);
 
         result.SuccessRate.ShouldBe(0.75);

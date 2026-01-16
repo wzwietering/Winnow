@@ -4,20 +4,22 @@ namespace EfCoreUtils.Operations;
 /// Update operation behavior for entity graphs (parent + children).
 /// Handles orphan detection, child tracking, and graph attachment.
 /// </summary>
-internal class UpdateGraphOperation<TEntity> : IBatchOperation<TEntity> where TEntity : class
+internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
     private readonly GraphBatchOptions _options;
-    private readonly List<int> _successfulIds = [];
-    private readonly List<BatchFailure> _failures = [];
-    private readonly Dictionary<int, IReadOnlyList<int>> _childIdsByParentId = [];
-    private readonly Dictionary<int, IReadOnlyList<int>> _pendingChildIds = [];
+    private readonly List<TKey> _successfulIds = [];
+    private readonly List<BatchFailure<TKey>> _failures = [];
+    private readonly Dictionary<TKey, IReadOnlyList<TKey>> _childIdsByParentId = [];
+    private readonly Dictionary<TKey, IReadOnlyList<TKey>> _pendingChildIds = [];
 
     internal UpdateGraphOperation(GraphBatchOptions options)
     {
         _options = options;
     }
 
-    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity> context)
+    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
         context.CaptureAllOriginalChildIds(entities);
 
@@ -27,7 +29,7 @@ internal class UpdateGraphOperation<TEntity> : IBatchOperation<TEntity> where TE
         }
     }
 
-    public void PrepareEntity(TEntity entity, BatchStrategyContext<TEntity> context)
+    public void PrepareEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
     {
         context.AttachEntityGraphAsModified(entity);
         context.HandleOrphanedChildren(entity, _options);
@@ -37,7 +39,7 @@ internal class UpdateGraphOperation<TEntity> : IBatchOperation<TEntity> where TE
         _pendingChildIds[entityId] = childIds;
     }
 
-    public void RecordSuccess(TEntity entity, BatchStrategyContext<TEntity> context)
+    public void RecordSuccess(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
         _successfulIds.Add(entityId);
@@ -49,12 +51,12 @@ internal class UpdateGraphOperation<TEntity> : IBatchOperation<TEntity> where TE
         }
     }
 
-    public void RecordFailure(TEntity entity, Exception ex, BatchStrategyContext<TEntity> context)
+    public void RecordFailure(TEntity entity, Exception ex, BatchStrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
         _pendingChildIds.Remove(entityId);
 
-        var failure = new BatchFailure
+        var failure = new BatchFailure<TKey>
         {
             EntityId = entityId,
             ErrorMessage = $"Graph update failed: {ex.Message}",
@@ -64,14 +66,14 @@ internal class UpdateGraphOperation<TEntity> : IBatchOperation<TEntity> where TE
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity> context)
+    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
     {
         context.DetachEntityWithOrphans(entity);
     }
 
-    public BatchResult CreateResult()
+    public BatchResult<TKey> CreateResult()
     {
-        return new BatchResult
+        return new BatchResult<TKey>
         {
             SuccessfulIds = _successfulIds,
             Failures = _failures,

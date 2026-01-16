@@ -1,9 +1,11 @@
 namespace EfCoreUtils;
 
-internal interface IBatchGraphUpdateStrategy<TEntity> where TEntity : class
+internal interface IBatchGraphUpdateStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    BatchResult Execute(
+    BatchResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
+        BatchStrategyContext<TEntity, TKey> context,
         GraphBatchOptions options);
 }

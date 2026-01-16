@@ -5,12 +5,14 @@ namespace EfCoreUtils.Strategies;
 /// Processes each entity individually with separate SaveChanges calls.
 /// Maximum failure isolation but more database round trips.
 /// </summary>
-internal class GenericOneByOneStrategy<TEntity> where TEntity : class
+internal class GenericOneByOneStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    internal BatchResult Execute(
+    internal BatchResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
-        IBatchOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
@@ -23,10 +25,10 @@ internal class GenericOneByOneStrategy<TEntity> where TEntity : class
         return operation.CreateResult();
     }
 
-    internal InsertBatchResult ExecuteInsert(
+    internal InsertBatchResult<TKey> ExecuteInsert(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
-        IBatchInsertOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchInsertOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
@@ -41,8 +43,8 @@ internal class GenericOneByOneStrategy<TEntity> where TEntity : class
 
     private static void ProcessSingleEntity(
         TEntity entity,
-        BatchStrategyContext<TEntity> context,
-        IBatchOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -65,8 +67,8 @@ internal class GenericOneByOneStrategy<TEntity> where TEntity : class
     private static void ProcessSingleInsert(
         TEntity entity,
         int index,
-        BatchStrategyContext<TEntity> context,
-        IBatchInsertOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchInsertOperation<TEntity, TKey> operation)
     {
         try
         {

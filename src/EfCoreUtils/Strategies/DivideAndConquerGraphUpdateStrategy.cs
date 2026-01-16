@@ -2,16 +2,17 @@ using EfCoreUtils.Operations;
 
 namespace EfCoreUtils.Strategies;
 
-internal class DivideAndConquerGraphUpdateStrategy<TEntity> : IBatchGraphUpdateStrategy<TEntity>
+internal class DivideAndConquerGraphUpdateStrategy<TEntity, TKey> : IBatchGraphUpdateStrategy<TEntity, TKey>
     where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    public BatchResult Execute(
+    public BatchResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
+        BatchStrategyContext<TEntity, TKey> context,
         GraphBatchOptions options)
     {
-        var operation = new UpdateGraphOperation<TEntity>(options);
-        var strategy = new GenericDivideAndConquerStrategy<TEntity>();
+        var operation = new UpdateGraphOperation<TEntity, TKey>(options);
+        var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
 }

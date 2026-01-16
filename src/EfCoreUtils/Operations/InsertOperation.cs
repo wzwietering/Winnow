@@ -6,10 +6,12 @@ namespace EfCoreUtils.Operations;
 /// Insert operation behavior for parent-only entity inserts.
 /// Sets entities to Added state and tracks results by original index.
 /// </summary>
-internal class InsertOperation<TEntity> : IBatchInsertOperation<TEntity> where TEntity : class
+internal class InsertOperation<TEntity, TKey> : IBatchInsertOperation<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
     private readonly InsertBatchOptions _options;
-    private readonly List<InsertedEntity> _insertedEntities = [];
+    private readonly List<InsertedEntity<TKey>> _insertedEntities = [];
     private readonly List<InsertBatchFailure> _failures = [];
 
     internal InsertOperation(InsertBatchOptions options)
@@ -17,7 +19,7 @@ internal class InsertOperation<TEntity> : IBatchInsertOperation<TEntity> where T
         _options = options;
     }
 
-    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity> context)
+    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
         if (!_options.ValidateNavigationProperties)
         {
@@ -30,15 +32,15 @@ internal class InsertOperation<TEntity> : IBatchInsertOperation<TEntity> where T
         }
     }
 
-    public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity> context)
+    public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
     {
         context.Context.Entry(entity).State = EntityState.Added;
     }
 
-    public void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity> context)
+    public void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
-        _insertedEntities.Add(new InsertedEntity
+        _insertedEntities.Add(new InsertedEntity<TKey>
         {
             Id = entityId,
             OriginalIndex = index,
@@ -46,20 +48,20 @@ internal class InsertOperation<TEntity> : IBatchInsertOperation<TEntity> where T
         });
     }
 
-    public void RecordFailure(TEntity entity, int index, Exception ex, BatchStrategyContext<TEntity> context)
+    public void RecordFailure(TEntity entity, int index, Exception ex, BatchStrategyContext<TEntity, TKey> context)
     {
         var failure = context.CreateInsertBatchFailure(index, ex);
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity> context)
+    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
     {
         context.Context.Entry(entity).State = EntityState.Detached;
     }
 
-    public InsertBatchResult CreateResult()
+    public InsertBatchResult<TKey> CreateResult()
     {
-        return new InsertBatchResult
+        return new InsertBatchResult<TKey>
         {
             InsertedEntities = _insertedEntities,
             Failures = _failures

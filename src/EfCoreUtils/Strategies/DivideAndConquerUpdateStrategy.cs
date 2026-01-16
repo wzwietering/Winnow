@@ -2,12 +2,17 @@ using EfCoreUtils.Operations;
 
 namespace EfCoreUtils.Strategies;
 
-internal class DivideAndConquerUpdateStrategy<TEntity> : IBatchUpdateStrategy<TEntity> where TEntity : class
+internal class DivideAndConquerUpdateStrategy<TEntity, TKey> : IBatchUpdateStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    public BatchResult Execute(List<TEntity> entities, BatchStrategyContext<TEntity> context, BatchOptions options)
+    public BatchResult<TKey> Execute(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        BatchOptions options)
     {
-        var operation = new UpdateOperation<TEntity>(options);
-        var strategy = new GenericDivideAndConquerStrategy<TEntity>();
+        var operation = new UpdateOperation<TEntity, TKey>(options);
+        var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
 }

@@ -2,15 +2,17 @@ using EfCoreUtils.Operations;
 
 namespace EfCoreUtils.Strategies;
 
-internal class OneByOneDeleteStrategy<TEntity> : IBatchDeleteStrategy<TEntity> where TEntity : class
+internal class OneByOneDeleteStrategy<TEntity, TKey> : IBatchDeleteStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    public BatchResult Execute(
+    public BatchResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
+        BatchStrategyContext<TEntity, TKey> context,
         DeleteBatchOptions options)
     {
-        var operation = new DeleteOperation<TEntity>(options);
-        var strategy = new GenericOneByOneStrategy<TEntity>();
+        var operation = new DeleteOperation<TEntity, TKey>(options);
+        var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
 }

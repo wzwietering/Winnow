@@ -2,12 +2,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreUtils;
 
-internal class BatchStrategyContext<TEntity> where TEntity : class
+internal class BatchStrategyContext<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
     private readonly DbContext _context;
     private int _roundTripCounter;
-    private readonly Dictionary<int, HashSet<int>> _originalChildIdsByParent = [];
-    private readonly Dictionary<int, List<object>> _deletedChildrenByParent = [];
+    private readonly Dictionary<TKey, HashSet<TKey>> _originalChildIdsByParent = [];
+    private readonly Dictionary<TKey, List<object>> _deletedChildrenByParent = [];
 
     internal BatchStrategyContext(DbContext context)
     {
@@ -19,7 +21,7 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
     internal int RoundTripCounter => _roundTripCounter;
     internal void IncrementRoundTrip() => _roundTripCounter++;
 
-    internal int GetEntityId(TEntity entity)
+    internal TKey GetEntityId(TEntity entity)
     {
         var entry = _context.Entry(entity);
         var keyProperty = entry.Metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
@@ -29,15 +31,18 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
         }
 
         var keyValue = entry.Property(keyProperty.Name).CurrentValue;
-        if (keyValue is int id)
+        if (keyValue is TKey id)
         {
             return id;
         }
 
-        throw new InvalidOperationException("Primary key must be of type int");
+        throw new InvalidOperationException(
+            $"Primary key type mismatch for entity {typeof(TEntity).Name}. " +
+            $"Expected type {typeof(TKey).Name}, but entity has key type {keyProperty.ClrType.Name}. " +
+            $"Use BatchSaver<{typeof(TEntity).Name}, {keyProperty.ClrType.Name}> instead.");
     }
 
-    internal BatchFailure CreateBatchFailure(int entityId, Exception exception)
+    internal BatchFailure<TKey> CreateBatchFailure(TKey entityId, Exception exception)
     {
         var reason = exception switch
         {
@@ -47,7 +52,7 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
             _ => FailureReason.UnknownError
         };
 
-        return new BatchFailure
+        return new BatchFailure<TKey>
         {
             EntityId = entityId,
             ErrorMessage = exception.Message,
@@ -196,7 +201,7 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
             throw new InvalidOperationException(
                 $"Entity {typeof(TEntity).Name} (Id={entityId}) has modified navigation properties: " +
                 $"{string.Join(", ", modifiedNavigations)}. " +
-                $"BatchSaver<{typeof(TEntity).Name}> only updates parent entities. " +
+                $"BatchSaver<{typeof(TEntity).Name}, {typeof(TKey).Name}> only updates parent entities. " +
                 $"To update entity graphs, use standard EF Core SaveChanges() or set " +
                 $"BatchOptions.ValidateNavigationProperties = false to suppress this check.");
         }
@@ -327,9 +332,9 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
         }
     }
 
-    internal List<int> GetChildIds(TEntity entity)
+    internal List<TKey> GetChildIds(TEntity entity)
     {
-        var childIds = new List<int>();
+        var childIds = new List<TKey>();
         var entry = _context.Entry(entity);
 
         foreach (var navigation in entry.Navigations)
@@ -347,7 +352,7 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
 
     private void AddChildIdsFromCollection(
         Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation,
-        List<int> childIds)
+        List<TKey> childIds)
     {
         if (navigation.CurrentValue is not System.Collections.IEnumerable collection)
         {
@@ -358,10 +363,10 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
         {
             var itemEntry = _context.Entry(item);
             var keyProperty = itemEntry.Metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
-            if (keyProperty?.ClrType == typeof(int))
+            if (keyProperty?.ClrType == typeof(TKey))
             {
                 var keyValue = itemEntry.Property(keyProperty.Name).CurrentValue;
-                if (keyValue is int id)
+                if (keyValue is TKey id)
                 {
                     childIds.Add(id);
                 }
@@ -385,7 +390,7 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
     private void CaptureOriginalChildIdsFromChangeTracker(TEntity entity)
     {
         var parentId = GetEntityId(entity);
-        var childIds = new HashSet<int>();
+        var childIds = new HashSet<TKey>();
         var deletedChildren = new List<object>();
 
         // Get current children (still in collection)
@@ -413,14 +418,14 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
 
     private void AddDeletedChildrenFromChangeTracker(
         Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation,
-        HashSet<int> childIds,
+        HashSet<TKey> childIds,
         List<object> deletedChildren,
-        int parentId)
+        TKey parentId)
     {
         var entityType = navigation.Metadata.TargetEntityType;
         var keyProperty = entityType.FindPrimaryKey()?.Properties.FirstOrDefault();
 
-        if (keyProperty?.ClrType != typeof(int))
+        if (keyProperty?.ClrType != typeof(TKey))
         {
             return;
         }
@@ -442,13 +447,13 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
 
             // Check if this deleted entity belongs to the current parent
             var fkValue = trackedEntry.Property(fkProperty.Name).CurrentValue;
-            if (fkValue is not int childParentId || childParentId != parentId)
+            if (fkValue is not TKey childParentId || !childParentId.Equals(parentId))
             {
                 continue;
             }
 
             var keyValue = trackedEntry.Property(keyProperty.Name).CurrentValue;
-            if (keyValue is int id)
+            if (keyValue is TKey id)
             {
                 childIds.Add(id);
                 deletedChildren.Add(trackedEntry.Entity);
@@ -466,7 +471,7 @@ internal class BatchStrategyContext<TEntity> where TEntity : class
         return null;
     }
 
-    internal List<int> GetOrphanedChildIds(TEntity entity)
+    internal List<TKey> GetOrphanedChildIds(TEntity entity)
     {
         var parentId = GetEntityId(entity);
         var currentChildIds = GetChildIds(entity).ToHashSet();

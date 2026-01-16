@@ -64,7 +64,7 @@ public class StrategyComparisonNavigationTests : TestBase
         divideConquer.DatabaseRoundTrips.ShouldBeGreaterThan(oneByOne.DatabaseRoundTrips);
     }
 
-    private (BatchResult OneByOne, BatchResult DivideAndConquer) CompareStrategies(
+    private (BatchResult<int> OneByOne, BatchResult<int> DivideAndConquer) CompareStrategies(
         int orderCount,
         int invalidCount,
         string scenarioName)
@@ -128,14 +128,14 @@ public class StrategyComparisonNavigationTests : TestBase
         return (oneByOneResult, divideConquerResult);
     }
 
-    private BatchResult RunWithStrategy(TestDbContext context, List<CustomerOrder> orders, BatchStrategy strategy)
+    private BatchResult<int> RunWithStrategy(TestDbContext context, List<CustomerOrder> orders, BatchStrategy strategy)
     {
         var options = new BatchOptions
         {
             Strategy = strategy,
             ValidateNavigationProperties = false
         };
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         return saver.UpdateBatch(orders, options);
     }
 
@@ -190,7 +190,7 @@ public class StrategyComparisonNavigationTests : TestBase
         divideConquer.DatabaseRoundTrips.ShouldBeGreaterThan(oneByOne.DatabaseRoundTrips);
     }
 
-    private (BatchResult OneByOne, BatchResult DivideAndConquer) CompareGraphStrategies(
+    private (BatchResult<int> OneByOne, BatchResult<int> DivideAndConquer) CompareGraphStrategies(
         int orderCount,
         int invalidCount,
         string scenarioName)
@@ -248,10 +248,10 @@ public class StrategyComparisonNavigationTests : TestBase
         }
     }
 
-    private static BatchResult RunGraphWithStrategy(TestDbContext context, List<CustomerOrder> orders, BatchStrategy strategy)
+    private static BatchResult<int> RunGraphWithStrategy(TestDbContext context, List<CustomerOrder> orders, BatchStrategy strategy)
     {
         var options = new GraphBatchOptions { Strategy = strategy };
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         return saver.UpdateGraphBatch(orders, options);
     }
 }

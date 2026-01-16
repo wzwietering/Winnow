@@ -20,7 +20,7 @@ public class BatchSaverDeleteGraphTests : TestBase
         var childIds = orderWithChildren.OrderItems.Select(i => i.Id).ToList();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.DeleteGraphBatch([orderWithChildren]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -48,7 +48,7 @@ public class BatchSaverDeleteGraphTests : TestBase
         var expectedChildIds = orderWithChildren.OrderItems.Select(i => i.Id).ToList();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.DeleteGraphBatch([orderWithChildren]);
 
         result.ChildIdsByParentId.ShouldNotBeNull();
@@ -67,7 +67,7 @@ public class BatchSaverDeleteGraphTests : TestBase
             .First();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var options = new DeleteGraphBatchOptions { CascadeBehavior = DeleteCascadeBehavior.Throw };
 
         Should.Throw<InvalidOperationException>(() => saver.DeleteGraphBatch([orderWithChildren], options))
@@ -92,7 +92,7 @@ public class BatchSaverDeleteGraphTests : TestBase
             .First(o => o.Id == orderWithChildren.Id);
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var options = new DeleteGraphBatchOptions { CascadeBehavior = DeleteCascadeBehavior.Throw };
 
         var result = saver.DeleteGraphBatch([emptyOrder], options);
@@ -112,7 +112,7 @@ public class BatchSaverDeleteGraphTests : TestBase
         var orderId = orderWithChildren.Id;
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var options = new DeleteGraphBatchOptions { CascadeBehavior = DeleteCascadeBehavior.ParentOnly };
 
         var result = saver.DeleteGraphBatch([orderWithChildren], options);
@@ -136,7 +136,7 @@ public class BatchSaverDeleteGraphTests : TestBase
         var deletedOrderIds = ordersWithChildren.Select(o => o.Id).ToList();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.DeleteGraphBatch(ordersWithChildren);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -163,7 +163,7 @@ public class BatchSaverDeleteGraphTests : TestBase
             .ToList();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var options = new DeleteGraphBatchOptions { Strategy = BatchStrategy.OneByOne };
         var result = saver.DeleteGraphBatch(ordersWithChildren, options);
 
@@ -182,7 +182,7 @@ public class BatchSaverDeleteGraphTests : TestBase
             .ToList();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var options = new DeleteGraphBatchOptions { Strategy = BatchStrategy.DivideAndConquer };
         var result = saver.DeleteGraphBatch(ordersWithChildren, options);
 
@@ -216,7 +216,7 @@ public class BatchSaverDeleteGraphTests : TestBase
             .First(o => o.Id == orderId);
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.DeleteGraphBatch([orderToDelete]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -238,7 +238,7 @@ public class BatchSaverDeleteGraphTests : TestBase
             .ToList();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.DeleteGraphBatch(ordersWithChildren);
 
         result.IsCompleteSuccess.ShouldBeTrue();

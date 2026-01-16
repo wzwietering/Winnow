@@ -32,7 +32,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -54,7 +54,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -71,7 +71,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     {
         using var context = CreateContext();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch([], DivideAndConquerOptions);
 
         result.SuccessCount.ShouldBe(0);
@@ -93,7 +93,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
             order.Status = CustomerOrderStatus.Completed;
         }
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -123,7 +123,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -150,7 +150,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -177,7 +177,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -203,7 +203,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -229,7 +229,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
 
         result.IsCompleteFailure.ShouldBeTrue();
@@ -250,7 +250,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         orders[0].OrderItems.Remove(orders[0].OrderItems.First());
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var ex = Should.Throw<InvalidOperationException>(() =>
             saver.UpdateGraphBatch(orders, DivideAndConquerOptions));
 
@@ -270,7 +270,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
         orders[0].OrderItems.Remove(orders[0].OrderItems.First());
         orders[0].Status = CustomerOrderStatus.Processing;
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
@@ -299,7 +299,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
         orders[0].Status = CustomerOrderStatus.Processing;
         orders[1].TotalAmount = -100m;
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
@@ -327,7 +327,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
         orders[0].OrderItems.Remove(removedItem1);
         orders[1].OrderItems.Remove(removedItem2);
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
@@ -358,7 +358,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
         orders[0].OrderItems.Remove(orders[0].OrderItems.First());
         orders[0].Status = CustomerOrderStatus.Processing;
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
@@ -394,7 +394,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
 
         result.IsCompleteSuccess.ShouldBeTrue();

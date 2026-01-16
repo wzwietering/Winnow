@@ -19,7 +19,7 @@ public class BatchSaverNavigationTests : TestBase
         // Ensure EF Core detects the change
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var ex = Should.Throw<InvalidOperationException>(() => saver.UpdateBatch(orders));
 
         ex.Message.ShouldContain("navigation properties");
@@ -37,7 +37,7 @@ public class BatchSaverNavigationTests : TestBase
         orders[0].OrderItems.First().Quantity = 999;
         orders[0].Status = CustomerOrderStatus.Processing;
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateBatch(orders, new BatchOptions
         {
             ValidateNavigationProperties = false
@@ -70,7 +70,7 @@ public class BatchSaverNavigationTests : TestBase
             orders[i].TotalAmount += 10m;
         }
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateBatch(orders, new BatchOptions
         {
             ValidateNavigationProperties = false
@@ -97,7 +97,7 @@ public class BatchSaverNavigationTests : TestBase
             order.Status = CustomerOrderStatus.Processing;
         }
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateBatch(orders, new BatchOptions
         {
             ValidateNavigationProperties = false
@@ -131,7 +131,7 @@ public class BatchSaverNavigationTests : TestBase
             order.TotalAmount += 100m;
         }
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateBatch(orders, new BatchOptions
         {
             ValidateNavigationProperties = false
@@ -167,7 +167,7 @@ public class BatchSaverNavigationTests : TestBase
             order.Status = CustomerOrderStatus.Processing;
         }
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateBatch(ordersToUpdate, new BatchOptions
         {
             ValidateNavigationProperties = false
@@ -199,7 +199,7 @@ public class BatchSaverNavigationTests : TestBase
             order.Status = CustomerOrderStatus.Completed;
         }
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateBatch(ordersToUpdate, new BatchOptions
         {
             ValidateNavigationProperties = false
@@ -223,7 +223,7 @@ public class BatchSaverNavigationTests : TestBase
             item.Subtotal = item.Quantity * item.UnitPrice;
         }
 
-        var saver = new BatchSaver<OrderItem>(context);
+        var saver = new BatchSaver<OrderItem, int>(context);
         var result = saver.UpdateBatch(itemsToUpdate);
 
         result.IsCompleteSuccess.ShouldBeTrue();
