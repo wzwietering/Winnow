@@ -14,10 +14,7 @@ internal class InsertOperation<TEntity, TKey> : IBatchInsertOperation<TEntity, T
     private readonly List<InsertedEntity<TKey>> _insertedEntities = [];
     private readonly List<InsertBatchFailure> _failures = [];
 
-    internal InsertOperation(InsertBatchOptions options)
-    {
-        _options = options;
-    }
+    internal InsertOperation(InsertBatchOptions options) => _options = options;
 
     public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
@@ -32,10 +29,7 @@ internal class InsertOperation<TEntity, TKey> : IBatchInsertOperation<TEntity, T
         }
     }
 
-    public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
-    {
-        context.Context.Entry(entity).State = EntityState.Added;
-    }
+    public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context) => context.Context.Entry(entity).State = EntityState.Added;
 
     public void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
     {
@@ -54,17 +48,11 @@ internal class InsertOperation<TEntity, TKey> : IBatchInsertOperation<TEntity, T
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
-    {
-        context.Context.Entry(entity).State = EntityState.Detached;
-    }
+    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.Context.Entry(entity).State = EntityState.Detached;
 
-    public InsertBatchResult<TKey> CreateResult()
+    public InsertBatchResult<TKey> CreateResult() => new()
     {
-        return new InsertBatchResult<TKey>
-        {
-            InsertedEntities = _insertedEntities,
-            Failures = _failures
-        };
-    }
+        InsertedEntities = _insertedEntities,
+        Failures = _failures
+    };
 }

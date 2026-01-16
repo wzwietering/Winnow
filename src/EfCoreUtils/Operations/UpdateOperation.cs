@@ -32,10 +32,7 @@ internal class UpdateOperation<TEntity, TKey> : IBatchOperation<TEntity, TKey>
         }
     }
 
-    public void PrepareEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
-    {
-        context.Context.Entry(entity).State = EntityState.Modified;
-    }
+    public void PrepareEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.Context.Entry(entity).State = EntityState.Modified;
 
     public void RecordSuccess(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
     {
@@ -50,17 +47,11 @@ internal class UpdateOperation<TEntity, TKey> : IBatchOperation<TEntity, TKey>
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
-    {
-        context.Context.Entry(entity).State = EntityState.Detached;
-    }
+    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.Context.Entry(entity).State = EntityState.Detached;
 
-    public BatchResult<TKey> CreateResult()
+    public BatchResult<TKey> CreateResult() => new()
     {
-        return new BatchResult<TKey>
-        {
-            SuccessfulIds = _successfulIds,
-            Failures = _failures
-        };
-    }
+        SuccessfulIds = _successfulIds,
+        Failures = _failures
+    };
 }

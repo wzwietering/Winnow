@@ -19,10 +19,16 @@ public class BatchResult<TKey> where TKey : notnull, IEquatable<TKey>
     public int DatabaseRoundTrips { get; init; }
 
     /// <summary>
-    /// For graph operations only: Maps each successful parent ID to its child IDs.
+    /// For graph operations only: Full hierarchy of processed entities.
     /// Null for parent-only UpdateBatch operations.
     /// </summary>
-    public IReadOnlyDictionary<TKey, IReadOnlyList<TKey>>? ChildIdsByParentId { get; init; }
+    public IReadOnlyList<GraphNode<TKey>>? GraphHierarchy { get; init; }
+
+    /// <summary>
+    /// For graph operations only: Statistics about the traversal.
+    /// Null for parent-only UpdateBatch operations.
+    /// </summary>
+    public GraphTraversalResult<TKey>? TraversalInfo { get; init; }
 
     public bool IsCompleteSuccess => FailureCount == 0 && SuccessCount > 0;
     public bool IsCompleteFailure => SuccessCount == 0 && FailureCount > 0;

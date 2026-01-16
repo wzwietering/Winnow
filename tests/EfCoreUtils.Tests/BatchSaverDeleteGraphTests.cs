@@ -36,7 +36,7 @@ public class BatchSaverDeleteGraphTests : TestBase
     }
 
     [Fact]
-    public void DeleteGraphBatch_ReturnsChildIdsByParentId()
+    public void DeleteGraphBatch_ReturnsGraphHierarchy()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 3, 2);
@@ -51,9 +51,9 @@ public class BatchSaverDeleteGraphTests : TestBase
         var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.DeleteGraphBatch([orderWithChildren]);
 
-        result.ChildIdsByParentId.ShouldNotBeNull();
-        result.ChildIdsByParentId.ShouldContainKey(orderId);
-        result.ChildIdsByParentId![orderId].ShouldBe(expectedChildIds);
+        result.GraphHierarchy.ShouldNotBeNull();
+        result.GraphHierarchy!.ShouldContain(n => n.EntityId.Equals(orderId));
+        result.GraphHierarchy!.First(n => n.EntityId.Equals(orderId)).GetChildIds().ShouldBe(expectedChildIds);
     }
 
     [Fact]
@@ -141,8 +141,8 @@ public class BatchSaverDeleteGraphTests : TestBase
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
-        result.ChildIdsByParentId.ShouldNotBeNull();
-        result.ChildIdsByParentId!.Count.ShouldBe(3);
+        result.GraphHierarchy.ShouldNotBeNull();
+        result.GraphHierarchy!.Count.ShouldBe(3);
 
         context.ChangeTracker.Clear();
         context.CustomerOrders.Count().ShouldBe(2);
@@ -220,8 +220,8 @@ public class BatchSaverDeleteGraphTests : TestBase
         var result = saver.DeleteGraphBatch([orderToDelete]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
-        result.ChildIdsByParentId.ShouldNotBeNull();
-        result.ChildIdsByParentId![orderId].ShouldBeEmpty();
+        result.GraphHierarchy.ShouldNotBeNull();
+        result.GraphHierarchy!.First(n => n.EntityId.Equals(orderId)).GetChildIds().ShouldBeEmpty();
 
         context.ChangeTracker.Clear();
         context.CustomerOrders.Find(orderId).ShouldBeNull();

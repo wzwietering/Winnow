@@ -14,4 +14,10 @@ public class DeleteGraphBatchOptions
     /// How to handle children when deleting parent. Default is Cascade.
     /// </summary>
     public DeleteCascadeBehavior CascadeBehavior { get; set; } = DeleteCascadeBehavior.Cascade;
+
+    /// <summary>
+    /// Maximum depth to traverse in the entity graph.
+    /// Default: 10. Use to prevent infinite recursion in deep hierarchies.
+    /// </summary>
+    public int MaxDepth { get; set; } = 10;
 }

@@ -25,7 +25,7 @@ public class BatchSaverInsertGraphTests : TestBase
     }
 
     [Fact]
-    public void InsertGraphBatch_ReturnsChildIdsByParentId()
+    public void InsertGraphBatch_ReturnsGraphHierarchy()
     {
         using var context = CreateContext();
 
@@ -34,9 +34,9 @@ public class BatchSaverInsertGraphTests : TestBase
         var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.InsertGraphBatch([order]);
 
-        result.ChildIdsByParentId.ShouldNotBeNull();
-        result.ChildIdsByParentId.ShouldContainKey(order.Id);
-        result.ChildIdsByParentId[order.Id].Count.ShouldBe(3);
+        result.GraphHierarchy.ShouldNotBeNull();
+        result.GraphHierarchy!.ShouldContain(n => n.EntityId.Equals(order.Id));
+        result.GraphHierarchy!.First(n => n.EntityId.Equals(order.Id)).GetChildIds().Count.ShouldBe(3);
     }
 
     [Fact]
@@ -56,7 +56,7 @@ public class BatchSaverInsertGraphTests : TestBase
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
-        result.ChildIdsByParentId!.Count.ShouldBe(3);
+        result.GraphHierarchy!.Count.ShouldBe(3);
     }
 
     [Fact]
@@ -168,7 +168,7 @@ public class BatchSaverInsertGraphTests : TestBase
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(1);
         result.InsertedEntities[0].Id.ShouldBeGreaterThan(0);
-        result.ChildIdsByParentId![order.Id].Count.ShouldBe(0);
+        result.GraphHierarchy!.First(n => n.EntityId.Equals(order.Id)).GetChildIds().ShouldBeEmpty();
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class BatchSaverInsertGraphTests : TestBase
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(20);
-        result.ChildIdsByParentId!.Count.ShouldBe(20);
+        result.GraphHierarchy!.Count.ShouldBe(20);
     }
 
     [Fact]
@@ -232,7 +232,7 @@ public class BatchSaverInsertGraphTests : TestBase
         var result = saver.InsertGraphBatch([order]);
 
         var parentId = result.InsertedEntities[0].Id;
-        var childIds = result.ChildIdsByParentId![parentId].ToList();
+        var childIds = result.GraphHierarchy!.First(n => n.EntityId.Equals(parentId)).GetChildIds().ToList();
 
         childIds.Count.ShouldBe(3);
 

@@ -11,27 +11,25 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
     private readonly InsertGraphBatchOptions _options;
     private readonly List<InsertedEntity<TKey>> _insertedEntities = [];
     private readonly List<InsertBatchFailure> _failures = [];
-    private readonly Dictionary<TKey, IReadOnlyList<TKey>> _childIdsByParentId = [];
+    private readonly List<GraphNode<TKey>> _graphHierarchy = [];
 
-    internal InsertGraphOperation(InsertGraphBatchOptions options)
-    {
-        _options = options;
-    }
+    // Stats aggregation
+    private int _totalEntitiesTraversed;
+    private int _maxDepthReached;
+    private readonly Dictionary<int, int> _entitiesByDepth = [];
+
+    internal InsertGraphOperation(InsertGraphBatchOptions options) => _options = options;
 
     public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
         // No validation needed for graph inserts - we expect children
     }
 
-    public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
-    {
-        context.AttachEntityGraphAsAdded(entity);
-    }
+    public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context) => context.AttachEntityGraphAsAddedRecursive(entity, _options.MaxDepth);
 
     public void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
-        var childIds = context.GetChildIds(entity);
 
         _insertedEntities.Add(new InsertedEntity<TKey>
         {
@@ -40,7 +38,9 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
             Entity = entity
         });
 
-        _childIdsByParentId[entityId] = childIds;
+        var (node, stats) = context.BuildGraphHierarchy(entity, _options.MaxDepth);
+        _graphHierarchy.Add(node);
+        AggregateStats(stats);
     }
 
     public void RecordFailure(TEntity entity, int index, Exception ex, BatchStrategyContext<TEntity, TKey> context)
@@ -55,29 +55,40 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
+    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.DetachEntityGraphRecursive(entity, _options.MaxDepth);
+
+    public InsertBatchResult<TKey> CreateResult() => new()
     {
-        context.DetachEntityGraph(entity);
+        InsertedEntities = _insertedEntities,
+        Failures = _failures,
+        GraphHierarchy = _graphHierarchy,
+        TraversalInfo = CreateTraversalInfo()
+    };
+
+    private void AggregateStats(GraphTraversalResult<TKey> stats)
+    {
+        _totalEntitiesTraversed += stats.TotalEntitiesTraversed;
+        _maxDepthReached = Math.Max(_maxDepthReached, stats.MaxDepthReached);
+
+        foreach (var (depth, count) in stats.EntitiesByDepth)
+        {
+            _entitiesByDepth.TryGetValue(depth, out var existing);
+            _entitiesByDepth[depth] = existing + count;
+        }
     }
 
-    public InsertBatchResult<TKey> CreateResult()
+    private GraphTraversalResult<TKey> CreateTraversalInfo() => new()
     {
-        return new InsertBatchResult<TKey>
-        {
-            InsertedEntities = _insertedEntities,
-            Failures = _failures,
-            ChildIdsByParentId = _childIdsByParentId
-        };
-    }
+        MaxDepthReached = _maxDepthReached,
+        TotalEntitiesTraversed = _totalEntitiesTraversed,
+        EntitiesByDepth = _entitiesByDepth
+    };
 
-    private static FailureReason ClassifyException(Exception ex)
+    private static FailureReason ClassifyException(Exception ex) => ex switch
     {
-        return ex switch
-        {
-            InvalidOperationException => FailureReason.ValidationError,
-            Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
-            Microsoft.EntityFrameworkCore.DbUpdateException => FailureReason.DatabaseConstraint,
-            _ => FailureReason.UnknownError
-        };
-    }
+        InvalidOperationException => FailureReason.ValidationError,
+        Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
+        Microsoft.EntityFrameworkCore.DbUpdateException => FailureReason.DatabaseConstraint,
+        _ => FailureReason.UnknownError
+    };
 }

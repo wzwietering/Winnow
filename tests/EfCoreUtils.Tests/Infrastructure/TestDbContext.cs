@@ -12,6 +12,7 @@ public class TestDbContext : DbContext
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<CustomerOrder> CustomerOrders => Set<CustomerOrder>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<ItemReservation> ItemReservations => Set<ItemReservation>();
 
     public TestDbContext(DbContextOptions<TestDbContext> options) : base(options)
     {
@@ -131,6 +132,23 @@ public class TestDbContext : DbContext
                 .IsRequired()
                 .IsRowVersion()
                 .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            entity.HasMany(e => e.Reservations)
+                .WithOne(r => r.OrderItem)
+                .HasForeignKey(r => r.OrderItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ItemReservation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.WarehouseLocation)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
         });
 
         base.OnModelCreating(modelBuilder);
@@ -150,71 +168,29 @@ public class TestDbContext : DbContext
 
     private void ValidateEntities()
     {
-        ValidateProducts();
-        ValidateProductLongs();
-        ValidateProductGuids();
-        ValidateProductStrings();
+        ValidateProductEntities<Product>();
+        ValidateProductEntities<ProductLong>();
+        ValidateProductEntities<ProductGuid>();
+        ValidateProductEntities<ProductString>();
         ValidateCustomerOrders();
         ValidateOrderItems();
+        ValidateItemReservations();
     }
 
-    private void ValidateProducts()
+    private void ValidateProductEntities<TProduct>() where TProduct : class, IProductEntity
     {
-        var products = ChangeTracker.Entries<Product>()
+        var products = ChangeTracker.Entries<TProduct>()
             .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
             .Select(e => e.Entity);
+
+        var typeName = typeof(TProduct).Name;
 
         foreach (var product in products)
         {
             if (product.Price <= 0)
-                throw new InvalidOperationException($"Product {product.Id}: Price must be greater than 0");
+                throw new InvalidOperationException($"{typeName} {product.DisplayId}: Price must be greater than 0");
             if (product.Stock < 0)
-                throw new InvalidOperationException($"Product {product.Id}: Stock cannot be negative");
-        }
-    }
-
-    private void ValidateProductLongs()
-    {
-        var products = ChangeTracker.Entries<ProductLong>()
-            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
-            .Select(e => e.Entity);
-
-        foreach (var product in products)
-        {
-            if (product.Price <= 0)
-                throw new InvalidOperationException($"ProductLong {product.Id}: Price must be greater than 0");
-            if (product.Stock < 0)
-                throw new InvalidOperationException($"ProductLong {product.Id}: Stock cannot be negative");
-        }
-    }
-
-    private void ValidateProductGuids()
-    {
-        var products = ChangeTracker.Entries<ProductGuid>()
-            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
-            .Select(e => e.Entity);
-
-        foreach (var product in products)
-        {
-            if (product.Price <= 0)
-                throw new InvalidOperationException($"ProductGuid {product.Id}: Price must be greater than 0");
-            if (product.Stock < 0)
-                throw new InvalidOperationException($"ProductGuid {product.Id}: Stock cannot be negative");
-        }
-    }
-
-    private void ValidateProductStrings()
-    {
-        var products = ChangeTracker.Entries<ProductString>()
-            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
-            .Select(e => e.Entity);
-
-        foreach (var product in products)
-        {
-            if (product.Price <= 0)
-                throw new InvalidOperationException($"ProductString {product.Id}: Price must be greater than 0");
-            if (product.Stock < 0)
-                throw new InvalidOperationException($"ProductString {product.Id}: Stock cannot be negative");
+                throw new InvalidOperationException($"{typeName} {product.DisplayId}: Stock cannot be negative");
         }
     }
 
@@ -251,6 +227,23 @@ public class TestDbContext : DbContext
             var expectedSubtotal = item.Quantity * item.UnitPrice;
             if (Math.Abs(item.Subtotal - expectedSubtotal) > 0.01m)
                 throw new InvalidOperationException($"OrderItem {item.Id}: Subtotal mismatch");
+        }
+    }
+
+    private void ValidateItemReservations()
+    {
+        var reservations = ChangeTracker.Entries<ItemReservation>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
+            .Select(e => e.Entity);
+
+        foreach (var reservation in reservations)
+        {
+            if (reservation.ReservedQuantity <= 0)
+                throw new InvalidOperationException(
+                    $"ItemReservation {reservation.Id}: ReservedQuantity must be greater than 0");
+            if (string.IsNullOrWhiteSpace(reservation.WarehouseLocation))
+                throw new InvalidOperationException(
+                    $"ItemReservation {reservation.Id}: WarehouseLocation is required");
         }
     }
 }
