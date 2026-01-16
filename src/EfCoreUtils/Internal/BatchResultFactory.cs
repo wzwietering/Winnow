@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+
 namespace EfCoreUtils.Internal;
 
 /// <summary>
@@ -75,6 +77,42 @@ internal static class BatchResultFactory
             MaxDepthReached = 0,
             TotalEntitiesTraversed = 0,
             EntitiesByDepth = new Dictionary<int, int>()
+        };
+    }
+
+    internal static BatchFailure<TKey> CreateBatchFailure<TKey>(TKey entityId, Exception exception)
+        where TKey : notnull, IEquatable<TKey>
+    {
+        var reason = DetermineFailureReason(exception);
+        return new BatchFailure<TKey>
+        {
+            EntityId = entityId,
+            ErrorMessage = exception.Message,
+            Reason = reason,
+            Exception = exception
+        };
+    }
+
+    internal static InsertBatchFailure CreateInsertBatchFailure(int entityIndex, Exception exception)
+    {
+        var reason = DetermineFailureReason(exception);
+        return new InsertBatchFailure
+        {
+            EntityIndex = entityIndex,
+            ErrorMessage = exception.Message,
+            Reason = reason,
+            Exception = exception
+        };
+    }
+
+    private static FailureReason DetermineFailureReason(Exception exception)
+    {
+        return exception switch
+        {
+            InvalidOperationException => FailureReason.ValidationError,
+            DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
+            DbUpdateException => FailureReason.DatabaseConstraint,
+            _ => FailureReason.UnknownError
         };
     }
 }

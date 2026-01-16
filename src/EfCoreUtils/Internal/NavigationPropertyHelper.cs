@@ -28,7 +28,7 @@ internal static class NavigationPropertyHelper
     {
         if (navigation.Metadata is INavigation navMetadata)
         {
-            return navMetadata.ForeignKey.Properties.FirstOrDefault();
+            return navMetadata.ForeignKey?.Properties.FirstOrDefault();
         }
         return null;
     }
