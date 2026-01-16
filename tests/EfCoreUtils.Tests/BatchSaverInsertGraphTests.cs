@@ -13,7 +13,7 @@ public class BatchSaverInsertGraphTests : TestBase
 
         var order = CreateValidOrder("ORD-001", 3);
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.InsertGraphBatch([order]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -31,7 +31,7 @@ public class BatchSaverInsertGraphTests : TestBase
 
         var order = CreateValidOrder("ORD-001", 3);
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.InsertGraphBatch([order]);
 
         result.ChildIdsByParentId.ShouldNotBeNull();
@@ -51,7 +51,7 @@ public class BatchSaverInsertGraphTests : TestBase
             CreateValidOrder("ORD-003", 1)
         };
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.InsertGraphBatch(orders);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -75,7 +75,7 @@ public class BatchSaverInsertGraphTests : TestBase
             OrderItems = [CreateValidOrderItem(1)]
         };
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.InsertGraphBatch([order]);
 
         result.IsCompleteFailure.ShouldBeTrue();
@@ -109,7 +109,7 @@ public class BatchSaverInsertGraphTests : TestBase
             ]
         };
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.InsertGraphBatch([order]);
 
         result.IsCompleteFailure.ShouldBeTrue();
@@ -137,7 +137,7 @@ public class BatchSaverInsertGraphTests : TestBase
             CreateValidOrder("ORD-003", 1)
         };
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.InsertGraphBatch(orders);
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -162,7 +162,7 @@ public class BatchSaverInsertGraphTests : TestBase
             OrderItems = []
         };
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.InsertGraphBatch([order]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -179,7 +179,7 @@ public class BatchSaverInsertGraphTests : TestBase
         var orders = Enumerable.Range(1, 20).Select(i =>
             CreateValidOrder($"ORD-{i:D3}", 3)).ToList();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.InsertGraphBatch(orders);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -209,7 +209,7 @@ public class BatchSaverInsertGraphTests : TestBase
             CreateValidOrder("ORD-004", 2)
         };
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
         {
             Strategy = BatchStrategy.DivideAndConquer
@@ -228,7 +228,7 @@ public class BatchSaverInsertGraphTests : TestBase
 
         var order = CreateValidOrder("ORD-001", 3);
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.InsertGraphBatch([order]);
 
         var parentId = result.InsertedEntities[0].Id;

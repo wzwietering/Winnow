@@ -6,6 +6,9 @@ namespace EfCoreUtils.Tests.Infrastructure;
 public class TestDbContext : DbContext
 {
     public DbSet<Product> Products => Set<Product>();
+    public DbSet<ProductLong> ProductLongs => Set<ProductLong>();
+    public DbSet<ProductGuid> ProductGuids => Set<ProductGuid>();
+    public DbSet<ProductString> ProductStrings => Set<ProductString>();
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<CustomerOrder> CustomerOrders => Set<CustomerOrder>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
@@ -19,6 +22,50 @@ public class TestDbContext : DbContext
         modelBuilder.Entity<Product>(entity =>
         {
             entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.Price)
+                .HasPrecision(18, 2);
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+        });
+
+        modelBuilder.Entity<ProductLong>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.Price)
+                .HasPrecision(18, 2);
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+        });
+
+        modelBuilder.Entity<ProductGuid>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.Price)
+                .HasPrecision(18, 2);
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+        });
+
+        modelBuilder.Entity<ProductString>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id)
+                .HasMaxLength(50);
             entity.Property(e => e.Name)
                 .IsRequired()
                 .HasMaxLength(100);
@@ -104,6 +151,9 @@ public class TestDbContext : DbContext
     private void ValidateEntities()
     {
         ValidateProducts();
+        ValidateProductLongs();
+        ValidateProductGuids();
+        ValidateProductStrings();
         ValidateCustomerOrders();
         ValidateOrderItems();
     }
@@ -120,6 +170,51 @@ public class TestDbContext : DbContext
                 throw new InvalidOperationException($"Product {product.Id}: Price must be greater than 0");
             if (product.Stock < 0)
                 throw new InvalidOperationException($"Product {product.Id}: Stock cannot be negative");
+        }
+    }
+
+    private void ValidateProductLongs()
+    {
+        var products = ChangeTracker.Entries<ProductLong>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
+            .Select(e => e.Entity);
+
+        foreach (var product in products)
+        {
+            if (product.Price <= 0)
+                throw new InvalidOperationException($"ProductLong {product.Id}: Price must be greater than 0");
+            if (product.Stock < 0)
+                throw new InvalidOperationException($"ProductLong {product.Id}: Stock cannot be negative");
+        }
+    }
+
+    private void ValidateProductGuids()
+    {
+        var products = ChangeTracker.Entries<ProductGuid>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
+            .Select(e => e.Entity);
+
+        foreach (var product in products)
+        {
+            if (product.Price <= 0)
+                throw new InvalidOperationException($"ProductGuid {product.Id}: Price must be greater than 0");
+            if (product.Stock < 0)
+                throw new InvalidOperationException($"ProductGuid {product.Id}: Stock cannot be negative");
+        }
+    }
+
+    private void ValidateProductStrings()
+    {
+        var products = ChangeTracker.Entries<ProductString>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
+            .Select(e => e.Entity);
+
+        foreach (var product in products)
+        {
+            if (product.Price <= 0)
+                throw new InvalidOperationException($"ProductString {product.Id}: Price must be greater than 0");
+            if (product.Stock < 0)
+                throw new InvalidOperationException($"ProductString {product.Id}: Stock cannot be negative");
         }
     }
 

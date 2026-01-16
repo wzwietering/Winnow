@@ -2,12 +2,17 @@ using EfCoreUtils.Operations;
 
 namespace EfCoreUtils.Strategies;
 
-internal class OneByOneUpdateStrategy<TEntity> : IBatchUpdateStrategy<TEntity> where TEntity : class
+internal class OneByOneUpdateStrategy<TEntity, TKey> : IBatchUpdateStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    public BatchResult Execute(List<TEntity> entities, BatchStrategyContext<TEntity> context, BatchOptions options)
+    public BatchResult<TKey> Execute(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        BatchOptions options)
     {
-        var operation = new UpdateOperation<TEntity>(options);
-        var strategy = new GenericOneByOneStrategy<TEntity>();
+        var operation = new UpdateOperation<TEntity, TKey>(options);
+        var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
 }

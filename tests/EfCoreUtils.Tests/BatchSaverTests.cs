@@ -19,7 +19,7 @@ public class BatchSaverTests : TestBase
             product.Price += 5.00m;
         }
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.UpdateBatch(productsToUpdate);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -33,7 +33,7 @@ public class BatchSaverTests : TestBase
     {
         using var context = CreateContext();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.UpdateBatch(new List<Product>());
 
         result.SuccessCount.ShouldBe(0);
@@ -50,7 +50,7 @@ public class BatchSaverTests : TestBase
         var product = context.Products.First();
         product.Price += 10.00m;
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.UpdateBatch(new List<Product> { product });
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -71,7 +71,7 @@ public class BatchSaverTests : TestBase
         productsToUpdate[3].Price = 100.00m;
         productsToUpdate[4].Price = 25.00m;
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.UpdateBatch(productsToUpdate);
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -93,7 +93,7 @@ public class BatchSaverTests : TestBase
         productsToUpdate[1].Stock = 100;
         productsToUpdate[2].Stock = -10;
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.UpdateBatch(productsToUpdate);
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -114,7 +114,7 @@ public class BatchSaverTests : TestBase
         productsToUpdate[5].Stock = -1;
         productsToUpdate[8].Price = -10.00m;
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.UpdateBatch(productsToUpdate);
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -135,7 +135,7 @@ public class BatchSaverTests : TestBase
             product.Price += 1.00m;
         }
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.UpdateBatch(productsToUpdate);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -147,7 +147,7 @@ public class BatchSaverTests : TestBase
     public void UpdateEntities_WithNullCollection_ThrowsArgumentException()
     {
         using var context = CreateContext();
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
 
         Should.Throw<ArgumentNullException>(() => saver.UpdateBatch(null!));
     }
@@ -163,7 +163,7 @@ public class BatchSaverTests : TestBase
         productsToUpdate[2].Stock = -5;
 
         var options = new BatchOptions { Strategy = BatchStrategy.OneByOne };
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.UpdateBatch(productsToUpdate, options);
 
         result.SuccessCount.ShouldBe(3);
@@ -181,7 +181,7 @@ public class BatchSaverTests : TestBase
         productsToUpdate[3].Price = -10.00m;
 
         var options = new BatchOptions { Strategy = BatchStrategy.DivideAndConquer };
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.UpdateBatch(productsToUpdate, options);
 
         result.SuccessCount.ShouldBe(7);

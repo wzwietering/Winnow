@@ -218,10 +218,10 @@ public class StrategyComparisonTests : TestBase
         divideAndConquerResult.DatabaseRoundTrips.ShouldBeGreaterThan(oneByOneResult.DatabaseRoundTrips);
     }
 
-    private BatchResult RunWithStrategy(TestDbContext context, List<Product> products, BatchStrategy strategy)
+    private BatchResult<int> RunWithStrategy(TestDbContext context, List<Product> products, BatchStrategy strategy)
     {
         var options = new BatchOptions { Strategy = strategy };
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         return saver.UpdateBatch(products, options);
     }
 }

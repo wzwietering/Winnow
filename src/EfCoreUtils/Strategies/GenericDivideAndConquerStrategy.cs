@@ -5,12 +5,14 @@ namespace EfCoreUtils.Strategies;
 /// Attempts batch processing first, splits on failure for isolation.
 /// Balances efficiency with failure isolation.
 /// </summary>
-internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
+internal class GenericDivideAndConquerStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    internal BatchResult Execute(
+    internal BatchResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
-        IBatchOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
@@ -20,10 +22,10 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
         return operation.CreateResult();
     }
 
-    internal InsertBatchResult ExecuteInsert(
+    internal InsertBatchResult<TKey> ExecuteInsert(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
-        IBatchInsertOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchInsertOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
@@ -36,8 +38,8 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
 
     private void ProcessBatch(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
-        IBatchOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchOperation<TEntity, TKey> operation)
     {
         if (entities.Count == 0)
         {
@@ -60,8 +62,8 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
 
     private void ProcessInsertBatch(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity> context,
-        IBatchInsertOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchInsertOperation<TEntity, TKey> operation)
     {
         if (indexedEntities.Count == 0)
         {
@@ -85,8 +87,8 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
 
     private static void ProcessSingleEntity(
         TEntity entity,
-        BatchStrategyContext<TEntity> context,
-        IBatchOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -109,8 +111,8 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
     private static void ProcessSingleInsert(
         TEntity entity,
         int index,
-        BatchStrategyContext<TEntity> context,
-        IBatchInsertOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchInsertOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -132,8 +134,8 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
 
     private static bool TryBatchProcess(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
-        IBatchOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -158,8 +160,8 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
 
     private static bool TryBatchInsert(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity> context,
-        IBatchInsertOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchInsertOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -184,8 +186,8 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
 
     private static void RecordAllSuccesses(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
-        IBatchOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchOperation<TEntity, TKey> operation)
     {
         foreach (var entity in entities)
         {
@@ -196,8 +198,8 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
 
     private static void RecordAllInsertSuccesses(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity> context,
-        IBatchInsertOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchInsertOperation<TEntity, TKey> operation)
     {
         foreach (var (entity, index) in indexedEntities)
         {
@@ -208,8 +210,8 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
 
     private static void CleanupAllEntities(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
-        IBatchOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchOperation<TEntity, TKey> operation)
     {
         foreach (var entity in entities)
         {
@@ -219,8 +221,8 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
 
     private static void CleanupAllInsertEntities(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity> context,
-        IBatchInsertOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchInsertOperation<TEntity, TKey> operation)
     {
         foreach (var (entity, _) in indexedEntities)
         {
@@ -230,8 +232,8 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
 
     private void SplitAndRecurse(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
-        IBatchOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchOperation<TEntity, TKey> operation)
     {
         var midpoint = entities.Count / 2;
         var firstHalf = entities.Take(midpoint).ToList();
@@ -243,8 +245,8 @@ internal class GenericDivideAndConquerStrategy<TEntity> where TEntity : class
 
     private void SplitAndRecurseInsert(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity> context,
-        IBatchInsertOperation<TEntity> operation)
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchInsertOperation<TEntity, TKey> operation)
     {
         var midpoint = indexedEntities.Count / 2;
         var firstHalf = indexedEntities.Take(midpoint).ToList();

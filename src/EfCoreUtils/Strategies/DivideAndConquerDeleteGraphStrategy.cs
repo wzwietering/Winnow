@@ -2,15 +2,17 @@ using EfCoreUtils.Operations;
 
 namespace EfCoreUtils.Strategies;
 
-internal class DivideAndConquerDeleteGraphStrategy<TEntity> : IBatchDeleteGraphStrategy<TEntity> where TEntity : class
+internal class DivideAndConquerDeleteGraphStrategy<TEntity, TKey> : IBatchDeleteGraphStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    public BatchResult Execute(
+    public BatchResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
+        BatchStrategyContext<TEntity, TKey> context,
         DeleteGraphBatchOptions options)
     {
-        var operation = new DeleteGraphOperation<TEntity>(options);
-        var strategy = new GenericDivideAndConquerStrategy<TEntity>();
+        var operation = new DeleteGraphOperation<TEntity, TKey>(options);
+        var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
 }

@@ -1,6 +1,8 @@
 namespace EfCoreUtils;
 
-internal interface IBatchUpdateStrategy<TEntity> where TEntity : class
+internal interface IBatchUpdateStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    BatchResult Execute(List<TEntity> entities, BatchStrategyContext<TEntity> context, BatchOptions options);
+    BatchResult<TKey> Execute(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context, BatchOptions options);
 }

@@ -2,15 +2,17 @@ using EfCoreUtils.Operations;
 
 namespace EfCoreUtils.Strategies;
 
-internal class DivideAndConquerInsertGraphStrategy<TEntity> : IBatchInsertGraphStrategy<TEntity> where TEntity : class
+internal class DivideAndConquerInsertGraphStrategy<TEntity, TKey> : IBatchInsertGraphStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    public InsertBatchResult Execute(
+    public InsertBatchResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
+        BatchStrategyContext<TEntity, TKey> context,
         InsertGraphBatchOptions options)
     {
-        var operation = new InsertGraphOperation<TEntity>(options);
-        var strategy = new GenericDivideAndConquerStrategy<TEntity>();
+        var operation = new InsertGraphOperation<TEntity, TKey>(options);
+        var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
         return strategy.ExecuteInsert(entities, context, operation);
     }
 }

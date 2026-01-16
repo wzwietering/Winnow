@@ -4,10 +4,10 @@ namespace EfCoreUtils;
 /// Result of a batch insert operation. Tracks inserted entities by their
 /// original index since entities don't have IDs before insertion.
 /// </summary>
-public class InsertBatchResult
+public class InsertBatchResult<TKey> where TKey : notnull, IEquatable<TKey>
 {
-    public IReadOnlyList<InsertedEntity> InsertedEntities { get; init; } = [];
-    public IReadOnlyList<int> InsertedIds => InsertedEntities.Select(e => e.Id).ToList();
+    public IReadOnlyList<InsertedEntity<TKey>> InsertedEntities { get; init; } = [];
+    public IReadOnlyList<TKey> InsertedIds => InsertedEntities.Select(e => e.Id).ToList();
     public int SuccessCount => InsertedEntities.Count;
 
     public IReadOnlyList<InsertBatchFailure> Failures { get; init; } = [];
@@ -23,7 +23,7 @@ public class InsertBatchResult
     /// For graph inserts only: Maps each parent ID to its child IDs.
     /// Null for parent-only InsertBatch operations.
     /// </summary>
-    public IReadOnlyDictionary<int, IReadOnlyList<int>>? ChildIdsByParentId { get; init; }
+    public IReadOnlyDictionary<TKey, IReadOnlyList<TKey>>? ChildIdsByParentId { get; init; }
 
     public bool IsCompleteSuccess => FailureCount == 0 && SuccessCount > 0;
     public bool IsCompleteFailure => SuccessCount == 0 && FailureCount > 0;
@@ -33,12 +33,12 @@ public class InsertBatchResult
 /// <summary>
 /// Represents a successfully inserted entity with its generated ID.
 /// </summary>
-public class InsertedEntity
+public class InsertedEntity<TKey> where TKey : notnull, IEquatable<TKey>
 {
     /// <summary>
     /// The database-generated ID after insertion.
     /// </summary>
-    public int Id { get; init; }
+    public TKey Id { get; init; } = default!;
 
     /// <summary>
     /// Position in the original input collection.

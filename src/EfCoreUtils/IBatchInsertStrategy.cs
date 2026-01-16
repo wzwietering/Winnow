@@ -1,17 +1,21 @@
 namespace EfCoreUtils;
 
-internal interface IBatchInsertStrategy<TEntity> where TEntity : class
+internal interface IBatchInsertStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    InsertBatchResult Execute(
+    InsertBatchResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
+        BatchStrategyContext<TEntity, TKey> context,
         InsertBatchOptions options);
 }
 
-internal interface IBatchInsertGraphStrategy<TEntity> where TEntity : class
+internal interface IBatchInsertGraphStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    InsertBatchResult Execute(
+    InsertBatchResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
+        BatchStrategyContext<TEntity, TKey> context,
         InsertGraphBatchOptions options);
 }

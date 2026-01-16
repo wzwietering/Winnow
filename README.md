@@ -14,7 +14,8 @@ Efficient batch utilities for Entity Framework Core with failure isolation and t
 ## Quick Start
 
 ```csharp
-var saver = new BatchSaver<Product>(context);
+// Specify entity type and key type
+var saver = new BatchSaver<Product, int>(context);
 
 // Insert
 var insertResult = saver.InsertBatch(newProducts);
@@ -34,11 +35,37 @@ foreach (var failure in updateResult.Failures)
 }
 ```
 
+## Supported Key Types
+
+BatchSaver supports any key type that implements `IEquatable<TKey>`:
+
+```csharp
+// Integer keys (most common)
+var saver = new BatchSaver<Product, int>(context);
+
+// Long keys
+var saver = new BatchSaver<Order, long>(context);
+
+// GUID keys
+var saver = new BatchSaver<Document, Guid>(context);
+
+// String keys
+var saver = new BatchSaver<Setting, string>(context);
+```
+
+If you specify the wrong key type, you'll get a descriptive error:
+```
+Primary key type mismatch for entity Product. Expected type Int64, but entity has key type Int32.
+Use BatchSaver<Product, Int32> instead.
+```
+
 ## Insert Operations
 
 ### Basic Insert
 
 ```csharp
+var saver = new BatchSaver<Product, int>(context);
+
 var products = new List<Product>
 {
     new Product { Name = "Widget", Price = 9.99m },
@@ -60,6 +87,8 @@ foreach (var inserted in result.InsertedEntities)
 ### Graph Insert (Parent + Children)
 
 ```csharp
+var saver = new BatchSaver<CustomerOrder, int>(context);
+
 var orders = new List<CustomerOrder>
 {
     new CustomerOrder
@@ -91,6 +120,8 @@ foreach (var parentId in result.InsertedIds)
 ### Basic Delete
 
 ```csharp
+var saver = new BatchSaver<Product, int>(context);
+
 var result = saver.DeleteBatch(productsToRemove, new DeleteBatchOptions
 {
     Strategy = BatchStrategy.DivideAndConquer
@@ -100,6 +131,8 @@ var result = saver.DeleteBatch(productsToRemove, new DeleteBatchOptions
 ### Graph Delete (Parent + Children)
 
 ```csharp
+var saver = new BatchSaver<CustomerOrder, int>(context);
+
 var orders = context.CustomerOrders
     .Include(o => o.OrderItems)
     .Where(o => o.Status == OrderStatus.Cancelled)
@@ -127,12 +160,16 @@ When deleting parent entities with children:
 ### Basic Update
 
 ```csharp
+var saver = new BatchSaver<Product, int>(context);
+
 var result = saver.UpdateBatch(products);
 ```
 
 ### Graph Update (Parent + Children)
 
 ```csharp
+var saver = new BatchSaver<CustomerOrder, int>(context);
+
 var orders = context.CustomerOrders
     .Include(o => o.OrderItems)
     .ToList();
@@ -179,12 +216,12 @@ When children are removed from a collection during updates:
 
 ## Results
 
-### BatchResult (Update/Delete)
+### BatchResult<TKey> (Update/Delete)
 
 ```csharp
-result.SuccessfulIds      // IDs that succeeded
-result.Failures           // List<BatchFailure> with EntityId, ErrorMessage, Reason
-result.ChildIdsByParentId // For graph ops: parent ID -> child IDs
+result.SuccessfulIds      // IReadOnlyList<TKey> - IDs that succeeded
+result.Failures           // List<BatchFailure<TKey>> with EntityId, ErrorMessage, Reason
+result.ChildIdsByParentId // For graph ops: parent ID -> child IDs (Dictionary<TKey, IReadOnlyList<TKey>>)
 result.DatabaseRoundTrips // Actual DB calls made
 result.Duration           // Total time
 result.IsCompleteSuccess  // All succeeded
@@ -192,13 +229,13 @@ result.IsPartialSuccess   // Some succeeded, some failed
 result.IsCompleteFailure  // All failed
 ```
 
-### InsertBatchResult
+### InsertBatchResult<TKey>
 
 ```csharp
-result.InsertedEntities   // List with Id, OriginalIndex, Entity reference
-result.InsertedIds        // Just the generated IDs
+result.InsertedEntities   // List<InsertedEntity<TKey>> with Id, OriginalIndex, Entity reference
+result.InsertedIds        // IReadOnlyList<TKey> - Just the generated IDs
 result.Failures           // List<InsertBatchFailure> with EntityIndex, ErrorMessage
-result.ChildIdsByParentId // For graph inserts: parent ID -> child IDs
+result.ChildIdsByParentId // For graph inserts: parent ID -> child IDs (Dictionary<TKey, IReadOnlyList<TKey>>)
 result.DatabaseRoundTrips // Actual DB calls made
 result.Duration           // Total time
 ```

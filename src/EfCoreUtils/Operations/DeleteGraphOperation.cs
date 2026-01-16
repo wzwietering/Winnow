@@ -4,20 +4,22 @@ namespace EfCoreUtils.Operations;
 /// Delete operation behavior for entity graphs (parent + children).
 /// Handles cascade behavior and child tracking.
 /// </summary>
-internal class DeleteGraphOperation<TEntity> : IBatchOperation<TEntity> where TEntity : class
+internal class DeleteGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
     private readonly DeleteGraphBatchOptions _options;
-    private readonly List<int> _successfulIds = [];
-    private readonly List<BatchFailure> _failures = [];
-    private readonly Dictionary<int, IReadOnlyList<int>> _childIdsByParentId = [];
-    private readonly Dictionary<int, IReadOnlyList<int>> _pendingChildIds = [];
+    private readonly List<TKey> _successfulIds = [];
+    private readonly List<BatchFailure<TKey>> _failures = [];
+    private readonly Dictionary<TKey, IReadOnlyList<TKey>> _childIdsByParentId = [];
+    private readonly Dictionary<TKey, IReadOnlyList<TKey>> _pendingChildIds = [];
 
     internal DeleteGraphOperation(DeleteGraphBatchOptions options)
     {
         _options = options;
     }
 
-    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity> context)
+    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
         if (_options.CascadeBehavior == DeleteCascadeBehavior.Throw)
         {
@@ -28,7 +30,7 @@ internal class DeleteGraphOperation<TEntity> : IBatchOperation<TEntity> where TE
         }
     }
 
-    public void PrepareEntity(TEntity entity, BatchStrategyContext<TEntity> context)
+    public void PrepareEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
         var childIds = context.GetChildIds(entity);
@@ -44,7 +46,7 @@ internal class DeleteGraphOperation<TEntity> : IBatchOperation<TEntity> where TE
         }
     }
 
-    public void RecordSuccess(TEntity entity, BatchStrategyContext<TEntity> context)
+    public void RecordSuccess(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
         _successfulIds.Add(entityId);
@@ -56,12 +58,12 @@ internal class DeleteGraphOperation<TEntity> : IBatchOperation<TEntity> where TE
         }
     }
 
-    public void RecordFailure(TEntity entity, Exception ex, BatchStrategyContext<TEntity> context)
+    public void RecordFailure(TEntity entity, Exception ex, BatchStrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
         _pendingChildIds.Remove(entityId);
 
-        var failure = new BatchFailure
+        var failure = new BatchFailure<TKey>
         {
             EntityId = entityId,
             ErrorMessage = $"Graph delete failed: {ex.Message}",
@@ -71,14 +73,14 @@ internal class DeleteGraphOperation<TEntity> : IBatchOperation<TEntity> where TE
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity> context)
+    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
     {
         context.DetachEntityGraph(entity);
     }
 
-    public BatchResult CreateResult()
+    public BatchResult<TKey> CreateResult()
     {
-        return new BatchResult
+        return new BatchResult<TKey>
         {
             SuccessfulIds = _successfulIds,
             Failures = _failures,

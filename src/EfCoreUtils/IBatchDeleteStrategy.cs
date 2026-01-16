@@ -3,21 +3,25 @@ namespace EfCoreUtils;
 /// <summary>
 /// Strategy interface for parent-only delete batch operations.
 /// </summary>
-internal interface IBatchDeleteStrategy<TEntity> where TEntity : class
+internal interface IBatchDeleteStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    BatchResult Execute(
+    BatchResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
+        BatchStrategyContext<TEntity, TKey> context,
         DeleteBatchOptions options);
 }
 
 /// <summary>
 /// Strategy interface for graph delete batch operations (parent + children).
 /// </summary>
-internal interface IBatchDeleteGraphStrategy<TEntity> where TEntity : class
+internal interface IBatchDeleteGraphStrategy<TEntity, TKey>
+    where TEntity : class
+    where TKey : notnull, IEquatable<TKey>
 {
-    BatchResult Execute(
+    BatchResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity> context,
+        BatchStrategyContext<TEntity, TKey> context,
         DeleteGraphBatchOptions options);
 }

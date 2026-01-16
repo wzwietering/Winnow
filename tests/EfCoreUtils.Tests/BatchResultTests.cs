@@ -7,7 +7,7 @@ public class BatchResultTests
     [Fact]
     public void EmptyResult_HasZeroSuccessAndFailure()
     {
-        var result = new BatchResult();
+        var result = new BatchResult<int>();
 
         result.SuccessCount.ShouldBe(0);
         result.FailureCount.ShouldBe(0);
@@ -17,7 +17,7 @@ public class BatchResultTests
     [Fact]
     public void CompleteSuccess_ReturnsCorrectStatus()
     {
-        var result = new BatchResult
+        var result = new BatchResult<int>
         {
             SuccessfulIds = new List<int> { 1, 2, 3 }
         };
@@ -32,9 +32,9 @@ public class BatchResultTests
     [Fact]
     public void CompleteFailure_ReturnsCorrectStatus()
     {
-        var result = new BatchResult
+        var result = new BatchResult<int>
         {
-            Failures = new List<BatchFailure>
+            Failures = new List<BatchFailure<int>>
             {
                 new() { EntityId = 1, ErrorMessage = "Error 1", Reason = FailureReason.ValidationError },
                 new() { EntityId = 2, ErrorMessage = "Error 2", Reason = FailureReason.ValidationError }
@@ -51,10 +51,10 @@ public class BatchResultTests
     [Fact]
     public void PartialSuccess_ReturnsCorrectStatus()
     {
-        var result = new BatchResult
+        var result = new BatchResult<int>
         {
             SuccessfulIds = new List<int> { 1, 2 },
-            Failures = new List<BatchFailure>
+            Failures = new List<BatchFailure<int>>
             {
                 new() { EntityId = 3, ErrorMessage = "Error", Reason = FailureReason.ValidationError }
             }
@@ -71,9 +71,9 @@ public class BatchResultTests
     [Fact]
     public void FailedIds_ReturnsCorrectEntityIds()
     {
-        var result = new BatchResult
+        var result = new BatchResult<int>
         {
-            Failures = new List<BatchFailure>
+            Failures = new List<BatchFailure<int>>
             {
                 new() { EntityId = 5, ErrorMessage = "Error 5", Reason = FailureReason.ValidationError },
                 new() { EntityId = 10, ErrorMessage = "Error 10", Reason = FailureReason.DatabaseConstraint }
@@ -89,10 +89,10 @@ public class BatchResultTests
     [Fact]
     public void SuccessRate_CalculatesCorrectly()
     {
-        var result = new BatchResult
+        var result = new BatchResult<int>
         {
             SuccessfulIds = new List<int> { 1, 2, 3 },
-            Failures = new List<BatchFailure>
+            Failures = new List<BatchFailure<int>>
             {
                 new() { EntityId = 4, ErrorMessage = "Error", Reason = FailureReason.ValidationError }
             }
@@ -104,7 +104,7 @@ public class BatchResultTests
     [Fact]
     public void SuccessRate_WithNoEntities_ReturnsZero()
     {
-        var result = new BatchResult();
+        var result = new BatchResult<int>();
 
         result.SuccessRate.ShouldBe(0);
     }
@@ -113,7 +113,7 @@ public class BatchResultTests
     public void PerformanceMetrics_StoresCorrectly()
     {
         var duration = TimeSpan.FromSeconds(5);
-        var result = new BatchResult
+        var result = new BatchResult<int>
         {
             Duration = duration,
             DatabaseRoundTrips = 42
@@ -127,7 +127,7 @@ public class BatchResultTests
     public void BatchFailure_StoresAllProperties()
     {
         var exception = new InvalidOperationException("Test exception");
-        var failure = new BatchFailure
+        var failure = new BatchFailure<int>
         {
             EntityId = 123,
             ErrorMessage = "Validation failed",

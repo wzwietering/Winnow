@@ -16,7 +16,7 @@ public class BatchSaverDeleteTests : TestBase
         var productToDelete = context.Products.First();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.DeleteBatch([productToDelete]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -37,7 +37,7 @@ public class BatchSaverDeleteTests : TestBase
         var deletedIds = productsToDelete.Select(p => p.Id).ToList();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.DeleteBatch(productsToDelete);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -55,7 +55,7 @@ public class BatchSaverDeleteTests : TestBase
     {
         using var context = CreateContext();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.DeleteBatch([]);
 
         result.SuccessCount.ShouldBe(0);
@@ -81,7 +81,7 @@ public class BatchSaverDeleteTests : TestBase
         };
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.DeleteBatch([existingProduct, nonExistingProduct]);
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -102,7 +102,7 @@ public class BatchSaverDeleteTests : TestBase
             .First();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
 
         Should.Throw<InvalidOperationException>(() => saver.DeleteBatch([orderWithChildren]))
             .Message.ShouldContain("populated navigation properties");
@@ -120,7 +120,7 @@ public class BatchSaverDeleteTests : TestBase
         var orderId = orderWithChildren.Id;
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var options = new DeleteBatchOptions { ValidateNavigationProperties = false };
 
         var result = saver.DeleteBatch([orderWithChildren], options);
@@ -141,7 +141,7 @@ public class BatchSaverDeleteTests : TestBase
         var productsToDelete = context.Products.ToList();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var options = new DeleteBatchOptions { Strategy = BatchStrategy.OneByOne };
         var result = saver.DeleteBatch(productsToDelete, options);
 
@@ -158,7 +158,7 @@ public class BatchSaverDeleteTests : TestBase
         var productsToDelete = context.Products.ToList();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var options = new DeleteBatchOptions { Strategy = BatchStrategy.DivideAndConquer };
         var result = saver.DeleteBatch(productsToDelete, options);
 
@@ -190,7 +190,7 @@ public class BatchSaverDeleteTests : TestBase
             .Concat(existingProducts.Skip(2))
             .ToList();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var options = new DeleteBatchOptions { Strategy = BatchStrategy.DivideAndConquer };
         var result = saver.DeleteBatch(mixedProducts, options);
 
@@ -209,7 +209,7 @@ public class BatchSaverDeleteTests : TestBase
         var productsToDelete = context.Products.ToList();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.DeleteBatch(productsToDelete);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -237,7 +237,7 @@ public class BatchSaverDeleteTests : TestBase
         };
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<Product>(context);
+        var saver = new BatchSaver<Product, int>(context);
         var result = saver.DeleteBatch(existingProducts.Concat([nonExistingProduct]));
 
         result.SuccessRate.ShouldBe(0.75);

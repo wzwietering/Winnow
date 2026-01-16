@@ -23,7 +23,7 @@ public class BatchSaverGraphTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -53,7 +53,7 @@ public class BatchSaverGraphTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders);
 
         // First graph should fail, others succeed
@@ -84,7 +84,7 @@ public class BatchSaverGraphTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders);
 
         // First graph should fail due to child, others succeed
@@ -112,7 +112,7 @@ public class BatchSaverGraphTests : TestBase
             order.Status = CustomerOrderStatus.Completed;
         }
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -145,7 +145,7 @@ public class BatchSaverGraphTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders);
 
         result.IsPartialSuccess.ShouldBeTrue();
@@ -175,7 +175,7 @@ public class BatchSaverGraphTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -192,7 +192,7 @@ public class BatchSaverGraphTests : TestBase
     {
         using var context = CreateContext();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch([]);
 
         result.IsCompleteSuccess.ShouldBeFalse();
@@ -222,7 +222,7 @@ public class BatchSaverGraphTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -246,7 +246,7 @@ public class BatchSaverGraphTests : TestBase
         // Remove a child from the collection
         orders[0].OrderItems.Remove(orders[0].OrderItems.First());
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var ex = Should.Throw<InvalidOperationException>(() =>
             saver.UpdateGraphBatch(orders)); // Default is OrphanBehavior.Throw
 
@@ -267,7 +267,7 @@ public class BatchSaverGraphTests : TestBase
         orders[0].OrderItems.Remove(orders[0].OrderItems.First());
         orders[0].Status = CustomerOrderStatus.Processing;
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Delete
@@ -305,7 +305,7 @@ public class BatchSaverGraphTests : TestBase
         orders[0].OrderItems.Remove(orders[0].OrderItems.First());
         orders[0].Status = CustomerOrderStatus.Processing;
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Detach
@@ -332,7 +332,7 @@ public class BatchSaverGraphTests : TestBase
         orders[0].OrderItems.Clear();
         orders[0].Status = CustomerOrderStatus.Completed;
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Delete
@@ -367,7 +367,7 @@ public class BatchSaverGraphTests : TestBase
         orders[0].OrderItems.Remove(removedItem1);
         orders[1].OrderItems.Remove(removedItem2);
 
-        var saver = new BatchSaver<CustomerOrder>(context);
+        var saver = new BatchSaver<CustomerOrder, int>(context);
         var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Delete
