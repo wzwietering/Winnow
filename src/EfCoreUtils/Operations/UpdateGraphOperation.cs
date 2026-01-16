@@ -11,8 +11,13 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
     private readonly GraphBatchOptions _options;
     private readonly List<TKey> _successfulIds = [];
     private readonly List<BatchFailure<TKey>> _failures = [];
-    private readonly Dictionary<TKey, IReadOnlyList<TKey>> _childIdsByParentId = [];
-    private readonly Dictionary<TKey, IReadOnlyList<TKey>> _pendingChildIds = [];
+    private readonly List<GraphNode<TKey>> _graphHierarchy = [];
+    private readonly Dictionary<TKey, (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats)> _pendingGraphNodes = [];
+
+    // Stats aggregation
+    private int _totalEntitiesTraversed;
+    private int _maxDepthReached;
+    private readonly Dictionary<int, int> _entitiesByDepth = [];
 
     internal UpdateGraphOperation(GraphBatchOptions options)
     {
@@ -21,22 +26,22 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
 
     public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
-        context.CaptureAllOriginalChildIds(entities);
+        context.CaptureAllOriginalChildIdsRecursive(entities, _options.MaxDepth);
 
         foreach (var entity in entities)
         {
-            context.ValidateNoOrphanedChildren(entity, _options);
+            context.ValidateNoOrphanedChildrenRecursive(entity, _options.MaxDepth, _options);
         }
     }
 
     public void PrepareEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
     {
-        context.AttachEntityGraphAsModified(entity);
-        context.HandleOrphanedChildren(entity, _options);
+        context.AttachEntityGraphAsModifiedRecursive(entity, _options.MaxDepth);
+        context.HandleOrphanedChildrenRecursive(entity, _options.MaxDepth, _options.OrphanedChildBehavior);
 
         var entityId = context.GetEntityId(entity);
-        var childIds = context.GetChildIds(entity);
-        _pendingChildIds[entityId] = childIds;
+        var (node, stats) = context.BuildGraphHierarchy(entity, _options.MaxDepth);
+        _pendingGraphNodes[entityId] = (node, stats);
     }
 
     public void RecordSuccess(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
@@ -44,17 +49,18 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
         var entityId = context.GetEntityId(entity);
         _successfulIds.Add(entityId);
 
-        if (_pendingChildIds.TryGetValue(entityId, out var childIds))
+        if (_pendingGraphNodes.TryGetValue(entityId, out var pending))
         {
-            _childIdsByParentId[entityId] = childIds;
-            _pendingChildIds.Remove(entityId);
+            _graphHierarchy.Add(pending.Node);
+            AggregateStats(pending.Stats);
+            _pendingGraphNodes.Remove(entityId);
         }
     }
 
     public void RecordFailure(TEntity entity, Exception ex, BatchStrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
-        _pendingChildIds.Remove(entityId);
+        _pendingGraphNodes.Remove(entityId);
 
         var failure = new BatchFailure<TKey>
         {
@@ -68,7 +74,7 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
 
     public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
     {
-        context.DetachEntityWithOrphans(entity);
+        context.DetachEntityWithOrphansRecursive(entity, _options.MaxDepth);
     }
 
     public BatchResult<TKey> CreateResult()
@@ -77,7 +83,30 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
         {
             SuccessfulIds = _successfulIds,
             Failures = _failures,
-            ChildIdsByParentId = _childIdsByParentId
+            GraphHierarchy = _graphHierarchy,
+            TraversalInfo = CreateTraversalInfo()
+        };
+    }
+
+    private void AggregateStats(GraphTraversalResult<TKey> stats)
+    {
+        _totalEntitiesTraversed += stats.TotalEntitiesTraversed;
+        _maxDepthReached = Math.Max(_maxDepthReached, stats.MaxDepthReached);
+
+        foreach (var (depth, count) in stats.EntitiesByDepth)
+        {
+            _entitiesByDepth.TryGetValue(depth, out var existing);
+            _entitiesByDepth[depth] = existing + count;
+        }
+    }
+
+    private GraphTraversalResult<TKey> CreateTraversalInfo()
+    {
+        return new GraphTraversalResult<TKey>
+        {
+            MaxDepthReached = _maxDepthReached,
+            TotalEntitiesTraversed = _totalEntitiesTraversed,
+            EntitiesByDepth = _entitiesByDepth
         };
     }
 

@@ -11,6 +11,12 @@ internal class BatchStrategyContext<TEntity, TKey>
     private readonly Dictionary<TKey, HashSet<TKey>> _originalChildIdsByParent = [];
     private readonly Dictionary<TKey, List<object>> _deletedChildrenByParent = [];
 
+    // Multi-level orphan tracking (key includes type name for disambiguation)
+    private readonly Dictionary<(string Type, TKey Id), HashSet<(string Type, TKey Id)>>
+        _originalChildIdsByParentRecursive = [];
+    private readonly Dictionary<(string Type, TKey Id), List<object>>
+        _deletedChildrenByParentRecursive = [];
+
     internal BatchStrategyContext(DbContext context)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
@@ -94,6 +100,19 @@ internal class BatchStrategyContext<TEntity, TKey>
     {
         // First, detach all deleted children (they're no longer in navigation collections)
         foreach (var deletedChildren in _deletedChildrenByParent.Values)
+        {
+            foreach (var deletedChild in deletedChildren)
+            {
+                var entry = _context.Entry(deletedChild);
+                if (entry.State != EntityState.Detached)
+                {
+                    entry.State = EntityState.Detached;
+                }
+            }
+        }
+
+        // Also detach all deleted children tracked by recursive methods
+        foreach (var deletedChildren in _deletedChildrenByParentRecursive.Values)
         {
             foreach (var deletedChild in deletedChildren)
             {
@@ -643,6 +662,817 @@ internal class BatchStrategyContext<TEntity, TKey>
                 {
                     throw new InvalidOperationException(
                         $"Entity {typeof(TEntity).Name} (Id={entityId}) has {childCount} child(ren) in '{navigation.Metadata.Name}'. " +
+                        $"Set DeleteGraphBatchOptions.CascadeBehavior to Cascade or ParentOnly to proceed.");
+                }
+            }
+        }
+    }
+
+    // ========== Shared Helper Methods for Recursive Traversal ==========
+
+    private static bool IsTraversableCollection(
+        Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation)
+    {
+        return navigation.CurrentValue != null &&
+               navigation.Metadata.IsCollection &&
+               navigation.CurrentValue is System.Collections.IEnumerable;
+    }
+
+    private static IEnumerable<object> GetCollectionItems(
+        Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation)
+    {
+        if (navigation.CurrentValue is System.Collections.IEnumerable collection)
+        {
+            return collection.Cast<object>().ToList();
+        }
+        return [];
+    }
+
+    private TKey GetEntityIdFromEntry(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
+    {
+        var keyProperty = entry.Metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
+        if (keyProperty?.ClrType != typeof(TKey))
+        {
+            throw new InvalidOperationException(
+                $"Entity {entry.Metadata.ClrType.Name} key type mismatch. Expected {typeof(TKey).Name}.");
+        }
+
+        var keyValue = entry.Property(keyProperty.Name).CurrentValue;
+        if (keyValue is TKey id)
+        {
+            return id;
+        }
+
+        throw new InvalidOperationException(
+            $"Could not retrieve key value for entity {entry.Metadata.ClrType.Name}.");
+    }
+
+    // ========== BuildGraphHierarchy Methods ==========
+
+    internal (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) BuildGraphHierarchy(
+        TEntity entity, int maxDepth)
+    {
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        var depthCounts = new Dictionary<int, int>();
+
+        var rootNode = BuildNodeRecursive(entity, 0, maxDepth, visited, depthCounts);
+        var stats = CreateTraversalStats(depthCounts);
+
+        return (rootNode, stats);
+    }
+
+    private GraphNode<TKey> BuildNodeRecursive(
+        object entity, int currentDepth, int maxDepth,
+        HashSet<object> visited, Dictionary<int, int> depthCounts)
+    {
+        if (!visited.Add(entity))
+        {
+            return CreateSkippedNode(entity, currentDepth);
+        }
+
+        IncrementDepthCount(depthCounts, currentDepth);
+        var entry = _context.Entry(entity);
+        var children = BuildChildNodes(entry, currentDepth, maxDepth, visited, depthCounts);
+
+        return CreateGraphNode(entry, currentDepth, children);
+    }
+
+    private GraphNode<TKey> CreateSkippedNode(object entity, int depth)
+    {
+        var entry = _context.Entry(entity);
+        return new GraphNode<TKey>
+        {
+            EntityId = GetEntityIdFromEntry(entry),
+            EntityType = entry.Metadata.ClrType.Name,
+            Depth = depth,
+            Children = []
+        };
+    }
+
+    private GraphNode<TKey> CreateGraphNode(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
+        int depth, List<GraphNode<TKey>> children)
+    {
+        return new GraphNode<TKey>
+        {
+            EntityId = GetEntityIdFromEntry(entry),
+            EntityType = entry.Metadata.ClrType.Name,
+            Depth = depth,
+            Children = children
+        };
+    }
+
+    private List<GraphNode<TKey>> BuildChildNodes(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
+        int currentDepth, int maxDepth,
+        HashSet<object> visited, Dictionary<int, int> depthCounts)
+    {
+        if (currentDepth >= maxDepth)
+        {
+            return [];
+        }
+
+        var children = new List<GraphNode<TKey>>();
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            AddChildNodesFromNavigation(navigation, currentDepth, maxDepth, visited, depthCounts, children);
+        }
+        return children;
+    }
+
+    private void AddChildNodesFromNavigation(
+        Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation,
+        int currentDepth, int maxDepth,
+        HashSet<object> visited, Dictionary<int, int> depthCounts,
+        List<GraphNode<TKey>> children)
+    {
+        foreach (var item in GetCollectionItems(navigation))
+        {
+            var childNode = BuildNodeRecursive(item, currentDepth + 1, maxDepth, visited, depthCounts);
+            children.Add(childNode);
+        }
+    }
+
+    private static void IncrementDepthCount(Dictionary<int, int> depthCounts, int depth)
+    {
+        depthCounts.TryGetValue(depth, out var count);
+        depthCounts[depth] = count + 1;
+    }
+
+    private static GraphTraversalResult<TKey> CreateTraversalStats(Dictionary<int, int> depthCounts)
+    {
+        return new GraphTraversalResult<TKey>
+        {
+            MaxDepthReached = depthCounts.Count > 0 ? depthCounts.Keys.Max() : 0,
+            TotalEntitiesTraversed = depthCounts.Values.Sum(),
+            EntitiesByDepth = depthCounts
+        };
+    }
+
+    // ========== Recursive Attachment Methods ==========
+
+    internal void AttachEntityGraphAsAddedRecursive(TEntity entity, int maxDepth)
+    {
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        AttachAsAddedRecursive(entity, 0, maxDepth, visited);
+    }
+
+    private void AttachAsAddedRecursive(
+        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        if (!visited.Add(entity))
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+        entry.State = EntityState.Added;
+
+        if (currentDepth >= maxDepth)
+        {
+            return;
+        }
+
+        AttachChildrenRecursive(entry, currentDepth, maxDepth, visited, EntityState.Added);
+    }
+
+    internal void AttachEntityGraphAsModifiedRecursive(TEntity entity, int maxDepth)
+    {
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        AttachAsModifiedRecursive(entity, 0, maxDepth, visited);
+    }
+
+    private void AttachAsModifiedRecursive(
+        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        if (!visited.Add(entity))
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+        if (entry.State == EntityState.Detached)
+        {
+            entry.State = EntityState.Modified;
+        }
+
+        if (currentDepth >= maxDepth)
+        {
+            return;
+        }
+
+        AttachChildrenRecursive(entry, currentDepth, maxDepth, visited, EntityState.Modified);
+    }
+
+    private void AttachChildrenRecursive(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
+        int currentDepth, int maxDepth, HashSet<object> visited, EntityState targetState)
+    {
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in GetCollectionItems(navigation))
+            {
+                if (targetState == EntityState.Added)
+                {
+                    AttachAsAddedRecursive(item, currentDepth + 1, maxDepth, visited);
+                }
+                else
+                {
+                    AttachAsModifiedRecursive(item, currentDepth + 1, maxDepth, visited);
+                }
+            }
+        }
+    }
+
+    // CRITICAL: Delete uses depth-first order - children before parent for FK constraints
+    internal void AttachEntityGraphAsDeletedRecursive(TEntity entity, int maxDepth)
+    {
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        AttachAsDeletedRecursive(entity, 0, maxDepth, visited);
+    }
+
+    private void AttachAsDeletedRecursive(
+        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        if (!visited.Add(entity))
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+
+        // Depth-first: process children BEFORE marking parent as Deleted
+        if (currentDepth < maxDepth)
+        {
+            DeleteChildrenRecursive(entry, currentDepth, maxDepth, visited);
+        }
+
+        // Then mark this entity as Deleted
+        entry.State = EntityState.Deleted;
+    }
+
+    private void DeleteChildrenRecursive(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
+        int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in GetCollectionItems(navigation))
+            {
+                AttachAsDeletedRecursive(item, currentDepth + 1, maxDepth, visited);
+            }
+        }
+    }
+
+    // ========== Recursive Detachment Methods ==========
+
+    internal void DetachEntityGraphRecursive(TEntity entity, int maxDepth)
+    {
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        DetachRecursive(entity, 0, maxDepth, visited);
+    }
+
+    private void DetachRecursive(
+        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        if (!visited.Add(entity))
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+
+        // Detach children first
+        if (currentDepth < maxDepth)
+        {
+            DetachChildrenRecursive(entry, currentDepth, maxDepth, visited);
+        }
+
+        // Then detach this entity
+        if (entry.State != EntityState.Detached)
+        {
+            entry.State = EntityState.Detached;
+        }
+    }
+
+    private void DetachChildrenRecursive(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
+        int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in GetCollectionItems(navigation))
+            {
+                DetachRecursive(item, currentDepth + 1, maxDepth, visited);
+            }
+        }
+    }
+
+    // ========== Recursive Orphan Detection Methods ==========
+
+    internal void CaptureAllOriginalChildIdsRecursive(List<TEntity> entities, int maxDepth)
+    {
+        _context.ChangeTracker.DetectChanges();
+
+        foreach (var entity in entities)
+        {
+            var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+            CaptureChildIdsRecursive(entity, 0, maxDepth, visited);
+        }
+    }
+
+    private void CaptureChildIdsRecursive(
+        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        if (!visited.Add(entity))
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+        var parentKey = CreateEntityKey(entry);
+
+        CaptureDirectChildIds(entry, parentKey);
+        CaptureDeletedChildrenFromTracker(entry, parentKey);
+
+        if (currentDepth >= maxDepth)
+        {
+            return;
+        }
+
+        // Recurse into children
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in GetCollectionItems(navigation))
+            {
+                CaptureChildIdsRecursive(item, currentDepth + 1, maxDepth, visited);
+            }
+        }
+    }
+
+    private (string Type, TKey Id) CreateEntityKey(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
+    {
+        return (entry.Metadata.ClrType.Name, GetEntityIdFromEntry(entry));
+    }
+
+    private void CaptureDirectChildIds(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
+        (string Type, TKey Id) parentKey)
+    {
+        var childIds = new HashSet<(string Type, TKey Id)>();
+
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in GetCollectionItems(navigation))
+            {
+                var childEntry = _context.Entry(item);
+                var childKey = CreateEntityKey(childEntry);
+                childIds.Add(childKey);
+            }
+        }
+
+        if (!_originalChildIdsByParentRecursive.TryGetValue(parentKey, out var existing))
+        {
+            _originalChildIdsByParentRecursive[parentKey] = childIds;
+        }
+        else
+        {
+            foreach (var id in childIds)
+            {
+                existing.Add(id);
+            }
+        }
+    }
+
+    private void CaptureDeletedChildrenFromTracker(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
+        (string Type, TKey Id) parentKey)
+    {
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!navigation.Metadata.IsCollection)
+            {
+                continue;
+            }
+
+            CaptureDeletedChildrenForNavigation(navigation, parentKey);
+        }
+    }
+
+    private void CaptureDeletedChildrenForNavigation(
+        Microsoft.EntityFrameworkCore.ChangeTracking.NavigationEntry navigation,
+        (string Type, TKey Id) parentKey)
+    {
+        var entityType = navigation.Metadata.TargetEntityType;
+        var keyProperty = entityType.FindPrimaryKey()?.Properties.FirstOrDefault();
+
+        if (keyProperty?.ClrType != typeof(TKey))
+        {
+            return;
+        }
+
+        var fkProperty = GetForeignKeyProperty(navigation);
+        if (fkProperty == null)
+        {
+            return;
+        }
+
+        foreach (var trackedEntry in _context.ChangeTracker.Entries())
+        {
+            if (trackedEntry.Metadata != entityType || trackedEntry.State != EntityState.Deleted)
+            {
+                continue;
+            }
+
+            AddDeletedChildIfBelongsToParent(trackedEntry, fkProperty, parentKey, keyProperty);
+        }
+    }
+
+    private void AddDeletedChildIfBelongsToParent(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry trackedEntry,
+        Microsoft.EntityFrameworkCore.Metadata.IProperty fkProperty,
+        (string Type, TKey Id) parentKey,
+        Microsoft.EntityFrameworkCore.Metadata.IProperty keyProperty)
+    {
+        var fkValue = trackedEntry.Property(fkProperty.Name).CurrentValue;
+        if (fkValue is not TKey childParentId || !childParentId.Equals(parentKey.Id))
+        {
+            return;
+        }
+
+        var keyValue = trackedEntry.Property(keyProperty.Name).CurrentValue;
+        if (keyValue is not TKey childId)
+        {
+            return;
+        }
+
+        var childKey = (trackedEntry.Metadata.ClrType.Name, childId);
+
+        // Add to original IDs
+        if (!_originalChildIdsByParentRecursive.TryGetValue(parentKey, out var originalIds))
+        {
+            originalIds = [];
+            _originalChildIdsByParentRecursive[parentKey] = originalIds;
+        }
+        originalIds.Add(childKey);
+
+        // Add to deleted children list
+        if (!_deletedChildrenByParentRecursive.TryGetValue(parentKey, out var deletedList))
+        {
+            deletedList = [];
+            _deletedChildrenByParentRecursive[parentKey] = deletedList;
+        }
+        deletedList.Add(trackedEntry.Entity);
+    }
+
+    internal List<(string EntityType, TKey EntityId, int Depth)> GetOrphanedChildIdsRecursive(
+        TEntity entity, int maxDepth)
+    {
+        var orphans = new List<(string EntityType, TKey EntityId, int Depth)>();
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        CollectOrphansRecursive(entity, 0, maxDepth, visited, orphans);
+        return orphans;
+    }
+
+    private void CollectOrphansRecursive(
+        object entity, int currentDepth, int maxDepth,
+        HashSet<object> visited, List<(string, TKey, int)> orphans)
+    {
+        if (!visited.Add(entity))
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+        var parentKey = CreateEntityKey(entry);
+
+        CollectOrphansForEntity(entry, parentKey, currentDepth, orphans);
+
+        if (currentDepth >= maxDepth)
+        {
+            return;
+        }
+
+        // Recurse into children
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in GetCollectionItems(navigation))
+            {
+                CollectOrphansRecursive(item, currentDepth + 1, maxDepth, visited, orphans);
+            }
+        }
+    }
+
+    private void CollectOrphansForEntity(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry,
+        (string Type, TKey Id) parentKey, int depth,
+        List<(string, TKey, int)> orphans)
+    {
+        if (!_originalChildIdsByParentRecursive.TryGetValue(parentKey, out var originalIds))
+        {
+            return;
+        }
+
+        var currentIds = GetCurrentChildKeysForEntity(entry);
+
+        foreach (var originalId in originalIds)
+        {
+            if (!currentIds.Contains(originalId))
+            {
+                orphans.Add((originalId.Type, originalId.Id, depth + 1));
+            }
+        }
+    }
+
+    private HashSet<(string Type, TKey Id)> GetCurrentChildKeysForEntity(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry)
+    {
+        var currentIds = new HashSet<(string Type, TKey Id)>();
+
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in GetCollectionItems(navigation))
+            {
+                var childEntry = _context.Entry(item);
+                currentIds.Add(CreateEntityKey(childEntry));
+            }
+        }
+
+        return currentIds;
+    }
+
+    internal void ValidateNoOrphanedChildrenRecursive(
+        TEntity entity, int maxDepth, GraphBatchOptions options)
+    {
+        if (options.OrphanedChildBehavior != OrphanBehavior.Throw)
+        {
+            return;
+        }
+
+        var orphanedIds = GetOrphanedChildIdsRecursive(entity, maxDepth);
+        if (orphanedIds.Count == 0)
+        {
+            return;
+        }
+
+        var entityId = GetEntityId(entity);
+        var summary = string.Join(", ", orphanedIds.Select(o => $"{o.EntityType}:{o.EntityId}@depth{o.Depth}"));
+        throw new InvalidOperationException(
+            $"Entity {typeof(TEntity).Name} (Id={entityId}) has {orphanedIds.Count} orphaned descendant(s): " +
+            $"[{summary}]. " +
+            $"Set GraphBatchOptions.OrphanedChildBehavior to Delete or Detach to allow this.");
+    }
+
+    internal void HandleOrphanedChildrenRecursive(
+        TEntity entity, int maxDepth, OrphanBehavior behavior)
+    {
+        if (behavior == OrphanBehavior.Detach)
+        {
+            // Explicitly detach orphans from change tracker so SaveChanges won't delete them
+            var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+            DetachOrphansAtAllLevels(entity, 0, maxDepth, visited);
+            return;
+        }
+
+        if (behavior == OrphanBehavior.Delete)
+        {
+            var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+            DeleteOrphansAtAllLevels(entity, 0, maxDepth, visited);
+        }
+    }
+
+    private void DetachOrphansAtAllLevels(
+        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        if (!visited.Add(entity))
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+        var parentKey = CreateEntityKey(entry);
+
+        DetachDeletedChildrenFromTracker(parentKey);
+
+        if (currentDepth >= maxDepth)
+        {
+            return;
+        }
+
+        // Recurse into children
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in GetCollectionItems(navigation))
+            {
+                DetachOrphansAtAllLevels(item, currentDepth + 1, maxDepth, visited);
+            }
+        }
+    }
+
+    private void DetachDeletedChildrenFromTracker((string Type, TKey Id) parentKey)
+    {
+        if (!_deletedChildrenByParentRecursive.TryGetValue(parentKey, out var deletedChildren))
+        {
+            return;
+        }
+
+        foreach (var deletedChild in deletedChildren)
+        {
+            var entry = _context.Entry(deletedChild);
+            if (entry.State != EntityState.Detached)
+            {
+                entry.State = EntityState.Detached;
+            }
+        }
+    }
+
+    private void DeleteOrphansAtAllLevels(
+        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        if (!visited.Add(entity))
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+        var parentKey = CreateEntityKey(entry);
+
+        ReattachDeletedChildrenAsDeleted(parentKey);
+
+        if (currentDepth >= maxDepth)
+        {
+            return;
+        }
+
+        // Recurse into children
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in GetCollectionItems(navigation))
+            {
+                DeleteOrphansAtAllLevels(item, currentDepth + 1, maxDepth, visited);
+            }
+        }
+    }
+
+    private void ReattachDeletedChildrenAsDeleted((string Type, TKey Id) parentKey)
+    {
+        if (!_deletedChildrenByParentRecursive.TryGetValue(parentKey, out var deletedChildren))
+        {
+            return;
+        }
+
+        foreach (var deletedChild in deletedChildren)
+        {
+            var entry = _context.Entry(deletedChild);
+            if (entry.State == EntityState.Detached)
+            {
+                entry.State = EntityState.Deleted;
+            }
+        }
+    }
+
+    // ========== Recursive Detach with Orphans Methods ==========
+
+    internal void DetachEntityWithOrphansRecursive(TEntity entity, int maxDepth)
+    {
+        // First detach all deleted children tracked at any level
+        DetachAllDeletedChildrenRecursive();
+
+        // Then detach the full entity graph
+        DetachEntityGraphRecursive(entity, maxDepth);
+    }
+
+    private void DetachAllDeletedChildrenRecursive()
+    {
+        foreach (var deletedChildren in _deletedChildrenByParentRecursive.Values)
+        {
+            foreach (var deletedChild in deletedChildren)
+            {
+                var entry = _context.Entry(deletedChild);
+                if (entry.State != EntityState.Detached)
+                {
+                    entry.State = EntityState.Detached;
+                }
+            }
+        }
+    }
+
+    // ========== Recursive Cascade Validation Methods ==========
+
+    internal void ValidateCascadeBehaviorRecursive(
+        TEntity entity, int maxDepth, DeleteGraphBatchOptions options)
+    {
+        if (options.CascadeBehavior != DeleteCascadeBehavior.Throw)
+        {
+            return;
+        }
+
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        ValidateCascadeRecursive(entity, 0, maxDepth, visited);
+    }
+
+    private void ValidateCascadeRecursive(
+        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        if (!visited.Add(entity))
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+        ValidateEntityHasNoChildren(entry, currentDepth);
+
+        if (currentDepth >= maxDepth)
+        {
+            return;
+        }
+
+        // Recurse into children
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in GetCollectionItems(navigation))
+            {
+                ValidateCascadeRecursive(item, currentDepth + 1, maxDepth, visited);
+            }
+        }
+    }
+
+    private void ValidateEntityHasNoChildren(
+        Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry entry, int depth)
+    {
+        foreach (var navigation in entry.Navigations)
+        {
+            if (navigation.CurrentValue == null || !navigation.Metadata.IsCollection)
+            {
+                continue;
+            }
+
+            if (navigation.CurrentValue is System.Collections.IEnumerable collection)
+            {
+                var childCount = collection.Cast<object>().Count();
+                if (childCount > 0)
+                {
+                    var entityId = GetEntityIdFromEntry(entry);
+                    throw new InvalidOperationException(
+                        $"Entity {entry.Metadata.ClrType.Name} (Id={entityId}) at depth {depth} has " +
+                        $"{childCount} child(ren) in '{navigation.Metadata.Name}'. " +
                         $"Set DeleteGraphBatchOptions.CascadeBehavior to Cascade or ParentOnly to proceed.");
                 }
             }

@@ -15,4 +15,10 @@ public class GraphBatchOptions
     /// Default: Throw (safest - user must explicitly choose Delete or Detach).
     /// </summary>
     public OrphanBehavior OrphanedChildBehavior { get; set; } = OrphanBehavior.Throw;
+
+    /// <summary>
+    /// Maximum depth to traverse in the entity graph.
+    /// Default: 10. Use to prevent infinite recursion in deep hierarchies.
+    /// </summary>
+    public int MaxDepth { get; set; } = 10;
 }

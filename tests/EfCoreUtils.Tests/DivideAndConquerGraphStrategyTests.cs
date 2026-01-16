@@ -76,12 +76,12 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         result.SuccessCount.ShouldBe(0);
         result.FailureCount.ShouldBe(0);
-        result.ChildIdsByParentId.ShouldNotBeNull();
-        result.ChildIdsByParentId.Count.ShouldBe(0);
+        result.GraphHierarchy.ShouldNotBeNull();
+        result.GraphHierarchy!.Count.ShouldBe(0);
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_ReturnsChildIdsByParentId()
+    public void UpdateGraphBatch_DivideAndConquer_ReturnsGraphHierarchy()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 3, itemsPerOrder: 3);
@@ -97,13 +97,13 @@ public class DivideAndConquerGraphStrategyTests : TestBase
         var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
 
         result.IsCompleteSuccess.ShouldBeTrue();
-        result.ChildIdsByParentId.ShouldNotBeNull();
-        result.ChildIdsByParentId.Count.ShouldBe(3);
+        result.GraphHierarchy.ShouldNotBeNull();
+        result.GraphHierarchy!.Count.ShouldBe(3);
 
         foreach (var order in orders)
         {
-            result.ChildIdsByParentId.ShouldContainKey(order.Id);
-            result.ChildIdsByParentId[order.Id].Count.ShouldBe(3);
+            result.GraphHierarchy!.ShouldContain(n => n.EntityId.Equals(order.Id));
+            result.GraphHierarchy!.First(n => n.EntityId.Equals(order.Id)).GetChildIds().Count.ShouldBe(3);
         }
     }
 

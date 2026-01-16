@@ -12,6 +12,7 @@ public class TestDbContext : DbContext
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<CustomerOrder> CustomerOrders => Set<CustomerOrder>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
+    public DbSet<ItemReservation> ItemReservations => Set<ItemReservation>();
 
     public TestDbContext(DbContextOptions<TestDbContext> options) : base(options)
     {
@@ -131,6 +132,23 @@ public class TestDbContext : DbContext
                 .IsRequired()
                 .IsRowVersion()
                 .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            entity.HasMany(e => e.Reservations)
+                .WithOne(r => r.OrderItem)
+                .HasForeignKey(r => r.OrderItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ItemReservation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.WarehouseLocation)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
         });
 
         base.OnModelCreating(modelBuilder);
@@ -156,6 +174,7 @@ public class TestDbContext : DbContext
         ValidateProductStrings();
         ValidateCustomerOrders();
         ValidateOrderItems();
+        ValidateItemReservations();
     }
 
     private void ValidateProducts()
@@ -251,6 +270,23 @@ public class TestDbContext : DbContext
             var expectedSubtotal = item.Quantity * item.UnitPrice;
             if (Math.Abs(item.Subtotal - expectedSubtotal) > 0.01m)
                 throw new InvalidOperationException($"OrderItem {item.Id}: Subtotal mismatch");
+        }
+    }
+
+    private void ValidateItemReservations()
+    {
+        var reservations = ChangeTracker.Entries<ItemReservation>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
+            .Select(e => e.Entity);
+
+        foreach (var reservation in reservations)
+        {
+            if (reservation.ReservedQuantity <= 0)
+                throw new InvalidOperationException(
+                    $"ItemReservation {reservation.Id}: ReservedQuantity must be greater than 0");
+            if (string.IsNullOrWhiteSpace(reservation.WarehouseLocation))
+                throw new InvalidOperationException(
+                    $"ItemReservation {reservation.Id}: WarehouseLocation is required");
         }
     }
 }

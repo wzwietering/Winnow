@@ -349,7 +349,13 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             Failures = [],
             Duration = stopwatch.Elapsed,
             DatabaseRoundTrips = 0,
-            ChildIdsByParentId = new Dictionary<TKey, IReadOnlyList<TKey>>()
+            GraphHierarchy = [],
+            TraversalInfo = new GraphTraversalResult<TKey>
+            {
+                MaxDepthReached = 0,
+                TotalEntitiesTraversed = 0,
+                EntitiesByDepth = new Dictionary<int, int>()
+            }
         };
     }
 
@@ -364,7 +370,8 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             Failures = result.Failures,
             Duration = stopwatch.Elapsed,
             DatabaseRoundTrips = context.RoundTripCounter,
-            ChildIdsByParentId = result.ChildIdsByParentId
+            GraphHierarchy = result.GraphHierarchy,
+            TraversalInfo = result.TraversalInfo
         };
     }
 
@@ -403,7 +410,13 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             Failures = [],
             Duration = stopwatch.Elapsed,
             DatabaseRoundTrips = 0,
-            ChildIdsByParentId = new Dictionary<TKey, IReadOnlyList<TKey>>()
+            GraphHierarchy = [],
+            TraversalInfo = new GraphTraversalResult<TKey>
+            {
+                MaxDepthReached = 0,
+                TotalEntitiesTraversed = 0,
+                EntitiesByDepth = new Dictionary<int, int>()
+            }
         };
     }
 
@@ -418,7 +431,8 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             Failures = result.Failures,
             Duration = stopwatch.Elapsed,
             DatabaseRoundTrips = context.RoundTripCounter,
-            ChildIdsByParentId = result.ChildIdsByParentId
+            GraphHierarchy = result.GraphHierarchy,
+            TraversalInfo = result.TraversalInfo
         };
     }
 }

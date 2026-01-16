@@ -11,7 +11,12 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
     private readonly InsertGraphBatchOptions _options;
     private readonly List<InsertedEntity<TKey>> _insertedEntities = [];
     private readonly List<InsertBatchFailure> _failures = [];
-    private readonly Dictionary<TKey, IReadOnlyList<TKey>> _childIdsByParentId = [];
+    private readonly List<GraphNode<TKey>> _graphHierarchy = [];
+
+    // Stats aggregation
+    private int _totalEntitiesTraversed;
+    private int _maxDepthReached;
+    private readonly Dictionary<int, int> _entitiesByDepth = [];
 
     internal InsertGraphOperation(InsertGraphBatchOptions options)
     {
@@ -25,13 +30,12 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
 
     public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
     {
-        context.AttachEntityGraphAsAdded(entity);
+        context.AttachEntityGraphAsAddedRecursive(entity, _options.MaxDepth);
     }
 
     public void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
-        var childIds = context.GetChildIds(entity);
 
         _insertedEntities.Add(new InsertedEntity<TKey>
         {
@@ -40,7 +44,9 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
             Entity = entity
         });
 
-        _childIdsByParentId[entityId] = childIds;
+        var (node, stats) = context.BuildGraphHierarchy(entity, _options.MaxDepth);
+        _graphHierarchy.Add(node);
+        AggregateStats(stats);
     }
 
     public void RecordFailure(TEntity entity, int index, Exception ex, BatchStrategyContext<TEntity, TKey> context)
@@ -57,7 +63,7 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
 
     public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
     {
-        context.DetachEntityGraph(entity);
+        context.DetachEntityGraphRecursive(entity, _options.MaxDepth);
     }
 
     public InsertBatchResult<TKey> CreateResult()
@@ -66,7 +72,30 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
         {
             InsertedEntities = _insertedEntities,
             Failures = _failures,
-            ChildIdsByParentId = _childIdsByParentId
+            GraphHierarchy = _graphHierarchy,
+            TraversalInfo = CreateTraversalInfo()
+        };
+    }
+
+    private void AggregateStats(GraphTraversalResult<TKey> stats)
+    {
+        _totalEntitiesTraversed += stats.TotalEntitiesTraversed;
+        _maxDepthReached = Math.Max(_maxDepthReached, stats.MaxDepthReached);
+
+        foreach (var (depth, count) in stats.EntitiesByDepth)
+        {
+            _entitiesByDepth.TryGetValue(depth, out var existing);
+            _entitiesByDepth[depth] = existing + count;
+        }
+    }
+
+    private GraphTraversalResult<TKey> CreateTraversalInfo()
+    {
+        return new GraphTraversalResult<TKey>
+        {
+            MaxDepthReached = _maxDepthReached,
+            TotalEntitiesTraversed = _totalEntitiesTraversed,
+            EntitiesByDepth = _entitiesByDepth
         };
     }
 
