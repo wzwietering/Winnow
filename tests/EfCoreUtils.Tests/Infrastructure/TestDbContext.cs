@@ -13,6 +13,7 @@ public class TestDbContext : DbContext
     public DbSet<CustomerOrder> CustomerOrders => Set<CustomerOrder>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<ItemReservation> ItemReservations => Set<ItemReservation>();
+    public DbSet<Category> Categories => Set<Category>();
 
     public TestDbContext(DbContextOptions<TestDbContext> options) : base(options)
     {
@@ -20,6 +21,16 @@ public class TestDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<Category>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.Description)
+                .HasMaxLength(500);
+        });
+
         modelBuilder.Entity<Product>(entity =>
         {
             entity.HasKey(e => e.Id);
@@ -32,6 +43,11 @@ public class TestDbContext : DbContext
                 .IsRequired()
                 .IsRowVersion()
                 .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            entity.HasOne(p => p.Category)
+                .WithMany()
+                .HasForeignKey(p => p.CategoryId)
+                .IsRequired(false);
         });
 
         modelBuilder.Entity<ProductLong>(entity =>
@@ -137,6 +153,11 @@ public class TestDbContext : DbContext
                 .WithOne(r => r.OrderItem)
                 .HasForeignKey(r => r.OrderItemId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(oi => oi.Product)
+                .WithMany()
+                .HasForeignKey("ProductNavFk")
+                .IsRequired(false);
         });
 
         modelBuilder.Entity<ItemReservation>(entity =>

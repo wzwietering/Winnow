@@ -9,5 +9,8 @@ public class Product : IProductEntity
     public DateTimeOffset LastModified { get; set; }
     public byte[] Version { get; set; } = [];
 
+    public int? CategoryId { get; set; }
+    public Category? Category { get; set; }
+
     public string DisplayId => Id.ToString();
 }
