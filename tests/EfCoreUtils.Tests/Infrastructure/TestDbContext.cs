@@ -13,6 +13,9 @@ public class TestDbContext : DbContext
     public DbSet<CustomerOrder> CustomerOrders => Set<CustomerOrder>();
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<ItemReservation> ItemReservations => Set<ItemReservation>();
+    public DbSet<CustomerOrderWithGuidGrandchildren> CustomerOrdersWithGuidGrandchildren => Set<CustomerOrderWithGuidGrandchildren>();
+    public DbSet<OrderItemWithGuidReservations> OrderItemsWithGuidReservations => Set<OrderItemWithGuidReservations>();
+    public DbSet<ItemReservationGuid> ItemReservationsGuid => Set<ItemReservationGuid>();
 
     public TestDbContext(DbContextOptions<TestDbContext> options) : base(options)
     {
@@ -151,6 +154,63 @@ public class TestDbContext : DbContext
                 .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
         });
 
+        modelBuilder.Entity<CustomerOrderWithGuidGrandchildren>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.OrderNumber)
+                .IsRequired()
+                .HasMaxLength(50);
+            entity.HasIndex(e => e.OrderNumber)
+                .IsUnique();
+            entity.Property(e => e.CustomerName)
+                .IsRequired()
+                .HasMaxLength(200);
+            entity.Property(e => e.TotalAmount)
+                .HasPrecision(18, 2);
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            entity.HasMany(e => e.OrderItems)
+                .WithOne(i => i.CustomerOrder)
+                .HasForeignKey(i => i.CustomerOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<OrderItemWithGuidReservations>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ProductName)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.UnitPrice)
+                .HasPrecision(18, 2);
+            entity.Property(e => e.Subtotal)
+                .HasPrecision(18, 2);
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            entity.HasMany(e => e.Reservations)
+                .WithOne(r => r.OrderItem)
+                .HasForeignKey(r => r.OrderItemWithGuidReservationsId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ItemReservationGuid>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.WarehouseLocation)
+                .IsRequired()
+                .HasMaxLength(100);
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+        });
+
         base.OnModelCreating(modelBuilder);
     }
 
@@ -175,6 +235,9 @@ public class TestDbContext : DbContext
         ValidateCustomerOrders();
         ValidateOrderItems();
         ValidateItemReservations();
+        ValidateCustomerOrdersWithGuidGrandchildren();
+        ValidateOrderItemsWithGuidReservations();
+        ValidateItemReservationsGuid();
     }
 
     private void ValidateProductEntities<TProduct>() where TProduct : class, IProductEntity
@@ -244,6 +307,65 @@ public class TestDbContext : DbContext
             if (string.IsNullOrWhiteSpace(reservation.WarehouseLocation))
                 throw new InvalidOperationException(
                     $"ItemReservation {reservation.Id}: WarehouseLocation is required");
+        }
+    }
+
+    private void ValidateCustomerOrdersWithGuidGrandchildren()
+    {
+        var orders = ChangeTracker.Entries<CustomerOrderWithGuidGrandchildren>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
+            .Select(e => e.Entity);
+
+        foreach (var order in orders)
+        {
+            if (order.TotalAmount < 0)
+                throw new InvalidOperationException(
+                    $"CustomerOrderWithGuidGrandchildren {order.Id}: TotalAmount cannot be negative");
+            if (string.IsNullOrWhiteSpace(order.CustomerName))
+                throw new InvalidOperationException(
+                    $"CustomerOrderWithGuidGrandchildren {order.Id}: CustomerName is required");
+        }
+    }
+
+    private void ValidateOrderItemsWithGuidReservations()
+    {
+        var items = ChangeTracker.Entries<OrderItemWithGuidReservations>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
+            .Select(e => e.Entity);
+
+        foreach (var item in items)
+        {
+            if (item.Quantity <= 0)
+                throw new InvalidOperationException(
+                    $"OrderItemWithGuidReservations {item.Id}: Quantity must be greater than 0");
+            if (item.UnitPrice < 0)
+                throw new InvalidOperationException(
+                    $"OrderItemWithGuidReservations {item.Id}: UnitPrice cannot be negative");
+            if (item.Subtotal < 0)
+                throw new InvalidOperationException(
+                    $"OrderItemWithGuidReservations {item.Id}: Subtotal cannot be negative");
+
+            var expectedSubtotal = item.Quantity * item.UnitPrice;
+            if (Math.Abs(item.Subtotal - expectedSubtotal) > 0.01m)
+                throw new InvalidOperationException(
+                    $"OrderItemWithGuidReservations {item.Id}: Subtotal mismatch");
+        }
+    }
+
+    private void ValidateItemReservationsGuid()
+    {
+        var reservations = ChangeTracker.Entries<ItemReservationGuid>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
+            .Select(e => e.Entity);
+
+        foreach (var reservation in reservations)
+        {
+            if (reservation.ReservedQuantity <= 0)
+                throw new InvalidOperationException(
+                    $"ItemReservationGuid {reservation.Id}: ReservedQuantity must be greater than 0");
+            if (string.IsNullOrWhiteSpace(reservation.WarehouseLocation))
+                throw new InvalidOperationException(
+                    $"ItemReservationGuid {reservation.Id}: WarehouseLocation is required");
         }
     }
 }

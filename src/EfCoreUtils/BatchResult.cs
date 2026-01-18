@@ -1,9 +1,43 @@
 ﻿namespace EfCoreUtils;
 
 /// <summary>
+/// Common interface for batch operation results.
+/// Enables generic code that works with both typed and mixed-key results.
+/// </summary>
+public interface IBatchResult
+{
+    /// <summary>Number of entities successfully processed.</summary>
+    int SuccessCount { get; }
+
+    /// <summary>Number of entities that failed processing.</summary>
+    int FailureCount { get; }
+
+    /// <summary>Total number of entities processed (success + failure).</summary>
+    int TotalProcessed { get; }
+
+    /// <summary>Ratio of successful operations (0.0 to 1.0).</summary>
+    double SuccessRate { get; }
+
+    /// <summary>Total time taken for the operation.</summary>
+    TimeSpan Duration { get; }
+
+    /// <summary>Number of database round trips made.</summary>
+    int DatabaseRoundTrips { get; }
+
+    /// <summary>True if all entities were processed successfully.</summary>
+    bool IsCompleteSuccess { get; }
+
+    /// <summary>True if all entities failed processing.</summary>
+    bool IsCompleteFailure { get; }
+
+    /// <summary>True if some entities succeeded and some failed.</summary>
+    bool IsPartialSuccess { get; }
+}
+
+/// <summary>
 /// Entity to report succeeded and failed CRUD entities
 /// </summary>
-public class BatchResult<TKey> where TKey : notnull, IEquatable<TKey>
+public class BatchResult<TKey> : IBatchResult where TKey : notnull, IEquatable<TKey>
 {
     public IReadOnlyList<TKey> SuccessfulIds { get; init; } = [];
     public int SuccessCount => SuccessfulIds.Count;

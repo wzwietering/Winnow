@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using EfCoreUtils.Internal;
+using EfCoreUtils.Internal.MixedKey;
+using EfCoreUtils.MixedKey;
 using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreUtils;
@@ -259,6 +261,182 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
         DeleteGraphBatchOptions options,
         CancellationToken cancellationToken = default) => Task.FromResult(DeleteGraphBatch(entities, options));
 
+    // === MIXED-KEY GRAPH OPERATIONS ===
+
+    /// <summary>
+    /// Inserts a batch of entity graphs with mixed key types using the default options.
+    /// Each graph succeeds or fails as a unit. Supports entities with different key types
+    /// (int, Guid, string, etc.) in the same hierarchy.
+    /// </summary>
+    /// <param name="entities">The parent entities with their navigation properties loaded</param>
+    /// <returns>Result containing inserted entities, failures, and performance metrics</returns>
+    public MixedKeyInsertBatchResult InsertMixedKeyGraphBatch(IEnumerable<TEntity> entities) =>
+        InsertMixedKeyGraphBatch(entities, new InsertGraphBatchOptions());
+
+    /// <summary>
+    /// Inserts a batch of entity graphs with mixed key types using the specified options.
+    /// Each graph succeeds or fails as a unit. Supports entities with different key types
+    /// (int, Guid, string, etc.) in the same hierarchy.
+    /// </summary>
+    /// <param name="entities">The parent entities with their navigation properties loaded</param>
+    /// <param name="options">Graph batch operation options</param>
+    /// <returns>Result containing inserted entities, failures, and performance metrics</returns>
+    public MixedKeyInsertBatchResult InsertMixedKeyGraphBatch(
+        IEnumerable<TEntity> entities,
+        InsertGraphBatchOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyMixedKeyInsertResult(stopwatch);
+        }
+
+        var strategyContext = new MixedKeyBatchStrategyContext<TEntity>(_context);
+        var strategy = MixedKeyBatchStrategyFactory.CreateInsertGraphStrategy<TEntity>(options.Strategy);
+        var result = strategy.Execute(entityList, strategyContext, options);
+
+        stopwatch.Stop();
+
+        return EnrichMixedKeyInsertResult(result, stopwatch, strategyContext);
+    }
+
+    /// <summary>
+    /// Asynchronously inserts a batch of entity graphs with mixed key types using the default options.
+    /// </summary>
+    public Task<MixedKeyInsertBatchResult> InsertMixedKeyGraphBatchAsync(
+        IEnumerable<TEntity> entities,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(InsertMixedKeyGraphBatch(entities));
+
+    /// <summary>
+    /// Asynchronously inserts a batch of entity graphs with mixed key types using the specified options.
+    /// </summary>
+    public Task<MixedKeyInsertBatchResult> InsertMixedKeyGraphBatchAsync(
+        IEnumerable<TEntity> entities,
+        InsertGraphBatchOptions options,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(InsertMixedKeyGraphBatch(entities, options));
+
+    /// <summary>
+    /// Updates a batch of entity graphs with mixed key types using the default options.
+    /// Each graph succeeds or fails as a unit. Supports entities with different key types
+    /// (int, Guid, string, etc.) in the same hierarchy.
+    /// </summary>
+    /// <param name="entities">The parent entities with their navigation properties loaded</param>
+    /// <returns>Result containing successful IDs, failures, and performance metrics</returns>
+    public MixedKeyBatchResult UpdateMixedKeyGraphBatch(IEnumerable<TEntity> entities) =>
+        UpdateMixedKeyGraphBatch(entities, new GraphBatchOptions());
+
+    /// <summary>
+    /// Updates a batch of entity graphs with mixed key types using the specified options.
+    /// Each graph succeeds or fails as a unit. Supports entities with different key types
+    /// (int, Guid, string, etc.) in the same hierarchy.
+    /// </summary>
+    /// <param name="entities">The parent entities with their navigation properties loaded</param>
+    /// <param name="options">Graph batch operation options</param>
+    /// <returns>Result containing successful IDs, failures, and performance metrics</returns>
+    public MixedKeyBatchResult UpdateMixedKeyGraphBatch(
+        IEnumerable<TEntity> entities,
+        GraphBatchOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyMixedKeyResult(stopwatch);
+        }
+
+        var strategyContext = new MixedKeyBatchStrategyContext<TEntity>(_context);
+        var strategy = MixedKeyBatchStrategyFactory.CreateGraphStrategy<TEntity>(options.Strategy);
+        var result = strategy.Execute(entityList, strategyContext, options);
+
+        stopwatch.Stop();
+
+        return EnrichMixedKeyResult(result, stopwatch, strategyContext);
+    }
+
+    /// <summary>
+    /// Asynchronously updates a batch of entity graphs with mixed key types using the default options.
+    /// </summary>
+    public Task<MixedKeyBatchResult> UpdateMixedKeyGraphBatchAsync(
+        IEnumerable<TEntity> entities,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(UpdateMixedKeyGraphBatch(entities));
+
+    /// <summary>
+    /// Asynchronously updates a batch of entity graphs with mixed key types using the specified options.
+    /// </summary>
+    public Task<MixedKeyBatchResult> UpdateMixedKeyGraphBatchAsync(
+        IEnumerable<TEntity> entities,
+        GraphBatchOptions options,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(UpdateMixedKeyGraphBatch(entities, options));
+
+    /// <summary>
+    /// Deletes a batch of entity graphs with mixed key types using the default options.
+    /// Each graph succeeds or fails as a unit. Supports entities with different key types
+    /// (int, Guid, string, etc.) in the same hierarchy.
+    /// </summary>
+    /// <param name="entities">The parent entities with their navigation properties loaded</param>
+    /// <returns>Result containing successful IDs, failures, and performance metrics</returns>
+    public MixedKeyBatchResult DeleteMixedKeyGraphBatch(IEnumerable<TEntity> entities) =>
+        DeleteMixedKeyGraphBatch(entities, new DeleteGraphBatchOptions());
+
+    /// <summary>
+    /// Deletes a batch of entity graphs with mixed key types using the specified options.
+    /// Each graph succeeds or fails as a unit. Supports entities with different key types
+    /// (int, Guid, string, etc.) in the same hierarchy.
+    /// </summary>
+    /// <param name="entities">The parent entities with their navigation properties loaded</param>
+    /// <param name="options">Graph batch operation options</param>
+    /// <returns>Result containing successful IDs, failures, and performance metrics</returns>
+    public MixedKeyBatchResult DeleteMixedKeyGraphBatch(
+        IEnumerable<TEntity> entities,
+        DeleteGraphBatchOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyMixedKeyResult(stopwatch);
+        }
+
+        var strategyContext = new MixedKeyBatchStrategyContext<TEntity>(_context);
+        var strategy = MixedKeyBatchStrategyFactory.CreateDeleteGraphStrategy<TEntity>(options.Strategy);
+        var result = strategy.Execute(entityList, strategyContext, options);
+
+        stopwatch.Stop();
+
+        return EnrichMixedKeyResult(result, stopwatch, strategyContext);
+    }
+
+    /// <summary>
+    /// Asynchronously deletes a batch of entity graphs with mixed key types using the default options.
+    /// </summary>
+    public Task<MixedKeyBatchResult> DeleteMixedKeyGraphBatchAsync(
+        IEnumerable<TEntity> entities,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(DeleteMixedKeyGraphBatch(entities));
+
+    /// <summary>
+    /// Asynchronously deletes a batch of entity graphs with mixed key types using the specified options.
+    /// </summary>
+    public Task<MixedKeyBatchResult> DeleteMixedKeyGraphBatchAsync(
+        IEnumerable<TEntity> entities,
+        DeleteGraphBatchOptions options,
+        CancellationToken cancellationToken = default) =>
+        Task.FromResult(DeleteMixedKeyGraphBatch(entities, options));
+
     // === PRIVATE HELPERS ===
 
     private BatchResult<TKey> CreateEmptyResult(Stopwatch stopwatch)
@@ -304,4 +482,30 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
         InsertBatchResult<TKey> result,
         Stopwatch stopwatch,
         BatchStrategyContext<TEntity, TKey> context) => BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
+
+    // === MIXED-KEY PRIVATE HELPERS ===
+
+    private MixedKeyBatchResult CreateEmptyMixedKeyResult(Stopwatch stopwatch)
+    {
+        stopwatch.Stop();
+        return MixedKeyBatchResultFactory.CreateEmpty(stopwatch.Elapsed);
+    }
+
+    private static MixedKeyBatchResult EnrichMixedKeyResult(
+        MixedKeyBatchResult result,
+        Stopwatch stopwatch,
+        MixedKeyBatchStrategyContext<TEntity> context) =>
+        MixedKeyBatchResultFactory.Enrich(result, stopwatch.Elapsed, context.RoundTripCounter);
+
+    private MixedKeyInsertBatchResult CreateEmptyMixedKeyInsertResult(Stopwatch stopwatch)
+    {
+        stopwatch.Stop();
+        return MixedKeyBatchResultFactory.CreateEmptyInsert(stopwatch.Elapsed);
+    }
+
+    private static MixedKeyInsertBatchResult EnrichMixedKeyInsertResult(
+        MixedKeyInsertBatchResult result,
+        Stopwatch stopwatch,
+        MixedKeyBatchStrategyContext<TEntity> context) =>
+        MixedKeyBatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
 }

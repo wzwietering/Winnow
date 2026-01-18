@@ -4,7 +4,7 @@ namespace EfCoreUtils;
 /// Result of a batch insert operation. Tracks inserted entities by their
 /// original index since entities don't have IDs before insertion.
 /// </summary>
-public class InsertBatchResult<TKey> where TKey : notnull, IEquatable<TKey>
+public class InsertBatchResult<TKey> : IBatchResult where TKey : notnull, IEquatable<TKey>
 {
     public IReadOnlyList<InsertedEntity<TKey>> InsertedEntities { get; init; } = [];
     public IReadOnlyList<TKey> InsertedIds => InsertedEntities.Select(e => e.Id).ToList();
