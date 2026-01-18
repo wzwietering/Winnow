@@ -23,11 +23,16 @@ internal class DeleteGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
 
     public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
-        if (_options.CascadeBehavior == DeleteCascadeBehavior.Throw)
+        foreach (var entity in entities)
         {
-            foreach (var entity in entities)
+            if (_options.CascadeBehavior == DeleteCascadeBehavior.Throw)
             {
                 context.ValidateCascadeBehaviorRecursive(entity, _options.MaxDepth, _options);
+            }
+
+            if (_options.ValidateReferencedEntitiesExist)
+            {
+                context.ValidateReferencedEntitiesExist(entity, _options.MaxDepth);
             }
         }
     }

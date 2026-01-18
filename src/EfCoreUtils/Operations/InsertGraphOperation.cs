@@ -18,14 +18,39 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
     private int _maxDepthReached;
     private readonly Dictionary<int, int> _entitiesByDepth = [];
 
+    // Reference tracking
+    private readonly Dictionary<string, List<TKey>> _processedReferencesByType = [];
+    private int _maxReferenceDepthReached;
+
     internal InsertGraphOperation(InsertGraphBatchOptions options) => _options = options;
 
     public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
-        // No validation needed for graph inserts - we expect children
+        if (!_options.IncludeReferences ||
+            _options.CircularReferenceHandling != CircularReferenceHandling.Throw)
+        {
+            return;
+        }
+
+        foreach (var entity in entities)
+        {
+            context.ValidateCircularReferences(entity, _options.MaxDepth);
+        }
     }
 
-    public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context) => context.AttachEntityGraphAsAddedRecursive(entity, _options.MaxDepth);
+    public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
+    {
+        if (_options.IncludeReferences)
+        {
+            var refResult = context.AttachEntityGraphAsAddedWithReferences(
+                entity, _options.MaxDepth, _options.CircularReferenceHandling);
+            AggregateReferenceStats(refResult);
+        }
+        else
+        {
+            context.AttachEntityGraphAsAddedRecursive(entity, _options.MaxDepth);
+        }
+    }
 
     public void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
     {
@@ -38,7 +63,9 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
             Entity = entity
         });
 
-        var (node, stats) = context.BuildGraphHierarchy(entity, _options.MaxDepth);
+        var (node, stats) = _options.IncludeReferences
+            ? context.BuildGraphHierarchyWithReferences(entity, _options.MaxDepth)
+            : context.BuildGraphHierarchy(entity, _options.MaxDepth);
         _graphHierarchy.Add(node);
         AggregateStats(stats);
     }
@@ -77,12 +104,43 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
         }
     }
 
-    private GraphTraversalResult<TKey> CreateTraversalInfo() => new()
+    private GraphTraversalResult<TKey> CreateTraversalInfo()
     {
-        MaxDepthReached = _maxDepthReached,
-        TotalEntitiesTraversed = _totalEntitiesTraversed,
-        EntitiesByDepth = _entitiesByDepth
-    };
+        var processedRefs = _processedReferencesByType.ToDictionary(
+            kvp => kvp.Key,
+            kvp => (IReadOnlyList<TKey>)kvp.Value.AsReadOnly());
+
+        return new GraphTraversalResult<TKey>
+        {
+            MaxDepthReached = _maxDepthReached,
+            TotalEntitiesTraversed = _totalEntitiesTraversed,
+            EntitiesByDepth = _entitiesByDepth,
+            ProcessedReferencesByType = processedRefs,
+            UniqueReferencesProcessed = _processedReferencesByType.Values.Sum(list => list.Count),
+            MaxReferenceDepthReached = _maxReferenceDepthReached
+        };
+    }
+
+    private void AggregateReferenceStats(EfCoreUtils.Internal.Services.ReferenceTrackingResult refResult)
+    {
+        foreach (var (typeName, ids) in refResult.ProcessedReferencesByType)
+        {
+            if (!_processedReferencesByType.TryGetValue(typeName, out var list))
+            {
+                list = [];
+                _processedReferencesByType[typeName] = list;
+            }
+
+            foreach (var id in ids)
+            {
+                if (id is TKey typedId)
+                {
+                    list.Add(typedId);
+                }
+            }
+        }
+        _maxReferenceDepthReached = Math.Max(_maxReferenceDepthReached, refResult.MaxReferenceDepthReached);
+    }
 
     private static FailureReason ClassifyException(Exception ex) => ex switch
     {

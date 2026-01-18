@@ -247,4 +247,188 @@ internal class ValidationService<TEntity, TKey>
     }
 
     private static int ClampDepth(int maxDepth) => Math.Min(maxDepth, AbsoluteMaxDepth);
+
+    // ========== Reference Validation Methods ==========
+
+    internal void ValidateCircularReferences(TEntity entity, int maxDepth)
+    {
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        ValidateCircularReferencesRecursive(entity, 0, ClampDepth(maxDepth), visited);
+    }
+
+    private void ValidateCircularReferencesRecursive(
+        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        if (!visited.Add(entity))
+        {
+            var entry = _context.Entry(entity);
+            var entityType = entry.Metadata.ClrType.Name;
+            var entityId = _keyService.GetEntityIdFromEntry(entry);
+            throw new InvalidOperationException(
+                $"Circular reference detected: Entity '{entityType}' (Id={entityId}) at depth {currentDepth} " +
+                $"was already visited. Set CircularReferenceHandling to Ignore to process each entity once.");
+        }
+
+        if (currentDepth >= maxDepth)
+        {
+            return;
+        }
+
+        var entry2 = _context.Entry(entity);
+        ValidateCollectionReferencesRecursive(entry2, currentDepth, maxDepth, visited);
+        ValidateReferenceNavigationsRecursive(entry2, currentDepth, maxDepth, visited);
+    }
+
+    private void ValidateCollectionReferencesRecursive(
+        EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
+            {
+                ValidateCircularReferencesRecursive(item, currentDepth + 1, maxDepth, visited);
+            }
+        }
+    }
+
+    private void ValidateReferenceNavigationsRecursive(
+        EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        foreach (var navigation in NavigationPropertyHelper.GetReferenceNavigations(entry))
+        {
+            var refEntity = NavigationPropertyHelper.GetReferenceValue(navigation);
+            if (refEntity == null)
+            {
+                continue;
+            }
+
+            ValidateSelfReference(entry, navigation, refEntity);
+            ValidateCircularReferencesRecursive(refEntity, currentDepth + 1, maxDepth, visited);
+        }
+    }
+
+    private void ValidateSelfReference(EntityEntry entry, NavigationEntry navigation, object refEntity)
+    {
+        if (ReferenceEquals(entry.Entity, refEntity))
+        {
+            var entityType = entry.Metadata.ClrType.Name;
+            var entityId = _keyService.GetEntityIdFromEntry(entry);
+            throw new InvalidOperationException(
+                $"Entity '{entityType}' (Id={entityId}) references itself via navigation '{navigation.Metadata.Name}'. " +
+                $"Self-referential entities are not supported in graph batch operations.");
+        }
+    }
+
+    internal void ValidateReferencedEntitiesExist(TEntity entity, int maxDepth)
+    {
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        ValidateReferencedEntitiesExistRecursive(entity, 0, ClampDepth(maxDepth), visited);
+    }
+
+    private void ValidateReferencedEntitiesExistRecursive(
+        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
+        if (!visited.Add(entity))
+        {
+            return;
+        }
+
+        if (currentDepth >= maxDepth)
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+        ValidateEntityReferencesExist(entry);
+
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
+            {
+                ValidateReferencedEntitiesExistRecursive(item, currentDepth + 1, maxDepth, visited);
+            }
+        }
+    }
+
+    private void ValidateEntityReferencesExist(EntityEntry entry)
+    {
+        foreach (var navigation in NavigationPropertyHelper.GetReferenceNavigations(entry))
+        {
+            var refEntity = NavigationPropertyHelper.GetReferenceValue(navigation);
+            if (refEntity == null)
+            {
+                continue;
+            }
+
+            var refEntry = _context.Entry(refEntity);
+            if (HasDefaultKeyValue(refEntry))
+            {
+                var entityType = entry.Metadata.ClrType.Name;
+                var entityId = _keyService.GetEntityIdFromEntry(entry);
+                var refType = refEntry.Metadata.ClrType.Name;
+
+                throw new InvalidOperationException(
+                    $"Entity '{entityType}' (Id={entityId}) references '{refType}' " +
+                    $"via navigation '{navigation.Metadata.Name}', but the referenced entity has a default key " +
+                    $"value and likely does not exist in the database. This would cause an FK constraint violation. " +
+                    $"Set ValidateReferencedEntitiesExist to false to skip this validation.");
+            }
+        }
+    }
+
+    private static bool HasDefaultKeyValue(EntityEntry entry)
+    {
+        var keyProperties = entry.Metadata.FindPrimaryKey()?.Properties;
+        if (keyProperties == null)
+        {
+            return false;
+        }
+
+        foreach (var keyProperty in keyProperties)
+        {
+            var value = entry.Property(keyProperty.Name).CurrentValue;
+            if (!IsDefaultValue(value, keyProperty.ClrType))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static bool IsDefaultValue(object? value, Type type)
+    {
+        if (value == null)
+        {
+            return true;
+        }
+
+        if (type == typeof(int) || type == typeof(int?))
+        {
+            return value is int i && i == 0;
+        }
+        if (type == typeof(long) || type == typeof(long?))
+        {
+            return value is long l && l == 0;
+        }
+        if (type == typeof(Guid) || type == typeof(Guid?))
+        {
+            return value is Guid g && g == Guid.Empty;
+        }
+        if (type == typeof(string))
+        {
+            return value is string s && string.IsNullOrEmpty(s);
+        }
+
+        return false;
+    }
 }
