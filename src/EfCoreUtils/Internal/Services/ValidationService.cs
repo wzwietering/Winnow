@@ -7,7 +7,6 @@ internal class ValidationService<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    private const int AbsoluteMaxDepth = 100;
 
     private static readonly Dictionary<Type, Func<object, bool>> DefaultValueCheckers = new()
     {
@@ -267,7 +266,7 @@ internal class ValidationService<TEntity, TKey>
         }
     }
 
-    private static int ClampDepth(int maxDepth) => Math.Min(maxDepth, AbsoluteMaxDepth);
+    private static int ClampDepth(int maxDepth) => DepthConstants.ClampDepth(maxDepth);
 
     // ========== Reference Validation Methods ==========
 

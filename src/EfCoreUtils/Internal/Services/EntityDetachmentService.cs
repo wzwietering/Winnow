@@ -7,8 +7,6 @@ internal class EntityDetachmentService<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    private const int AbsoluteMaxDepth = 100;
-
     private readonly DbContext _context;
 
     internal EntityDetachmentService(DbContext context)
@@ -155,5 +153,5 @@ internal class EntityDetachmentService<TEntity, TKey>
         }
     }
 
-    private static int ClampDepth(int maxDepth) => Math.Min(maxDepth, AbsoluteMaxDepth);
+    private static int ClampDepth(int maxDepth) => DepthConstants.ClampDepth(maxDepth);
 }

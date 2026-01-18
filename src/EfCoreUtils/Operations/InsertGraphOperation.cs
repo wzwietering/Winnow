@@ -1,3 +1,5 @@
+using EfCoreUtils.Internal;
+
 namespace EfCoreUtils.Operations;
 
 /// <summary>
@@ -12,15 +14,7 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
     private readonly List<InsertedEntity<TKey>> _insertedEntities = [];
     private readonly List<InsertBatchFailure> _failures = [];
     private readonly List<GraphNode<TKey>> _graphHierarchy = [];
-
-    // Stats aggregation
-    private int _totalEntitiesTraversed;
-    private int _maxDepthReached;
-    private readonly Dictionary<int, int> _entitiesByDepth = [];
-
-    // Reference tracking
-    private readonly Dictionary<string, List<TKey>> _processedReferencesByType = [];
-    private int _maxReferenceDepthReached;
+    private readonly GraphStatisticsTracker<TKey> _statsTracker = new();
 
     internal InsertGraphOperation(InsertGraphBatchOptions options) => _options = options;
 
@@ -44,7 +38,7 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
         {
             var refResult = context.AttachEntityGraphAsAddedWithReferences(
                 entity, _options.MaxDepth, _options.CircularReferenceHandling);
-            AggregateReferenceStats(refResult);
+            _statsTracker.AggregateReferenceStats(refResult);
         }
         else
         {
@@ -67,7 +61,7 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
             ? context.BuildGraphHierarchyWithReferences(entity, _options.MaxDepth)
             : context.BuildGraphHierarchy(entity, _options.MaxDepth);
         _graphHierarchy.Add(node);
-        AggregateStats(stats);
+        _statsTracker.AggregateStats(stats);
     }
 
     public void RecordFailure(TEntity entity, int index, Exception ex, BatchStrategyContext<TEntity, TKey> context)
@@ -76,7 +70,7 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
         {
             EntityIndex = index,
             ErrorMessage = $"Graph insert failed: {ex.Message}",
-            Reason = ClassifyException(ex),
+            Reason = FailureClassifier.Classify(ex),
             Exception = ex
         };
         _failures.Add(failure);
@@ -89,64 +83,7 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
         InsertedEntities = _insertedEntities,
         Failures = _failures,
         GraphHierarchy = _graphHierarchy,
-        TraversalInfo = CreateTraversalInfo()
+        TraversalInfo = _statsTracker.CreateTraversalInfo()
     };
 
-    private void AggregateStats(GraphTraversalResult<TKey> stats)
-    {
-        _totalEntitiesTraversed += stats.TotalEntitiesTraversed;
-        _maxDepthReached = Math.Max(_maxDepthReached, stats.MaxDepthReached);
-
-        foreach (var (depth, count) in stats.EntitiesByDepth)
-        {
-            _entitiesByDepth.TryGetValue(depth, out var existing);
-            _entitiesByDepth[depth] = existing + count;
-        }
-    }
-
-    private GraphTraversalResult<TKey> CreateTraversalInfo()
-    {
-        var processedRefs = _processedReferencesByType.ToDictionary(
-            kvp => kvp.Key,
-            kvp => (IReadOnlyList<TKey>)kvp.Value.AsReadOnly());
-
-        return new GraphTraversalResult<TKey>
-        {
-            MaxDepthReached = _maxDepthReached,
-            TotalEntitiesTraversed = _totalEntitiesTraversed,
-            EntitiesByDepth = _entitiesByDepth,
-            ProcessedReferencesByType = processedRefs,
-            UniqueReferencesProcessed = _processedReferencesByType.Values.Sum(list => list.Count),
-            MaxReferenceDepthReached = _maxReferenceDepthReached
-        };
-    }
-
-    private void AggregateReferenceStats(EfCoreUtils.Internal.Services.ReferenceTrackingResult refResult)
-    {
-        foreach (var (typeName, ids) in refResult.ProcessedReferencesByType)
-        {
-            if (!_processedReferencesByType.TryGetValue(typeName, out var list))
-            {
-                list = [];
-                _processedReferencesByType[typeName] = list;
-            }
-
-            foreach (var id in ids)
-            {
-                if (id is TKey typedId)
-                {
-                    list.Add(typedId);
-                }
-            }
-        }
-        _maxReferenceDepthReached = Math.Max(_maxReferenceDepthReached, refResult.MaxReferenceDepthReached);
-    }
-
-    private static FailureReason ClassifyException(Exception ex) => ex switch
-    {
-        InvalidOperationException => FailureReason.ValidationError,
-        Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
-        Microsoft.EntityFrameworkCore.DbUpdateException => FailureReason.DatabaseConstraint,
-        _ => FailureReason.UnknownError
-    };
 }

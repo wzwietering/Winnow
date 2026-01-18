@@ -1,3 +1,5 @@
+using EfCoreUtils.Internal;
+
 namespace EfCoreUtils.Operations;
 
 /// <summary>
@@ -13,11 +15,7 @@ internal class DeleteGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
     private readonly List<BatchFailure<TKey>> _failures = [];
     private readonly List<GraphNode<TKey>> _graphHierarchy = [];
     private readonly Dictionary<TKey, (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats)> _pendingGraphNodes = [];
-
-    // Stats aggregation
-    private int _totalEntitiesTraversed;
-    private int _maxDepthReached;
-    private readonly Dictionary<int, int> _entitiesByDepth = [];
+    private readonly GraphStatisticsTracker<TKey> _statsTracker = new();
 
     internal DeleteGraphOperation(DeleteGraphBatchOptions options) => _options = options;
 
@@ -63,7 +61,7 @@ internal class DeleteGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
         if (_pendingGraphNodes.TryGetValue(entityId, out var pending))
         {
             _graphHierarchy.Add(pending.Node);
-            AggregateStats(pending.Stats);
+            _statsTracker.AggregateStats(pending.Stats);
             _pendingGraphNodes.Remove(entityId);
         }
     }
@@ -77,7 +75,7 @@ internal class DeleteGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
         {
             EntityId = entityId,
             ErrorMessage = $"Graph delete failed: {ex.Message}",
-            Reason = ClassifyException(ex),
+            Reason = FailureClassifier.Classify(ex),
             Exception = ex
         };
         _failures.Add(failure);
@@ -90,33 +88,7 @@ internal class DeleteGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
         SuccessfulIds = _successfulIds,
         Failures = _failures,
         GraphHierarchy = _graphHierarchy,
-        TraversalInfo = CreateTraversalInfo()
+        TraversalInfo = _statsTracker.CreateBasicTraversalInfo()
     };
 
-    private void AggregateStats(GraphTraversalResult<TKey> stats)
-    {
-        _totalEntitiesTraversed += stats.TotalEntitiesTraversed;
-        _maxDepthReached = Math.Max(_maxDepthReached, stats.MaxDepthReached);
-
-        foreach (var (depth, count) in stats.EntitiesByDepth)
-        {
-            _entitiesByDepth.TryGetValue(depth, out var existing);
-            _entitiesByDepth[depth] = existing + count;
-        }
-    }
-
-    private GraphTraversalResult<TKey> CreateTraversalInfo() => new()
-    {
-        MaxDepthReached = _maxDepthReached,
-        TotalEntitiesTraversed = _totalEntitiesTraversed,
-        EntitiesByDepth = _entitiesByDepth
-    };
-
-    private static FailureReason ClassifyException(Exception ex) => ex switch
-    {
-        InvalidOperationException => FailureReason.ValidationError,
-        Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
-        Microsoft.EntityFrameworkCore.DbUpdateException => FailureReason.DatabaseConstraint,
-        _ => FailureReason.UnknownError
-    };
 }

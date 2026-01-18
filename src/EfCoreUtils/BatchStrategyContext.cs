@@ -8,7 +8,7 @@ internal class BatchStrategyContext<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    internal const int AbsoluteMaxDepth = 100;
+    internal const int AbsoluteMaxDepth = DepthConstants.AbsoluteMaxDepth;
 
     private readonly DbContext _context;
     private int _roundTripCounter;

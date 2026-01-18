@@ -30,8 +30,6 @@ internal class EntityAttachmentService<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    private const int AbsoluteMaxDepth = 100;
-
     private readonly DbContext _context;
 
     internal EntityAttachmentService(DbContext context) => _context = context;
@@ -240,7 +238,7 @@ internal class EntityAttachmentService<TEntity, TKey>
         }
     }
 
-    private static int ClampDepth(int maxDepth) => Math.Min(maxDepth, AbsoluteMaxDepth);
+    private static int ClampDepth(int maxDepth) => DepthConstants.ClampDepth(maxDepth);
 
     // ========== Reference-Aware Attachment Methods ==========
 
@@ -357,17 +355,24 @@ internal class EntityAttachmentService<TEntity, TKey>
 
             foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
-                if (targetState == EntityState.Added)
-                {
-                    AttachAsAddedWithReferences(item, currentDepth + 1, maxDepth, visited,
-                        circularHandling, refResult);
-                }
-                else
-                {
-                    AttachAsModifiedWithReferences(item, currentDepth + 1, maxDepth, visited,
-                        circularHandling, refResult);
-                }
+                AttachChildItemWithReferences(
+                    item, currentDepth + 1, maxDepth, visited, circularHandling, refResult, targetState);
             }
+        }
+    }
+
+    private void AttachChildItemWithReferences(
+        object item, int newDepth, int maxDepth, HashSet<object> visited,
+        CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
+        EntityState targetState)
+    {
+        if (targetState == EntityState.Added)
+        {
+            AttachAsAddedWithReferences(item, newDepth, maxDepth, visited, circularHandling, refResult);
+        }
+        else
+        {
+            AttachAsModifiedWithReferences(item, newDepth, maxDepth, visited, circularHandling, refResult);
         }
     }
 
@@ -379,32 +384,38 @@ internal class EntityAttachmentService<TEntity, TKey>
         foreach (var navigation in NavigationPropertyHelper.GetReferenceNavigations(entry))
         {
             var refEntity = NavigationPropertyHelper.GetReferenceValue(navigation);
-            if (refEntity == null)
+            if (refEntity == null || !TryVisitEntity(refEntity, visited, circularHandling, currentDepth + 1))
             {
                 continue;
             }
 
-            if (!TryVisitEntity(refEntity, visited, circularHandling, currentDepth + 1))
-            {
-                continue;
-            }
-
-            var refEntry = _context.Entry(refEntity);
-            TrackReference(refEntry, refResult, currentDepth + 1);
-
-            if (refEntry.State == EntityState.Detached)
-            {
-                refEntry.State = targetState;
-            }
-
-            if (currentDepth + 1 < maxDepth)
-            {
-                AttachChildrenWithReferences(refEntry, currentDepth + 1, maxDepth, visited,
-                    circularHandling, refResult, targetState);
-                AttachReferences(refEntry, currentDepth + 1, maxDepth, visited,
-                    circularHandling, refResult, targetState);
-            }
+            ProcessReferenceEntity(
+                refEntity, currentDepth, maxDepth, visited, circularHandling, refResult, targetState);
         }
+    }
+
+    private void ProcessReferenceEntity(
+        object refEntity, int currentDepth, int maxDepth, HashSet<object> visited,
+        CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
+        EntityState targetState)
+    {
+        var refEntry = _context.Entry(refEntity);
+        TrackReference(refEntry, refResult, currentDepth + 1);
+
+        if (refEntry.State == EntityState.Detached)
+        {
+            refEntry.State = targetState;
+        }
+
+        if (currentDepth + 1 >= maxDepth)
+        {
+            return;
+        }
+
+        AttachChildrenWithReferences(
+            refEntry, currentDepth + 1, maxDepth, visited, circularHandling, refResult, targetState);
+        AttachReferences(
+            refEntry, currentDepth + 1, maxDepth, visited, circularHandling, refResult, targetState);
     }
 
     private void TrackReference(EntityEntry entry, ReferenceTrackingResult refResult, int depth)
