@@ -8,6 +8,7 @@ Efficient batch utilities for Entity Framework Core with failure isolation and t
 - **Batch Updates**: Update many entities while tracking success/failure per entity
 - **Batch Deletes**: Delete many entities with cascade behavior options
 - **Graph Operations**: Handle parent + children together (insert, update, delete)
+- **Reference Navigation**: Include many-to-one references in graph operations
 - **Two Strategies**: OneByOne (predictable) vs DivideAndConquer (optimized for low failure rates)
 - **Detailed Results**: Track successful IDs, failures with reasons, round trips, and duration
 
@@ -196,6 +197,36 @@ When children are removed from a collection during updates:
 | `Delete` | Removed children are deleted from database |
 | `Detach` | Removed children stay in database (may violate FK) |
 
+## Reference Navigation (Many-to-One)
+
+Graph operations can include reference navigations (many-to-one relationships) in addition to collections.
+
+```csharp
+var saver = new BatchSaver<OrderItem, int>(context);
+
+var items = context.OrderItems
+    .Include(i => i.Product)  // Include the reference
+    .ToList();
+
+// Update both OrderItem and its referenced Product
+items[0].Quantity = 5;
+items[0].Product.Price = 29.99m;
+
+var result = saver.UpdateGraphBatch(items, new GraphBatchOptions
+{
+    IncludeReferences = true,
+    CircularReferenceHandling = CircularReferenceHandling.Ignore
+});
+```
+
+### Reference Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `IncludeReferences` | `false` | Include many-to-one references in traversal |
+| `CircularReferenceHandling` | `Throw` | `Throw` or `Ignore` circular references |
+| `MaxDepth` | `10` | Maximum traversal depth (applies to both collections and references) |
+
 ## Strategies
 
 | Strategy | Best For | Round Trips |
@@ -222,11 +253,16 @@ When children are removed from a collection during updates:
 result.SuccessfulIds      // IReadOnlyList<TKey> - IDs that succeeded
 result.Failures           // List<BatchFailure<TKey>> with EntityId, ErrorMessage, Reason
 result.ChildIdsByParentId // For graph ops: parent ID -> child IDs (Dictionary<TKey, IReadOnlyList<TKey>>)
+result.TraversalInfo      // Graph traversal statistics (see below)
 result.DatabaseRoundTrips // Actual DB calls made
 result.Duration           // Total time
 result.IsCompleteSuccess  // All succeeded
 result.IsPartialSuccess   // Some succeeded, some failed
 result.IsCompleteFailure  // All failed
+
+// TraversalInfo (for graph operations)
+result.TraversalInfo?.ProcessedReferencesByType  // Reference IDs grouped by type name
+result.TraversalInfo?.UniqueReferencesProcessed  // Count of unique references processed
 ```
 
 ### InsertBatchResult<TKey>
@@ -261,4 +297,5 @@ Order2's failure doesn't affect Order1 or Order3.
 | Update parent + children | `UpdateGraphBatch` | Set OrphanBehavior explicitly |
 | Delete entities | `DeleteBatch` | DivideAndConquer (if <5% failures) |
 | Delete parent + children | `DeleteGraphBatch` | Set CascadeBehavior explicitly |
+| Include many-to-one refs | `*GraphBatch` | Set `IncludeReferences = true` |
 | High failure rate (>25%) | Any | OneByOne |
