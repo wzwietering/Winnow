@@ -8,8 +8,6 @@ internal class OrphanTrackingService<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    private const int AbsoluteMaxDepth = 100;
-
     private readonly DbContext _context;
     private readonly EntityKeyService<TEntity, TKey> _keyService;
 
@@ -649,5 +647,5 @@ internal class OrphanTrackingService<TEntity, TKey>
         }
     }
 
-    private static int ClampDepth(int maxDepth) => Math.Min(maxDepth, AbsoluteMaxDepth);
+    private static int ClampDepth(int maxDepth) => DepthConstants.ClampDepth(maxDepth);
 }

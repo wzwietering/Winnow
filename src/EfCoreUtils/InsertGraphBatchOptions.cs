@@ -15,4 +15,19 @@ public class InsertGraphBatchOptions
     /// Default: 10. Use to prevent infinite recursion in deep hierarchies.
     /// </summary>
     public int MaxDepth { get; set; } = 10;
+
+    /// <summary>
+    /// When true, includes reference navigations (many-to-one) during traversal.
+    /// Referenced entities will be inserted if they are new.
+    /// Default: false.
+    /// </summary>
+    public bool IncludeReferences { get; set; } = false;
+
+    /// <summary>
+    /// How to handle circular references during traversal.
+    /// Only applies when IncludeReferences is true.
+    /// Default: Throw (safest).
+    /// </summary>
+    public CircularReferenceHandling CircularReferenceHandling { get; set; }
+        = CircularReferenceHandling.Throw;
 }

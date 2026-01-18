@@ -8,7 +8,7 @@ internal class BatchStrategyContext<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    internal const int AbsoluteMaxDepth = 100;
+    internal const int AbsoluteMaxDepth = DepthConstants.AbsoluteMaxDepth;
 
     private readonly DbContext _context;
     private int _roundTripCounter;
@@ -71,6 +71,12 @@ internal class BatchStrategyContext<TEntity, TKey>
         TEntity entity, int maxDepth, DeleteGraphBatchOptions options) =>
         _validationService.ValidateCascadeBehaviorRecursive(entity, maxDepth, options);
 
+    internal void ValidateCircularReferences(TEntity entity, int maxDepth) =>
+        _validationService.ValidateCircularReferences(entity, maxDepth);
+
+    internal void ValidateReferencedEntitiesExist(TEntity entity, int maxDepth) =>
+        _validationService.ValidateReferencedEntitiesExist(entity, maxDepth);
+
     // ========== Attachment Service Delegation ==========
 
     internal void AttachEntityAsDeleted(TEntity entity) =>
@@ -93,6 +99,14 @@ internal class BatchStrategyContext<TEntity, TKey>
 
     internal void AttachEntityGraphAsDeletedRecursive(TEntity entity, int maxDepth) =>
         _attachmentService.AttachEntityGraphAsDeletedRecursive(entity, maxDepth);
+
+    internal ReferenceTrackingResult AttachEntityGraphAsAddedWithReferences(
+        TEntity entity, int maxDepth, CircularReferenceHandling circularHandling) =>
+        _attachmentService.AttachEntityGraphAsAddedWithReferences(entity, maxDepth, circularHandling);
+
+    internal ReferenceTrackingResult AttachEntityGraphAsModifiedWithReferences(
+        TEntity entity, int maxDepth, CircularReferenceHandling circularHandling) =>
+        _attachmentService.AttachEntityGraphAsModifiedWithReferences(entity, maxDepth, circularHandling);
 
     // ========== Detachment Service Delegation ==========
 
@@ -153,4 +167,7 @@ internal class BatchStrategyContext<TEntity, TKey>
 
     internal (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) BuildGraphHierarchy(
         TEntity entity, int maxDepth) => GraphBuilder.Build(entity, maxDepth);
+
+    internal (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) BuildGraphHierarchyWithReferences(
+        TEntity entity, int maxDepth) => GraphBuilder.BuildWithReferences(entity, maxDepth);
 }

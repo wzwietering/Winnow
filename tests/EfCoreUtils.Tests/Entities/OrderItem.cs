@@ -12,5 +12,6 @@ public class OrderItem
     public byte[] Version { get; set; } = [];
 
     public CustomerOrder CustomerOrder { get; set; } = null!;
+    public Product? Product { get; set; }
     public ICollection<ItemReservation> Reservations { get; set; } = [];
 }

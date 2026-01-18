@@ -20,4 +20,10 @@ public class DeleteGraphBatchOptions
     /// Default: 10. Use to prevent infinite recursion in deep hierarchies.
     /// </summary>
     public int MaxDepth { get; set; } = 10;
+
+    /// <summary>
+    /// When true, validates that referenced entities exist before deletion.
+    /// Prevents FK constraint violations. Default: true (safer).
+    /// </summary>
+    public bool ValidateReferencedEntitiesExist { get; set; } = true;
 }
