@@ -324,13 +324,23 @@ internal class EntityAttachmentService<TEntity, TKey>
         {
             var entry = _context.Entry(entity);
             var entityType = entry.Metadata.ClrType.Name;
-            var entityId = entry.Property("Id")?.CurrentValue ?? "unknown";
+            var entityId = GetEntityIdFromEntry(entry);
             throw new InvalidOperationException(
                 $"Circular reference detected: Entity '{entityType}' (Id={entityId}) at depth {currentDepth} " +
                 $"was already visited. Set CircularReferenceHandling to Ignore to process each entity once.");
         }
 
         return false;
+    }
+
+    private static object GetEntityIdFromEntry(EntityEntry entry)
+    {
+        var keyProperty = entry.Metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
+        if (keyProperty == null)
+        {
+            return "unknown";
+        }
+        return entry.Property(keyProperty.Name).CurrentValue ?? "unknown";
     }
 
     private void AttachChildrenWithReferences(
@@ -400,7 +410,7 @@ internal class EntityAttachmentService<TEntity, TKey>
     private void TrackReference(EntityEntry entry, ReferenceTrackingResult refResult, int depth)
     {
         var typeName = entry.Metadata.ClrType.Name;
-        var entityId = entry.Property("Id")?.CurrentValue ?? "unknown";
+        var entityId = GetEntityIdFromEntry(entry);
         refResult.AddReference(typeName, entityId, depth);
     }
 }
