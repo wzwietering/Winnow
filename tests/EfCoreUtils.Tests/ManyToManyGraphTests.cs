@@ -861,4 +861,254 @@ public class ManyToManyGraphTests : TestBase
     }
 
     #endregion
+
+    #region ManyToManyInsertBehavior Tests
+
+    [Fact]
+    public void InsertBehavior_AttachExisting_ExistingCourses_AttachesAsUnchanged()
+    {
+        using var context = CreateContext();
+        SeedCourses(context, 3);
+
+        // Create detached course references with existing IDs
+        var courseIds = context.Courses.Select(c => c.Id).ToList();
+        context.ChangeTracker.Clear();
+
+        var detachedCourses = courseIds.Select(id => new Course
+        {
+            Id = id,
+            Code = $"EXIST{id}",
+            Title = $"Existing Course {id}",
+            Credits = 3
+        }).ToList();
+
+        var student = CreateStudent("AttachTest", detachedCourses);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.AttachExisting,
+            ValidateManyToManyEntitiesExist = true
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.TraversalInfo!.JoinRecordsCreated.ShouldBe(3);
+
+        // Verify courses weren't duplicated
+        context.ChangeTracker.Clear();
+        context.Courses.Count().ShouldBe(3);
+    }
+
+    [Fact]
+    public void InsertBehavior_InsertIfNew_MixedIds_InsertsOnlyNew()
+    {
+        using var context = CreateContext();
+        SeedCourses(context, 2);
+
+        // Get an existing course ID, then clear tracker
+        var existingCourseId = context.Courses.First().Id;
+        context.ChangeTracker.Clear();
+
+        // Create detached reference to existing course
+        var existingCourse = new Course
+        {
+            Id = existingCourseId,
+            Code = "EXISTING",
+            Title = "Existing Course",
+            Credits = 3
+        };
+
+        // Mix of existing (Id > 0) and new (Id = 0)
+        var courses = new List<Course>
+        {
+            existingCourse,
+            CreateCourse("NEW001"), // Id = 0, should be inserted
+            CreateCourse("NEW002")  // Id = 0, should be inserted
+        };
+        var student = CreateStudent("MixedTest", courses);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        context.ChangeTracker.Clear();
+        context.Courses.Count().ShouldBe(4); // 2 existing + 2 new
+    }
+
+    [Fact]
+    public void InsertBehavior_InsertIfNew_AllExisting_AttachesAll()
+    {
+        using var context = CreateContext();
+        SeedCourses(context, 3);
+
+        // Create detached course references with existing IDs
+        var courseIds = context.Courses.Select(c => c.Id).ToList();
+        context.ChangeTracker.Clear();
+
+        var detachedCourses = courseIds.Select(id => new Course
+        {
+            Id = id,
+            Code = $"EXIST{id}",
+            Title = $"Existing Course {id}",
+            Credits = 3
+        }).ToList();
+
+        var student = CreateStudent("AllExisting", detachedCourses);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        // Verify courses weren't duplicated
+        context.ChangeTracker.Clear();
+        context.Courses.Count().ShouldBe(3);
+    }
+
+    [Fact]
+    public void InsertBehavior_AttachExisting_AllNewCourses_AttachesAsUnchanged()
+    {
+        using var context = CreateContext();
+
+        // Create new courses with assigned IDs (simulating detached entities)
+        var newCourses = new List<Course>
+        {
+            CreateCourse("CS701"),
+            CreateCourse("CS702")
+        };
+        var student = CreateStudent("NewWithAttach", newCourses);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
+            ValidateManyToManyEntitiesExist = false
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        // With InsertIfNew and Id=0, courses should be inserted
+        context.ChangeTracker.Clear();
+        context.Courses.Count().ShouldBe(2);
+    }
+
+    #endregion
+
+    #region Error Conditions
+
+    [Fact]
+    public void InsertGraph_CollectionSizeExceedsLimit_FailsWithClearMessage()
+    {
+        using var context = CreateContext();
+
+        var courses = Enumerable.Range(1, 15)
+            .Select(i => CreateCourse($"LIMIT{i:D2}"))
+            .ToList();
+        var student = CreateStudent("SizeLimit", courses);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
+            MaxManyToManyCollectionSize = 10
+        });
+
+        result.IsCompleteSuccess.ShouldBeFalse();
+        result.Failures.ShouldNotBeEmpty();
+        result.Failures.First().ErrorMessage.ShouldContain("15 items");
+        result.Failures.First().ErrorMessage.ShouldContain("MaxManyToManyCollectionSize of 10");
+    }
+
+    [Fact]
+    public void InsertGraph_MultipleNonExistentEntities_ListsAllInErrorMessage()
+    {
+        using var context = CreateContext();
+
+        // Create course objects with non-existent IDs
+        var fakeCourses = new List<Course>
+        {
+            new() { Id = 99901, Code = "FAKE1", Title = "Fake 1", Credits = 3 },
+            new() { Id = 99902, Code = "FAKE2", Title = "Fake 2", Credits = 3 },
+            new() { Id = 99903, Code = "FAKE3", Title = "Fake 3", Credits = 3 }
+        };
+
+        var student = CreateStudent("MultiMissing", fakeCourses);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.AttachExisting,
+            ValidateManyToManyEntitiesExist = true
+        });
+
+        result.IsCompleteSuccess.ShouldBeFalse();
+        result.Failures.ShouldNotBeEmpty();
+
+        var errorMessage = result.Failures.First().ErrorMessage;
+        errorMessage.ShouldContain("99901");
+        errorMessage.ShouldContain("99902");
+        errorMessage.ShouldContain("99903");
+    }
+
+    [Fact]
+    public void UpdateGraph_CollectionSizeExceedsLimit_FailsWithClearMessage()
+    {
+        using var context = CreateContext();
+        SeedCourses(context, 20);
+
+        var student = CreateStudent("UpdateLimit");
+        context.Students.Add(student);
+        context.SaveChanges();
+        var studentId = student.Id;
+        context.ChangeTracker.Clear();
+
+        // Load student and add many courses
+        var loaded = context.Students.First(s => s.Id == studentId);
+        loaded.Courses = context.Courses.Take(15).ToList();
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            MaxManyToManyCollectionSize = 10
+        });
+
+        result.IsCompleteSuccess.ShouldBeFalse();
+        result.Failures.ShouldNotBeEmpty();
+        result.Failures.First().ErrorMessage.ShouldContain("15 items");
+        result.Failures.First().ErrorMessage.ShouldContain("MaxManyToManyCollectionSize of 10");
+    }
+
+    [Fact]
+    public void InsertGraph_EmptyCoursesCollection_Succeeds()
+    {
+        using var context = CreateContext();
+
+        var student = CreateStudent("EmptyCollection", []);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            MaxManyToManyCollectionSize = 5
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.TraversalInfo!.JoinRecordsCreated.ShouldBe(0);
+    }
+
+    #endregion
 }

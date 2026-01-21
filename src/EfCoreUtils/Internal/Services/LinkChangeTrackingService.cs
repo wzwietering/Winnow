@@ -181,7 +181,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
             var navName = navigation.Metadata.Name;
             var currentIds = CaptureRelatedIds(navigation);
 
-            ValidateCollectionSize(entityTypeName, navName, currentIds.Count, maxCollectionSize);
+            ManyToManyValidation.ValidateCollectionSize(entityTypeName, navName, currentIds.Count, maxCollectionSize);
 
             if (!originalByNav.TryGetValue(navName, out var originalIds))
             {
@@ -190,18 +190,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
 
             var (added, removed) = DetectChanges(originalIds, currentIds);
 
-            RecordChanges(entry, navigation, added, removed, tracker, entityTypeName, navName);
-        }
-    }
-
-    private static void ValidateCollectionSize(
-        string entityTypeName, string navigationName, int itemCount, int maxSize)
-    {
-        if (maxSize > 0 && itemCount > maxSize)
-        {
-            throw new InvalidOperationException(
-                $"Many-to-many collection '{navigationName}' on entity '{entityTypeName}' " +
-                $"has {itemCount} items, exceeding MaxManyToManyCollectionSize of {maxSize}.");
+            RecordChanges(navigation, added, removed, tracker, entityTypeName, navName);
         }
     }
 
@@ -218,7 +207,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
     }
 
     private void RecordChanges(
-        EntityEntry entry, NavigationEntry navigation,
+        NavigationEntry navigation,
         HashSet<object> added, HashSet<object> removed,
         ManyToManyStatisticsTracker tracker, string entityTypeName, string navName)
     {
@@ -229,12 +218,12 @@ internal class LinkChangeTrackingService<TEntity, TKey>
 
         if (removed.Count > 0)
         {
-            HandleRemovedLinks(entry, navigation, removed, tracker, entityTypeName, navName);
+            HandleRemovedLinks(navigation, removed, tracker, entityTypeName, navName);
         }
     }
 
     private void HandleRemovedLinks(
-        EntityEntry parentEntry, NavigationEntry navigation, HashSet<object> removedIds,
+        NavigationEntry navigation, HashSet<object> removedIds,
         ManyToManyStatisticsTracker tracker, string entityTypeName, string navName)
     {
         if (ManyToManyNavigationHelper.IsSkipNavigation(navigation))
