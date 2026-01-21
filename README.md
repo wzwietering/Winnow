@@ -9,6 +9,7 @@ Efficient batch utilities for Entity Framework Core with failure isolation and t
 - **Batch Deletes**: Delete many entities with cascade behavior options
 - **Graph Operations**: Handle parent + children together (insert, update, delete)
 - **Reference Navigation**: Include many-to-one references in graph operations
+- **Many-to-Many Relationships**: Support for skip navigations and explicit join entities with join record tracking
 - **Two Strategies**: OneByOne (predictable) vs DivideAndConquer (optimized for low failure rates)
 - **Detailed Results**: Track successful IDs, failures with reasons, round trips, and duration
 
@@ -227,6 +228,98 @@ var result = saver.UpdateGraphBatch(items, new GraphBatchOptions
 | `CircularReferenceHandling` | `Throw` | `Throw` or `Ignore` circular references |
 | `MaxDepth` | `10` | Maximum traversal depth (applies to both collections and references) |
 
+## Many-to-Many Relationships
+
+Graph operations support many-to-many relationships via skip navigations (EF Core 5+) and explicit join entities.
+
+### Basic Insert with Many-to-Many
+
+```csharp
+var saver = new BatchSaver<Student, int>(context);
+
+var student = new Student
+{
+    Name = "Alice",
+    Courses = existingCourses  // Courses already in database
+};
+
+var result = saver.InsertGraphBatch(new[] { student }, new InsertGraphBatchOptions
+{
+    IncludeManyToMany = true  // Enable M2M handling
+});
+
+Console.WriteLine($"Students inserted: {result.SuccessCount}");
+Console.WriteLine($"Course enrollments created: {result.TraversalInfo?.JoinRecordsCreated}");
+```
+
+### Update with Link Changes
+
+```csharp
+var student = context.Students
+    .Include(s => s.Courses)
+    .First(s => s.Id == 1);
+
+// Modify enrollments
+student.Courses.Remove(student.Courses.First());  // Drop a course
+student.Courses.Add(newCourse);  // Enroll in new course
+
+var result = saver.UpdateGraphBatch(new[] { student }, new GraphBatchOptions
+{
+    IncludeManyToMany = true
+});
+
+// Check what happened
+var stats = result.TraversalInfo?.JoinOperationsByNavigation["MyApp.Entities.Student.Courses"];
+Console.WriteLine($"Join records added: {stats?.Created}");
+Console.WriteLine($"Join records removed: {stats?.Removed}");
+```
+
+### Delete with Join Record Cleanup
+
+```csharp
+var studentsToDelete = context.Students
+    .Include(s => s.Courses)
+    .Where(s => s.GraduationYear < 2020)
+    .ToList();
+
+var result = saver.DeleteGraphBatch(studentsToDelete, new DeleteGraphBatchOptions
+{
+    IncludeManyToMany = true  // Clean up join records
+});
+
+// Courses remain in database - only join records removed
+Console.WriteLine($"Join records deleted: {result.TraversalInfo?.JoinRecordsRemoved}");
+```
+
+### Explicit Join Entity with Payload
+
+For join entities with extra properties (e.g., `EnrolledAt`, `Grade`), modify the join entity collection directly:
+
+```csharp
+var enrollment = new Enrollment
+{
+    StudentId = existingStudent.Id,
+    CourseId = existingCourse.Id,
+    EnrolledAt = DateTime.UtcNow,
+    Grade = null
+};
+
+student.Enrollments.Add(enrollment);
+
+var result = saver.UpdateGraphBatch(new[] { student }, new GraphBatchOptions
+{
+    IncludeManyToMany = true
+});
+```
+
+### Many-to-Many Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `IncludeManyToMany` | `false` | Include many-to-many navigations in traversal |
+| `ManyToManyInsertBehavior` | `AttachExisting` | `AttachExisting` (assume related entities exist) or `InsertIfNew` (insert if default ID) |
+| `ValidateManyToManyEntitiesExist` | `true` | Validate related entities exist before creating join records |
+
 ## Strategies
 
 | Strategy | Best For | Round Trips |
@@ -261,8 +354,11 @@ result.IsPartialSuccess   // Some succeeded, some failed
 result.IsCompleteFailure  // All failed
 
 // TraversalInfo (for graph operations)
-result.TraversalInfo?.ProcessedReferencesByType  // Reference IDs grouped by type name
-result.TraversalInfo?.UniqueReferencesProcessed  // Count of unique references processed
+result.TraversalInfo?.ProcessedReferencesByType    // Reference IDs grouped by type name
+result.TraversalInfo?.UniqueReferencesProcessed    // Count of unique references processed
+result.TraversalInfo?.JoinRecordsCreated           // Count of M2M join records created
+result.TraversalInfo?.JoinRecordsRemoved           // Count of M2M join records removed
+result.TraversalInfo?.JoinOperationsByNavigation   // Join ops grouped by navigation name
 ```
 
 ### InsertBatchResult<TKey>
@@ -298,4 +394,5 @@ Order2's failure doesn't affect Order1 or Order3.
 | Delete entities | `DeleteBatch` | DivideAndConquer (if <5% failures) |
 | Delete parent + children | `DeleteGraphBatch` | Set CascadeBehavior explicitly |
 | Include many-to-one refs | `*GraphBatch` | Set `IncludeReferences = true` |
+| Include many-to-many | `*GraphBatch` | Set `IncludeManyToMany = true` |
 | High failure rate (>25%) | Any | OneByOne |

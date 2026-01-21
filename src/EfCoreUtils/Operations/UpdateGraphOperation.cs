@@ -26,6 +26,11 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
     {
         context.CaptureAllOriginalChildIdsRecursive(entities, _options.MaxDepth);
 
+        if (_options.IncludeManyToMany)
+        {
+            context.CaptureOriginalManyToManyLinks(entities, _options.MaxDepth);
+        }
+
         foreach (var entity in entities)
         {
             context.ValidateNoOrphanedChildrenRecursive(entity, _options.MaxDepth, _options);
@@ -52,6 +57,12 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
         }
 
         context.HandleOrphanedChildrenRecursive(entity, _options.MaxDepth, _options.OrphanedChildBehavior);
+
+        if (_options.IncludeManyToMany)
+        {
+            var m2mResult = context.ApplyManyToManyChanges(entity, _options);
+            _statsTracker.AggregateManyToManyStats(m2mResult);
+        }
 
         var entityId = context.GetEntityId(entity);
         var (node, stats) = _options.IncludeReferences

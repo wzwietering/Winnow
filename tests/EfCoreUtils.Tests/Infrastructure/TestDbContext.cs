@@ -14,6 +14,9 @@ public class TestDbContext : DbContext
     public DbSet<OrderItem> OrderItems => Set<OrderItem>();
     public DbSet<ItemReservation> ItemReservations => Set<ItemReservation>();
     public DbSet<Category> Categories => Set<Category>();
+    public DbSet<Student> Students => Set<Student>();
+    public DbSet<Course> Courses => Set<Course>();
+    public DbSet<Enrollment> Enrollments => Set<Enrollment>();
 
     public TestDbContext(DbContextOptions<TestDbContext> options) : base(options)
     {
@@ -170,6 +173,53 @@ public class TestDbContext : DbContext
                 .IsRequired()
                 .IsRowVersion()
                 .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+        });
+
+        modelBuilder.Entity<Student>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Email).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            // Skip navigation: Student ↔ Course (implicit join table)
+            entity.HasMany(e => e.Courses)
+                .WithMany(c => c.Students);
+        });
+
+        modelBuilder.Entity<Course>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Code).IsRequired().HasMaxLength(20);
+            entity.Property(e => e.Title).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+        });
+
+        modelBuilder.Entity<Enrollment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => new { e.StudentId, e.CourseId }).IsUnique();
+            entity.Property(e => e.Grade).HasMaxLength(5);
+            entity.Property(e => e.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            entity.HasOne(e => e.Student)
+                .WithMany(s => s.Enrollments)
+                .HasForeignKey(e => e.StudentId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Course)
+                .WithMany(c => c.Enrollments)
+                .HasForeignKey(e => e.CourseId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         base.OnModelCreating(modelBuilder);

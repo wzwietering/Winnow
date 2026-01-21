@@ -44,6 +44,12 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
         {
             context.AttachEntityGraphAsAddedRecursive(entity, _options.MaxDepth);
         }
+
+        if (_options.IncludeManyToMany)
+        {
+            var m2mResult = context.ProcessManyToManyForInsert(entity, _options);
+            _statsTracker.AggregateManyToManyStats(m2mResult);
+        }
     }
 
     public void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
@@ -85,5 +91,4 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
         GraphHierarchy = _graphHierarchy,
         TraversalInfo = _statsTracker.CreateTraversalInfo()
     };
-
 }

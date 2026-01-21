@@ -19,6 +19,8 @@ internal class BatchStrategyContext<TEntity, TKey>
     private readonly EntityAttachmentService<TEntity, TKey> _attachmentService;
     private readonly EntityDetachmentService<TEntity, TKey> _detachmentService;
     private readonly OrphanTrackingService<TEntity, TKey> _orphanService;
+    private readonly ManyToManyLinkService<TEntity, TKey> _manyToManyService;
+    private readonly LinkChangeTrackingService<TEntity, TKey> _linkChangeService;
 
     private GraphHierarchyBuilder<TKey>? _graphBuilder;
 
@@ -32,6 +34,8 @@ internal class BatchStrategyContext<TEntity, TKey>
         _attachmentService = new EntityAttachmentService<TEntity, TKey>(context);
         _detachmentService = new EntityDetachmentService<TEntity, TKey>(context);
         _orphanService = new OrphanTrackingService<TEntity, TKey>(context, _keyService);
+        _manyToManyService = new ManyToManyLinkService<TEntity, TKey>(context, _keyService);
+        _linkChangeService = new LinkChangeTrackingService<TEntity, TKey>(context, _keyService);
     }
 
     private GraphHierarchyBuilder<TKey> GraphBuilder =>
@@ -170,4 +174,21 @@ internal class BatchStrategyContext<TEntity, TKey>
 
     internal (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) BuildGraphHierarchyWithReferences(
         TEntity entity, int maxDepth) => GraphBuilder.BuildWithReferences(entity, maxDepth);
+
+    // ========== Many-to-Many Link Service Delegation ==========
+
+    internal Internal.ManyToManyStatisticsTracker ProcessManyToManyForInsert(
+        TEntity entity, InsertGraphBatchOptions options) =>
+        _manyToManyService.ProcessManyToManyForInsert(entity, options);
+
+    internal Internal.ManyToManyStatisticsTracker ProcessManyToManyForDelete(TEntity entity) =>
+        _manyToManyService.ProcessManyToManyForDelete(entity);
+
+    // ========== Link Change Tracking Service Delegation ==========
+
+    internal void CaptureOriginalManyToManyLinks(List<TEntity> entities, int maxDepth) =>
+        _linkChangeService.CaptureOriginalLinks(entities, maxDepth);
+
+    internal Internal.ManyToManyStatisticsTracker ApplyManyToManyChanges(TEntity entity, GraphBatchOptions options) =>
+        _linkChangeService.ApplyLinkChanges(entity, options);
 }

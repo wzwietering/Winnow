@@ -37,4 +37,12 @@ public class GraphBatchOptions
     /// </summary>
     public CircularReferenceHandling CircularReferenceHandling { get; set; }
         = CircularReferenceHandling.Throw;
+
+    /// <summary>
+    /// When true, includes many-to-many navigations during traversal.
+    /// Join records will be managed (created/removed) based on collection changes.
+    /// Only the traversed direction is processed - inverse navigation not auto-followed.
+    /// Default: false.
+    /// </summary>
+    public bool IncludeManyToMany { get; set; } = false;
 }
