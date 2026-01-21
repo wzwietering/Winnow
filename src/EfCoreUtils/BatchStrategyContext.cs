@@ -184,6 +184,10 @@ internal class BatchStrategyContext<TEntity, TKey>
     internal Internal.ManyToManyStatisticsTracker ProcessManyToManyForDelete(TEntity entity) =>
         _manyToManyService.ProcessManyToManyForDelete(entity);
 
+    internal void ValidateManyToManyEntitiesExistBatched(
+        List<TEntity> entities, InsertGraphBatchOptions options) =>
+        _manyToManyService.ValidateManyToManyEntitiesExistBatched(entities, options);
+
     // ========== Link Change Tracking Service Delegation ==========
 
     internal void CaptureOriginalManyToManyLinks(List<TEntity> entities, int maxDepth) =>

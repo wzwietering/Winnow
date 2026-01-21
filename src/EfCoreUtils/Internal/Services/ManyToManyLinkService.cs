@@ -12,8 +12,17 @@ internal class ManyToManyLinkService<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
+    private static readonly System.Reflection.MethodInfo QueryExistingIdsGenericMethod =
+        typeof(ManyToManyLinkService<TEntity, TKey>)
+            .GetMethod(nameof(QueryExistingIdsGeneric),
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+        ?? throw new InvalidOperationException("QueryExistingIdsGeneric method not found");
+
     private readonly DbContext _context;
     private readonly EntityKeyService<TEntity, TKey> _keyService;
+
+    // Cache of missing IDs by entity type, populated during batched validation
+    private Dictionary<Type, HashSet<object>> _missingIdsByType = [];
 
     internal ManyToManyLinkService(DbContext context, EntityKeyService<TEntity, TKey> keyService)
     {
@@ -50,6 +59,148 @@ internal class ManyToManyLinkService<TEntity, TKey>
 
         RemoveJoinRecords(entry, tracker);
         return tracker;
+    }
+
+    /// <summary>
+    /// Pre-validates that all referenced M2M entities exist by doing batched queries.
+    /// Caches missing IDs for per-entity validation during ProcessManyToManyForInsert.
+    /// Does not throw - failures are recorded per-entity when processing.
+    /// </summary>
+    internal void ValidateManyToManyEntitiesExistBatched(
+        List<TEntity> entities, InsertGraphBatchOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+        ArgumentNullException.ThrowIfNull(options);
+
+        _missingIdsByType.Clear();
+
+        if (!options.ValidateManyToManyEntitiesExist ||
+            options.ManyToManyInsertBehavior != ManyToManyInsertBehavior.AttachExisting)
+        {
+            return;
+        }
+
+        var idsByTargetType = CollectAllRelatedIds(entities, options.MaxDepth);
+        _missingIdsByType = FindMissingIds(idsByTargetType);
+    }
+
+    private Dictionary<Type, (IEntityType Metadata, HashSet<object> Ids)> CollectAllRelatedIds(
+        List<TEntity> entities, int maxDepth)
+    {
+        var idsByTargetType = new Dictionary<Type, (IEntityType Metadata, HashSet<object> Ids)>();
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+
+        foreach (var entity in entities)
+        {
+            CollectEntityRelatedIds(entity, idsByTargetType, visited, 0, maxDepth);
+        }
+
+        return idsByTargetType;
+    }
+
+    private void CollectEntityRelatedIds(
+        object entity, Dictionary<Type, (IEntityType Metadata, HashSet<object> Ids)> idsByTargetType,
+        HashSet<object> visited, int depth, int maxDepth)
+    {
+        if (!visited.Add(entity))
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+        CollectEntryRelatedIds(entry, idsByTargetType);
+
+        if (depth >= maxDepth)
+        {
+            return;
+        }
+
+        CollectChildRelatedIds(entry, idsByTargetType, visited, depth, maxDepth);
+    }
+
+    private static void CollectEntryRelatedIds(
+        EntityEntry entry, Dictionary<Type, (IEntityType Metadata, HashSet<object> Ids)> idsByTargetType)
+    {
+        foreach (var navigation in ManyToManyNavigationHelper.GetManyToManyNavigations(entry))
+        {
+            var targetType = navigation.Metadata.TargetEntityType;
+            var keyProperty = targetType.FindPrimaryKey()?.Properties.FirstOrDefault();
+            if (keyProperty == null)
+            {
+                continue;
+            }
+
+            var clrType = targetType.ClrType;
+            if (!idsByTargetType.TryGetValue(clrType, out var existing))
+            {
+                existing = (targetType, []);
+                idsByTargetType[clrType] = existing;
+            }
+
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
+            {
+                var itemType = item.GetType();
+                var prop = itemType.GetProperty(keyProperty.Name);
+                var idValue = prop?.GetValue(item);
+                if (idValue != null)
+                {
+                    existing.Ids.Add(idValue);
+                }
+            }
+        }
+    }
+
+    private void CollectChildRelatedIds(
+        EntityEntry entry, Dictionary<Type, (IEntityType Metadata, HashSet<object> Ids)> idsByTargetType,
+        HashSet<object> visited, int depth, int maxDepth)
+    {
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            if (ManyToManyNavigationHelper.IsManyToManyNavigation(navigation))
+            {
+                continue;
+            }
+
+            foreach (var child in NavigationPropertyHelper.GetCollectionItems(navigation))
+            {
+                CollectEntityRelatedIds(child, idsByTargetType, visited, depth + 1, maxDepth);
+            }
+        }
+    }
+
+    private Dictionary<Type, HashSet<object>> FindMissingIds(
+        Dictionary<Type, (IEntityType Metadata, HashSet<object> Ids)> idsByTargetType)
+    {
+        var missingByType = new Dictionary<Type, HashSet<object>>();
+
+        foreach (var (clrType, (metadata, ids)) in idsByTargetType)
+        {
+            if (ids.Count == 0)
+            {
+                continue;
+            }
+
+            var keyProperty = metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
+            if (keyProperty == null)
+            {
+                continue;
+            }
+
+            var existingIds = QueryExistingIds(clrType, keyProperty.Name, ids.ToList());
+            var missingIds = ids.Except(existingIds).ToHashSet();
+
+            if (missingIds.Count > 0)
+            {
+                missingByType[clrType] = missingIds;
+            }
+        }
+
+        return missingByType;
     }
 
     private void ProcessEntityManyToMany(
@@ -106,19 +257,70 @@ internal class ManyToManyLinkService<TEntity, TKey>
     {
         var entityTypeName = entry.Metadata.ClrType.Name;
         var navigationName = navigation.Metadata.Name;
+        var itemCount = CountNavigationItems(navigation);
 
-        if (options.ValidateManyToManyEntitiesExist &&
-            options.ManyToManyInsertBehavior == ManyToManyInsertBehavior.AttachExisting)
-        {
-            ValidateRelatedEntitiesExist(entry, navigation);
-        }
+        ValidateCollectionSize(entityTypeName, navigationName, itemCount, options.MaxManyToManyCollectionSize);
+
+        // Check against cached missing IDs (populated by batched validation)
+        ValidateAgainstCachedMissingIds(entry, navigation);
 
         AttachRelatedEntities(navigation, options.ManyToManyInsertBehavior);
 
-        var itemCount = CountNavigationItems(navigation);
         for (var i = 0; i < itemCount; i++)
         {
             tracker.RecordJoinCreated(entityTypeName, navigationName);
+        }
+    }
+
+    private void ValidateAgainstCachedMissingIds(EntityEntry parentEntry, NavigationEntry navigation)
+    {
+        var targetType = navigation.Metadata.TargetEntityType;
+        var clrType = targetType.ClrType;
+
+        if (!_missingIdsByType.TryGetValue(clrType, out var missingIds) || missingIds.Count == 0)
+        {
+            return;
+        }
+
+        var keyProperty = targetType.FindPrimaryKey()?.Properties.FirstOrDefault();
+        if (keyProperty == null)
+        {
+            return;
+        }
+
+        var entityMissingIds = new List<object>();
+        foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
+        {
+            var itemType = item.GetType();
+            var prop = itemType.GetProperty(keyProperty.Name);
+            var idValue = prop?.GetValue(item);
+            if (idValue != null && missingIds.Contains(idValue))
+            {
+                entityMissingIds.Add(idValue);
+            }
+        }
+
+        if (entityMissingIds.Count > 0)
+        {
+            var parentType = parentEntry.Metadata.ClrType.Name;
+            var parentId = EntityEntryHelper.GetEntityIdSafe(parentEntry);
+            var missingIdList = string.Join(", ", entityMissingIds);
+
+            throw new InvalidOperationException(
+                $"Entity '{parentType}' (Id={parentId}) has many-to-many link to '{clrType.Name}' " +
+                $"via navigation '{navigation.Metadata.Name}', but the following related entities don't exist: [{missingIdList}]. " +
+                $"Either insert the related entities first, or set ValidateManyToManyEntitiesExist=false to skip validation.");
+        }
+    }
+
+    private static void ValidateCollectionSize(
+        string entityTypeName, string navigationName, int itemCount, int maxSize)
+    {
+        if (maxSize > 0 && itemCount > maxSize)
+        {
+            throw new InvalidOperationException(
+                $"Many-to-many collection '{navigationName}' on entity '{entityTypeName}' " +
+                $"has {itemCount} items, exceeding MaxManyToManyCollectionSize of {maxSize}.");
         }
     }
 
@@ -168,46 +370,6 @@ internal class ManyToManyLinkService<TEntity, TKey>
         return keyValue.Equals(defaultValue);
     }
 
-    private void ValidateRelatedEntitiesExist(EntityEntry parentEntry, NavigationEntry navigation)
-    {
-        var targetType = navigation.Metadata.TargetEntityType;
-        var keyProperty = targetType.FindPrimaryKey()?.Properties.FirstOrDefault();
-        if (keyProperty == null)
-        {
-            return;
-        }
-
-        var relatedIds = GetRelatedEntityIds(navigation, keyProperty);
-        if (relatedIds.Count == 0)
-        {
-            return;
-        }
-
-        var existingIds = QueryExistingIds(targetType.ClrType, keyProperty.Name, relatedIds);
-        var missingIds = relatedIds.Except(existingIds).ToList();
-
-        if (missingIds.Count > 0)
-        {
-            ThrowMissingRelatedEntityException(parentEntry, navigation, targetType.ClrType, missingIds);
-        }
-    }
-
-    private static List<object> GetRelatedEntityIds(NavigationEntry navigation, IProperty keyProperty)
-    {
-        var ids = new List<object>();
-        foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
-        {
-            var itemType = item.GetType();
-            var prop = itemType.GetProperty(keyProperty.Name);
-            var idValue = prop?.GetValue(item);
-            if (idValue != null)
-            {
-                ids.Add(idValue);
-            }
-        }
-        return ids;
-    }
-
     private HashSet<object> QueryExistingIds(Type entityType, string keyPropertyName, List<object> ids)
     {
         if (ids.Count == 0)
@@ -225,12 +387,7 @@ internal class ManyToManyLinkService<TEntity, TKey>
             ?? throw new InvalidOperationException(
                 $"Property '{keyPropertyName}' not found on type {entityType.Name}");
 
-        // Use reflection to call the generic helper method for type-safe LINQ query
-        var method = GetType().GetMethod(nameof(QueryExistingIdsGeneric),
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
-            ?? throw new InvalidOperationException("QueryExistingIdsGeneric method not found");
-
-        var genericMethod = method.MakeGenericMethod(entityType, keyProp.PropertyType);
+        var genericMethod = QueryExistingIdsGenericMethod.MakeGenericMethod(entityType, keyProp.PropertyType);
         return (HashSet<object>)genericMethod.Invoke(this, [keyPropertyName, ids])!;
     }
 
@@ -247,19 +404,6 @@ internal class ManyToManyLinkService<TEntity, TKey>
             .ToList();
 
         return existingIds.Cast<object>().ToHashSet();
-    }
-
-    private void ThrowMissingRelatedEntityException(
-        EntityEntry parentEntry, NavigationEntry navigation, Type relatedType, List<object> missingIds)
-    {
-        var parentType = parentEntry.Metadata.ClrType.Name;
-        var parentId = EntityEntryHelper.GetEntityIdSafe(parentEntry);
-        var missingIdList = string.Join(", ", missingIds);
-
-        throw new InvalidOperationException(
-            $"Entity '{parentType}' (Id={parentId}) has many-to-many link to '{relatedType.Name}' " +
-            $"via navigation '{navigation.Metadata.Name}', but the following related entities don't exist: [{missingIdList}]. " +
-            $"Either insert the related entities first, or set ValidateManyToManyEntitiesExist=false to skip validation.");
     }
 
     private void RemoveJoinRecords(EntityEntry entry, ManyToManyStatisticsTracker tracker)

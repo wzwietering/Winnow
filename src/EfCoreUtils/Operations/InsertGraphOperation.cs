@@ -20,15 +20,18 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
 
     public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
-        if (!_options.IncludeReferences ||
-            _options.CircularReferenceHandling != CircularReferenceHandling.Throw)
+        if (_options.IncludeReferences &&
+            _options.CircularReferenceHandling == CircularReferenceHandling.Throw)
         {
-            return;
+            foreach (var entity in entities)
+            {
+                context.ValidateCircularReferences(entity, _options.MaxDepth);
+            }
         }
 
-        foreach (var entity in entities)
+        if (_options.IncludeManyToMany)
         {
-            context.ValidateCircularReferences(entity, _options.MaxDepth);
+            context.ValidateManyToManyEntitiesExistBatched(entities, _options);
         }
     }
 

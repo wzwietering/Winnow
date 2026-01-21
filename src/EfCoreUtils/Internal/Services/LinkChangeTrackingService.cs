@@ -54,7 +54,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
 
         var tracker = new ManyToManyStatisticsTracker();
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        ApplyEntityLinkChanges(entity, tracker, visited, 0, options.MaxDepth);
+        ApplyEntityLinkChanges(entity, tracker, visited, 0, options.MaxDepth, options.MaxManyToManyCollectionSize);
         return tracker;
     }
 
@@ -146,7 +146,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
 
     private void ApplyEntityLinkChanges(
         object entity, ManyToManyStatisticsTracker tracker,
-        HashSet<object> visited, int depth, int maxDepth)
+        HashSet<object> visited, int depth, int maxDepth, int maxCollectionSize)
     {
         if (!visited.Add(entity))
         {
@@ -154,17 +154,17 @@ internal class LinkChangeTrackingService<TEntity, TKey>
         }
 
         var entry = _context.Entry(entity);
-        ApplyEntryLinkChanges(entry, tracker);
+        ApplyEntryLinkChanges(entry, tracker, maxCollectionSize);
 
         if (depth >= maxDepth)
         {
             return;
         }
 
-        ApplyChildLinkChanges(entry, tracker, visited, depth, maxDepth);
+        ApplyChildLinkChanges(entry, tracker, visited, depth, maxDepth, maxCollectionSize);
     }
 
-    private void ApplyEntryLinkChanges(EntityEntry entry, ManyToManyStatisticsTracker tracker)
+    private void ApplyEntryLinkChanges(EntityEntry entry, ManyToManyStatisticsTracker tracker, int maxCollectionSize)
     {
         var entityType = entry.Metadata.ClrType;
         var entityId = EntityEntryHelper.GetEntityIdSafe(entry);
@@ -181,6 +181,8 @@ internal class LinkChangeTrackingService<TEntity, TKey>
             var navName = navigation.Metadata.Name;
             var currentIds = CaptureRelatedIds(navigation);
 
+            ValidateCollectionSize(entityTypeName, navName, currentIds.Count, maxCollectionSize);
+
             if (!originalByNav.TryGetValue(navName, out var originalIds))
             {
                 originalIds = [];
@@ -189,6 +191,17 @@ internal class LinkChangeTrackingService<TEntity, TKey>
             var (added, removed) = DetectChanges(originalIds, currentIds);
 
             RecordChanges(entry, navigation, added, removed, tracker, entityTypeName, navName);
+        }
+    }
+
+    private static void ValidateCollectionSize(
+        string entityTypeName, string navigationName, int itemCount, int maxSize)
+    {
+        if (maxSize > 0 && itemCount > maxSize)
+        {
+            throw new InvalidOperationException(
+                $"Many-to-many collection '{navigationName}' on entity '{entityTypeName}' " +
+                $"has {itemCount} items, exceeding MaxManyToManyCollectionSize of {maxSize}.");
         }
     }
 
@@ -263,7 +276,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
 
     private void ApplyChildLinkChanges(
         EntityEntry entry, ManyToManyStatisticsTracker tracker,
-        HashSet<object> visited, int depth, int maxDepth)
+        HashSet<object> visited, int depth, int maxDepth, int maxCollectionSize)
     {
         foreach (var navigation in entry.Navigations)
         {
@@ -279,7 +292,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
 
             foreach (var child in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
-                ApplyEntityLinkChanges(child, tracker, visited, depth + 1, maxDepth);
+                ApplyEntityLinkChanges(child, tracker, visited, depth + 1, maxDepth, maxCollectionSize);
             }
         }
     }

@@ -53,4 +53,11 @@ public class InsertGraphBatchOptions
     /// Default: true (safer).
     /// </summary>
     public bool ValidateManyToManyEntitiesExist { get; set; } = true;
+
+    /// <summary>
+    /// Maximum allowed size for many-to-many collections.
+    /// Throws if a collection exceeds this size.
+    /// Default: 0 (no limit). Set to a positive value to enable.
+    /// </summary>
+    public int MaxManyToManyCollectionSize { get; set; } = 0;
 }
