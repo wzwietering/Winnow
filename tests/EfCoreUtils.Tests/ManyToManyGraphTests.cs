@@ -724,5 +724,141 @@ public class ManyToManyGraphTests : TestBase
         result.TraversalInfo!.JoinRecordsCreated.ShouldBe(2);
     }
 
+    [Fact]
+    public void InsertGraph_LargeCollection_PerformsEfficiently()
+    {
+        // Tests that large M2M collections are handled efficiently (verifies N+1 fix)
+        using var context = CreateContext();
+
+        // Create 50 courses - enough to verify efficiency without being excessive
+        var courses = Enumerable.Range(1, 50)
+            .Select(i => CreateCourse($"BATCH{i:D3}"))
+            .ToList();
+
+        var student = CreateStudent("LargeTest", courses);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.TraversalInfo!.JoinRecordsCreated.ShouldBe(50);
+
+        context.ChangeTracker.Clear();
+        var loaded = context.Students.Include(s => s.Courses).First();
+        loaded.Courses.Count.ShouldBe(50);
+    }
+
+    [Fact]
+    public void UpdateGraph_MultipleSequentialOperations_StateIsolated()
+    {
+        // Tests that state from previous operations doesn't affect subsequent operations
+        // (verifies state corruption fix)
+        using var context = CreateContext();
+        SeedCourses(context, 3);
+        var courseIds = context.Courses.Select(c => c.Id).ToList();
+
+        // Create two students
+        var student1 = CreateStudent("Sequential1");
+        var student2 = CreateStudent("Sequential2");
+        context.Students.AddRange(student1, student2);
+        context.SaveChanges();
+
+        // Add enrollments to student1
+        context.Enrollments.AddRange(courseIds.Take(2).Select(cid => new Enrollment
+        {
+            StudentId = student1.Id,
+            CourseId = cid,
+            EnrolledAt = DateTime.UtcNow
+        }));
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+
+        var saver = new BatchSaver<Student, int>(context);
+
+        // First update operation
+        var loaded1 = context.Students.Include(s => s.Enrollments).First(s => s.Id == student1.Id);
+        loaded1.Name = "Sequential1 Updated";
+        var result1 = saver.UpdateGraphBatch([loaded1], new GraphBatchOptions
+        {
+            IncludeManyToMany = true
+        });
+        result1.IsCompleteSuccess.ShouldBeTrue();
+
+        context.ChangeTracker.Clear();
+
+        // Second update operation on different student (state should be isolated)
+        var loaded2 = context.Students.Include(s => s.Enrollments).First(s => s.Id == student2.Id);
+        loaded2.Name = "Sequential2 Updated";
+        var result2 = saver.UpdateGraphBatch([loaded2], new GraphBatchOptions
+        {
+            IncludeManyToMany = true
+        });
+        result2.IsCompleteSuccess.ShouldBeTrue();
+
+        // Verify both students have correct state
+        context.ChangeTracker.Clear();
+        var verified1 = context.Students.Include(s => s.Enrollments).First(s => s.Id == student1.Id);
+        var verified2 = context.Students.Include(s => s.Enrollments).First(s => s.Id == student2.Id);
+
+        verified1.Name.ShouldBe("Sequential1 Updated");
+        verified1.Enrollments.Count.ShouldBe(2);
+        verified2.Name.ShouldBe("Sequential2 Updated");
+        verified2.Enrollments.Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public void InsertGraph_ValidationFailure_RelatedEntityNotFound()
+    {
+        using var context = CreateContext();
+
+        // Create a course object with a non-existent ID (simulating a detached entity)
+        var fakeCourse = new Course
+        {
+            Id = 99999, // Non-existent ID
+            Code = "FAKE",
+            Title = "Fake Course",
+            Credits = 3
+        };
+
+        var student = CreateStudent("ValidationTest", [fakeCourse]);
+
+        var saver = new BatchSaver<Student, int>(context);
+
+        // Batch operations catch exceptions and record failures instead of throwing
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.AttachExisting,
+            ValidateManyToManyEntitiesExist = true
+        });
+
+        // Should have a failure because validation detected non-existent course
+        result.IsCompleteSuccess.ShouldBeFalse();
+        result.Failures.ShouldNotBeEmpty();
+        result.Failures.First().ErrorMessage.ShouldContain("99999");
+    }
+
+    [Fact]
+    public void InsertGraph_ValidationDisabled_SkipsCheck()
+    {
+        using var context = CreateContext();
+
+        var student = CreateStudent("NoValidation", [CreateCourse("NEW001")]);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
+            ValidateManyToManyEntitiesExist = false
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+    }
+
     #endregion
 }

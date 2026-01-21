@@ -24,6 +24,15 @@ internal class LinkChangeTrackingService<TEntity, TKey>
 
     internal void CaptureOriginalLinks(IEnumerable<TEntity> entities, int maxDepth)
     {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        if (maxDepth < 0 || maxDepth > DepthConstants.AbsoluteMaxDepth)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxDepth),
+                $"maxDepth must be between 0 and {DepthConstants.AbsoluteMaxDepth}");
+        }
+
+        _originalLinks.Clear();
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
 
         foreach (var entity in entities)
@@ -34,6 +43,15 @@ internal class LinkChangeTrackingService<TEntity, TKey>
 
     internal ManyToManyStatisticsTracker ApplyLinkChanges(TEntity entity, GraphBatchOptions options)
     {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (options.MaxDepth < 0 || options.MaxDepth > DepthConstants.AbsoluteMaxDepth)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options),
+                $"MaxDepth must be between 0 and {DepthConstants.AbsoluteMaxDepth}");
+        }
+
         var tracker = new ManyToManyStatisticsTracker();
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
         ApplyEntityLinkChanges(entity, tracker, visited, 0, options.MaxDepth);
@@ -61,7 +79,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
     private void CaptureEntryLinks(EntityEntry entry)
     {
         var entityType = entry.Metadata.ClrType;
-        var entityId = GetEntityIdSafe(entry);
+        var entityId = EntityEntryHelper.GetEntityIdSafe(entry);
         var key = (entityType, entityId);
 
         if (_originalLinks.ContainsKey(key))
@@ -149,7 +167,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
     private void ApplyEntryLinkChanges(EntityEntry entry, ManyToManyStatisticsTracker tracker)
     {
         var entityType = entry.Metadata.ClrType;
-        var entityId = GetEntityIdSafe(entry);
+        var entityId = EntityEntryHelper.GetEntityIdSafe(entry);
         var key = (entityType, entityId);
         var entityTypeName = entityType.Name;
 
@@ -264,15 +282,5 @@ internal class LinkChangeTrackingService<TEntity, TKey>
                 ApplyEntityLinkChanges(child, tracker, visited, depth + 1, maxDepth);
             }
         }
-    }
-
-    private static object GetEntityIdSafe(EntityEntry entry)
-    {
-        var keyProperty = entry.Metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
-        if (keyProperty == null)
-        {
-            return "unknown";
-        }
-        return entry.Property(keyProperty.Name).CurrentValue ?? "unknown";
     }
 }

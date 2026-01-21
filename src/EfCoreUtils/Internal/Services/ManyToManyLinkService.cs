@@ -24,6 +24,15 @@ internal class ManyToManyLinkService<TEntity, TKey>
     internal ManyToManyStatisticsTracker ProcessManyToManyForInsert(
         TEntity entity, InsertGraphBatchOptions options)
     {
+        ArgumentNullException.ThrowIfNull(entity);
+        ArgumentNullException.ThrowIfNull(options);
+
+        if (options.MaxDepth < 0 || options.MaxDepth > DepthConstants.AbsoluteMaxDepth)
+        {
+            throw new ArgumentOutOfRangeException(nameof(options),
+                $"MaxDepth must be between 0 and {DepthConstants.AbsoluteMaxDepth}");
+        }
+
         var tracker = new ManyToManyStatisticsTracker();
         var entry = _context.Entry(entity);
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance) { entity };
@@ -34,6 +43,8 @@ internal class ManyToManyLinkService<TEntity, TKey>
 
     internal ManyToManyStatisticsTracker ProcessManyToManyForDelete(TEntity entity)
     {
+        ArgumentNullException.ThrowIfNull(entity);
+
         var tracker = new ManyToManyStatisticsTracker();
         var entry = _context.Entry(entity);
 
@@ -199,40 +210,50 @@ internal class ManyToManyLinkService<TEntity, TKey>
 
     private HashSet<object> QueryExistingIds(Type entityType, string keyPropertyName, List<object> ids)
     {
-        var dbSet = _context.Model.FindEntityType(entityType);
-        if (dbSet == null)
+        if (ids.Count == 0)
         {
             return [];
         }
 
-        var existingIds = new HashSet<object>();
-        var setMethod = typeof(DbContext).GetMethod(nameof(DbContext.Set), Type.EmptyTypes);
-        var genericSet = setMethod?.MakeGenericMethod(entityType);
-        var queryable = genericSet?.Invoke(_context, null) as IQueryable<object>;
-
-        if (queryable == null)
+        var entityMetadata = _context.Model.FindEntityType(entityType);
+        if (entityMetadata == null)
         {
-            return existingIds;
+            return [];
         }
 
-        var keyProp = entityType.GetProperty(keyPropertyName);
-        foreach (var id in ids)
-        {
-            var exists = queryable.Any(e => keyProp!.GetValue(e)!.Equals(id));
-            if (exists)
-            {
-                existingIds.Add(id);
-            }
-        }
+        var keyProp = entityType.GetProperty(keyPropertyName)
+            ?? throw new InvalidOperationException(
+                $"Property '{keyPropertyName}' not found on type {entityType.Name}");
 
-        return existingIds;
+        // Use reflection to call the generic helper method for type-safe LINQ query
+        var method = GetType().GetMethod(nameof(QueryExistingIdsGeneric),
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            ?? throw new InvalidOperationException("QueryExistingIdsGeneric method not found");
+
+        var genericMethod = method.MakeGenericMethod(entityType, keyProp.PropertyType);
+        return (HashSet<object>)genericMethod.Invoke(this, [keyPropertyName, ids])!;
+    }
+
+    private HashSet<object> QueryExistingIdsGeneric<TEntityType, TKeyType>(string keyPropertyName, List<object> ids)
+        where TEntityType : class
+    {
+        var typedIds = ids.Select(id => (TKeyType)Convert.ChangeType(id, typeof(TKeyType))).ToList();
+
+        // Use AsNoTracking to query only the database, not the local change tracker
+        var existingIds = _context.Set<TEntityType>()
+            .AsNoTracking()
+            .Where(e => typedIds.Contains(EF.Property<TKeyType>(e, keyPropertyName)))
+            .Select(e => EF.Property<TKeyType>(e, keyPropertyName))
+            .ToList();
+
+        return existingIds.Cast<object>().ToHashSet();
     }
 
     private void ThrowMissingRelatedEntityException(
         EntityEntry parentEntry, NavigationEntry navigation, Type relatedType, List<object> missingIds)
     {
         var parentType = parentEntry.Metadata.ClrType.Name;
-        var parentId = GetEntityIdSafe(parentEntry);
+        var parentId = EntityEntryHelper.GetEntityIdSafe(parentEntry);
         var missingIdList = string.Join(", ", missingIds);
 
         throw new InvalidOperationException(
@@ -290,14 +311,4 @@ internal class ManyToManyLinkService<TEntity, TKey>
         navigation.CurrentValue is System.Collections.IEnumerable enumerable
             ? enumerable.Cast<object>().Count()
             : 0;
-
-    private static object GetEntityIdSafe(EntityEntry entry)
-    {
-        var keyProperty = entry.Metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
-        if (keyProperty == null)
-        {
-            return "unknown";
-        }
-        return entry.Property(keyProperty.Name).CurrentValue ?? "unknown";
-    }
 }
