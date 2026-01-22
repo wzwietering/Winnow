@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -8,6 +9,18 @@ namespace EfCoreUtils.Internal.Services;
 /// Service for managing many-to-many join records during graph operations.
 /// Handles both skip navigations (EF-managed) and explicit join entities.
 /// </summary>
+/// <remarks>
+/// <para>
+/// This service modifies the DbContext's change tracker but does not call SaveChanges.
+/// The caller is responsible for wrapping operations in a transaction when atomicity
+/// is required across multiple entities.
+/// </para>
+/// <para>
+/// For batched validation (<see cref="ValidateManyToManyEntitiesExistBatched"/>),
+/// database queries are executed immediately to check for missing entities.
+/// These queries use AsNoTracking and do not affect the change tracker.
+/// </para>
+/// </remarks>
 internal class ManyToManyLinkService<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
@@ -17,6 +30,9 @@ internal class ManyToManyLinkService<TEntity, TKey>
             .GetMethod(nameof(QueryExistingIdsGeneric),
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
         ?? throw new InvalidOperationException("QueryExistingIdsGeneric method not found");
+
+    private static readonly ConcurrentDictionary<(Type EntityType, Type KeyType), System.Reflection.MethodInfo>
+        GenericMethodCache = new();
 
     private readonly DbContext _context;
     private readonly EntityKeyService<TEntity, TKey> _keyService;
@@ -449,14 +465,24 @@ internal class ManyToManyLinkService<TEntity, TKey>
             ?? throw new InvalidOperationException(
                 $"Property '{keyPropertyName}' not found on type {entityType.Name}");
 
-        var genericMethod = QueryExistingIdsGenericMethod.MakeGenericMethod(entityType, keyProp.PropertyType);
-        return (HashSet<object>)genericMethod.Invoke(this, [keyPropertyName, ids])!;
+        var genericMethod = GenericMethodCache.GetOrAdd(
+            (entityType, keyProp.PropertyType),
+            key => QueryExistingIdsGenericMethod.MakeGenericMethod(key.EntityType, key.KeyType));
+
+        var result = genericMethod.Invoke(this, [keyPropertyName, ids]);
+        if (result is not HashSet<object> hashSet)
+        {
+            throw new InvalidOperationException(
+                $"Failed to query existing IDs for type {entityType.Name}. " +
+                "Expected HashSet<object> but got null or incompatible type.");
+        }
+        return hashSet;
     }
 
     private HashSet<object> QueryExistingIdsGeneric<TEntityType, TKeyType>(string keyPropertyName, List<object> ids)
         where TEntityType : class
     {
-        var typedIds = ids.Select(id => (TKeyType)Convert.ChangeType(id, typeof(TKeyType))).ToList();
+        var typedIds = ConvertIds<TKeyType>(ids);
 
         // Use AsNoTracking to query only the database, not the local change tracker
         var existingIds = _context.Set<TEntityType>()
@@ -466,6 +492,26 @@ internal class ManyToManyLinkService<TEntity, TKey>
             .ToList();
 
         return existingIds.Cast<object>().ToHashSet();
+    }
+
+    private static List<TKeyType> ConvertIds<TKeyType>(List<object> ids)
+    {
+        var typedIds = new List<TKeyType>(ids.Count);
+        foreach (var id in ids)
+        {
+            try
+            {
+                var targetType = Nullable.GetUnderlyingType(typeof(TKeyType)) ?? typeof(TKeyType);
+                var converted = (TKeyType)Convert.ChangeType(id, targetType);
+                typedIds.Add(converted);
+            }
+            catch (Exception ex) when (ex is InvalidCastException or FormatException or OverflowException)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot convert ID value '{id}' of type {id.GetType().Name} to {typeof(TKeyType).Name}.", ex);
+            }
+        }
+        return typedIds;
     }
 
     private void RemoveJoinRecords(EntityEntry entry, ManyToManyStatisticsTracker tracker)

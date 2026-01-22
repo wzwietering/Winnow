@@ -79,8 +79,10 @@ public class ManyToManyGraphTests : TestBase
     }
 
     [Fact]
-    public void InsertGraph_ExplicitJoin_JoinEntitiesCreated()
+    public void Baseline_ExplicitJoin_DirectEfCore_Works()
     {
+        // Baseline test: Verifies EF Core handles explicit join entities correctly
+        // This tests the EF Core behavior, not BatchSaver's M2M handling
         using var context = CreateContext();
         SeedCourses(context, 2);
         var courses = context.Courses.ToList();
@@ -89,7 +91,7 @@ public class ManyToManyGraphTests : TestBase
         context.Students.Add(student);
         context.SaveChanges();
 
-        // Create enrollments with explicit join entity
+        // Create enrollments with explicit join entity directly via EF Core
         var enrollments = courses.Select(c => new Enrollment
         {
             StudentId = student.Id,
@@ -270,10 +272,10 @@ public class ManyToManyGraphTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraph_AddEnrollment_DirectSave()
+    public void Baseline_AddEnrollment_DirectEfCore_Works()
     {
-        // Tests adding enrollment via direct EF Core, not through BatchSaver
-        // BatchSaver's UpdateGraph may require specific setup for new children
+        // Baseline test: Verifies EF Core direct enrollment creation works
+        // This is NOT testing BatchSaver - it establishes expected EF Core behavior
         using var context = CreateContext();
         SeedCourses(context, 3);
         var courseId = context.Courses.First().Id;
@@ -284,8 +286,39 @@ public class ManyToManyGraphTests : TestBase
         var studentId = student.Id;
         context.ChangeTracker.Clear();
 
-        // Add enrollment directly
+        // Add enrollment directly via EF Core
         context.Enrollments.Add(new Enrollment
+        {
+            StudentId = studentId,
+            CourseId = courseId,
+            EnrolledAt = DateTime.UtcNow,
+            Grade = "B+"
+        });
+        context.SaveChanges();
+
+        context.ChangeTracker.Clear();
+        var verified = context.Students.Include(s => s.Enrollments).First(s => s.Id == studentId);
+        verified.Enrollments.Count.ShouldBe(1);
+        verified.Enrollments.First().Grade.ShouldBe("B+");
+    }
+
+    [Fact]
+    public void Baseline_AddEnrollment_DirectEfCore_ViaNavigation()
+    {
+        // Baseline test: Verifies EF Core handles adding children via navigation
+        using var context = CreateContext();
+        SeedCourses(context, 3);
+        var courseId = context.Courses.First().Id;
+
+        var student = CreateStudent("EnrollmentNavTest");
+        context.Students.Add(student);
+        context.SaveChanges();
+        var studentId = student.Id;
+        context.ChangeTracker.Clear();
+
+        // Load student and add enrollment through navigation via direct EF Core
+        var loaded = context.Students.Include(s => s.Enrollments).First(s => s.Id == studentId);
+        loaded.Enrollments.Add(new Enrollment
         {
             StudentId = studentId,
             CourseId = courseId,
@@ -449,6 +482,194 @@ public class ManyToManyGraphTests : TestBase
         });
 
         result.IsCompleteSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void UpdateGraph_SkipNavigation_AddCourses_UpdatesDatabase()
+    {
+        using var context = CreateContext();
+        SeedCourses(context, 3);
+
+        var student = CreateStudent("AddCoursesTest");
+        context.Students.Add(student);
+        context.SaveChanges();
+        var studentId = student.Id;
+        context.ChangeTracker.Clear();
+
+        // Load student without courses, then add existing courses
+        var loaded = context.Students.Include(s => s.Courses).First(s => s.Id == studentId);
+        var coursesToAdd = context.Courses.Take(2).ToList();
+        foreach (var course in coursesToAdd)
+        {
+            loaded.Courses.Add(course);
+        }
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        {
+            IncludeManyToMany = true
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        // Verify database state
+        context.ChangeTracker.Clear();
+        var verified = context.Students.Include(s => s.Courses).First(s => s.Id == studentId);
+        verified.Courses.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public void UpdateGraph_SkipNavigation_WithExistingCourses_PropertiesUpdated()
+    {
+        // Test that updating student properties works when student has existing M2M relationships
+        using var context = CreateContext();
+        SeedCourses(context, 3);
+
+        // Create student with courses via skip navigation
+        var courses = context.Courses.Take(2).ToList();
+        var student = CreateStudent("SkipNavTest");
+        student.Courses = courses;
+        context.Students.Add(student);
+        context.SaveChanges();
+        var studentId = student.Id;
+        context.ChangeTracker.Clear();
+
+        // Load and only update properties (not the M2M collection)
+        var loaded = context.Students.First(s => s.Id == studentId);
+        loaded.Name = "SkipNavTest Updated";
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        {
+            IncludeManyToMany = true
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        // Verify name updated
+        context.ChangeTracker.Clear();
+        var verified = context.Students.First(s => s.Id == studentId);
+        verified.Name.ShouldBe("SkipNavTest Updated");
+    }
+
+    [Fact]
+    public void UpdateGraph_SkipNavigation_VerifyCoursesPreserved()
+    {
+        // Test that existing M2M relationships are preserved during property update
+        using var context = CreateContext();
+        SeedCourses(context, 5);
+
+        var initialCourses = context.Courses.Take(2).ToList();
+        var initialCourseIds = initialCourses.Select(c => c.Id).ToList();
+        var student = CreateStudent("PreserveCoursesTest");
+        student.Courses = initialCourses;
+        context.Students.Add(student);
+        context.SaveChanges();
+        var studentId = student.Id;
+        context.ChangeTracker.Clear();
+
+        // Load WITHOUT courses and update only properties
+        var loaded = context.Students.First(s => s.Id == studentId);
+        loaded.Name = "PreserveCoursesTest Updated";
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        {
+            IncludeManyToMany = true
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        // Verify courses are still there
+        context.ChangeTracker.Clear();
+        var verified = context.Students.Include(s => s.Courses).First(s => s.Id == studentId);
+        verified.Courses.Count.ShouldBe(2);
+        verified.Courses.Select(c => c.Id).ShouldBe(initialCourseIds, ignoreOrder: true);
+    }
+
+    [Fact]
+    public void UpdateGraph_SkipNavigation_MultipleStudents_PropertiesUpdated()
+    {
+        // Test batch update of student properties while M2M enabled
+        using var context = CreateContext();
+        SeedCourses(context, 5);
+
+        // Create multiple students with initial course
+        var firstCourse = context.Courses.First();
+        var students = Enumerable.Range(1, 3)
+            .Select(i =>
+            {
+                var s = CreateStudent($"BatchStudent{i}");
+                s.Courses = [firstCourse];
+                return s;
+            })
+            .ToList();
+        context.Students.AddRange(students);
+        context.SaveChanges();
+        var studentIds = students.Select(s => s.Id).ToList();
+        context.ChangeTracker.Clear();
+
+        // Load all students and update only properties
+        var loaded = context.Students
+            .Where(s => studentIds.Contains(s.Id))
+            .ToList();
+
+        foreach (var student in loaded)
+        {
+            student.Name += " Updated";
+        }
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.UpdateGraphBatch(loaded, new GraphBatchOptions
+        {
+            IncludeManyToMany = true
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.SuccessCount.ShouldBe(3);
+
+        // Verify all students were updated
+        context.ChangeTracker.Clear();
+        var verified = context.Students
+            .Where(s => studentIds.Contains(s.Id))
+            .ToList();
+        verified.ShouldAllBe(s => s.Name.EndsWith(" Updated"));
+    }
+
+    [Fact]
+    public void UpdateGraph_SkipNavigation_PropertyOnlyUpdate_SucceedsWithZeroJoinOperations()
+    {
+        // Test that property-only updates don't affect join records
+        using var context = CreateContext();
+        SeedCourses(context, 2);
+
+        var courses = context.Courses.Take(2).ToList();
+        var student = CreateStudent("PropertyOnlyTest");
+        student.Courses = courses;
+        context.Students.Add(student);
+        context.SaveChanges();
+        var studentId = student.Id;
+        context.ChangeTracker.Clear();
+
+        // Load WITHOUT courses and update only properties
+        var loaded = context.Students.First(s => s.Id == studentId);
+        loaded.Name = "PropertyOnlyTest Updated";
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        {
+            IncludeManyToMany = true
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.TraversalInfo!.JoinRecordsCreated.ShouldBe(0);
+        result.TraversalInfo.JoinRecordsRemoved.ShouldBe(0);
+
+        // Verify courses unchanged
+        context.ChangeTracker.Clear();
+        var verified = context.Students.Include(s => s.Courses).First(s => s.Id == studentId);
+        verified.Courses.Count.ShouldBe(2);
+        verified.Name.ShouldBe("PropertyOnlyTest Updated");
     }
 
     #endregion
