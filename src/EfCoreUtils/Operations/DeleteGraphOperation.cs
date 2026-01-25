@@ -43,6 +43,12 @@ internal class DeleteGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
         var (node, stats) = context.BuildGraphHierarchy(entity, _options.MaxDepth);
         _pendingGraphNodes[entityId] = (node, stats);
 
+        if (_options.IncludeManyToMany)
+        {
+            var m2mResult = context.ProcessManyToManyForDelete(entity);
+            _statsTracker.AggregateManyToManyStats(m2mResult);
+        }
+
         if (_options.CascadeBehavior == DeleteCascadeBehavior.ParentOnly)
         {
             context.AttachEntityAsDeleted(entity);
@@ -88,7 +94,6 @@ internal class DeleteGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
         SuccessfulIds = _successfulIds,
         Failures = _failures,
         GraphHierarchy = _graphHierarchy,
-        TraversalInfo = _statsTracker.CreateBasicTraversalInfo()
+        TraversalInfo = _statsTracker.CreateTraversalInfo()
     };
-
 }

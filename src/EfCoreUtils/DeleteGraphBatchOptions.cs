@@ -26,4 +26,12 @@ public class DeleteGraphBatchOptions
     /// Prevents FK constraint violations. Default: true (safer).
     /// </summary>
     public bool ValidateReferencedEntitiesExist { get; set; } = true;
+
+    /// <summary>
+    /// When true, includes many-to-many navigations during delete.
+    /// Join records will be deleted automatically.
+    /// Related entities are NOT deleted (only the join records).
+    /// Default: false.
+    /// </summary>
+    public bool IncludeManyToMany { get; set; } = false;
 }

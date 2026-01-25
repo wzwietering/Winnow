@@ -1,3 +1,4 @@
+using EfCoreUtils.Internal.Visitors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -31,8 +32,13 @@ internal class EntityAttachmentService<TEntity, TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly DbContext _context;
+    private readonly GraphTraversalEngine _engine;
 
-    internal EntityAttachmentService(DbContext context) => _context = context;
+    internal EntityAttachmentService(DbContext context)
+    {
+        _context = context;
+        _engine = new GraphTraversalEngine(context);
+    }
 
     internal void AttachEntityAsDeleted(TEntity entity) => _context.Entry(entity).State = EntityState.Deleted;
 
@@ -118,124 +124,29 @@ internal class EntityAttachmentService<TEntity, TKey>
 
     // ========== Recursive Attachment Methods ==========
 
+    // Traversal options that match original behavior - traverse all collections
+    private static readonly TraversalOptions AttachOptions = new() { SkipManyToMany = false };
+    private static readonly TraversalOptions AttachDeleteOptions = new() { BottomUp = true, SkipManyToMany = false };
+
     internal void AttachEntityGraphAsAddedRecursive(TEntity entity, int maxDepth)
     {
-        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        AttachAsAddedRecursive(entity, 0, ClampDepth(maxDepth), visited);
-    }
-
-    private void AttachAsAddedRecursive(
-        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
-    {
-        if (!visited.Add(entity))
-        {
-            return;
-        }
-
-        var entry = _context.Entry(entity);
-        entry.State = EntityState.Added;
-
-        if (currentDepth >= maxDepth)
-        {
-            return;
-        }
-
-        AttachChildrenRecursive(entry, currentDepth, maxDepth, visited, EntityState.Added);
+        var visitor = new ConditionalStateVisitor();
+        var ctx = new StateVisitorContext { TargetState = EntityState.Added, OnlyIfDetached = false };
+        _engine.Traverse(entity, maxDepth, visitor, ctx, AttachOptions);
     }
 
     internal void AttachEntityGraphAsModifiedRecursive(TEntity entity, int maxDepth)
     {
-        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        AttachAsModifiedRecursive(entity, 0, ClampDepth(maxDepth), visited);
+        var visitor = new ConditionalStateVisitor();
+        var ctx = new StateVisitorContext { TargetState = EntityState.Modified, OnlyIfDetached = true };
+        _engine.Traverse(entity, maxDepth, visitor, ctx, AttachOptions);
     }
 
-    private void AttachAsModifiedRecursive(
-        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
-    {
-        if (!visited.Add(entity))
-        {
-            return;
-        }
-
-        var entry = _context.Entry(entity);
-        if (entry.State == EntityState.Detached)
-        {
-            entry.State = EntityState.Modified;
-        }
-
-        if (currentDepth >= maxDepth)
-        {
-            return;
-        }
-
-        AttachChildrenRecursive(entry, currentDepth, maxDepth, visited, EntityState.Modified);
-    }
-
-    private void AttachChildrenRecursive(
-        EntityEntry entry, int currentDepth, int maxDepth,
-        HashSet<object> visited, EntityState targetState)
-    {
-        foreach (var navigation in entry.Navigations)
-        {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
-            {
-                continue;
-            }
-
-            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
-            {
-                if (targetState == EntityState.Added)
-                {
-                    AttachAsAddedRecursive(item, currentDepth + 1, maxDepth, visited);
-                }
-                else
-                {
-                    AttachAsModifiedRecursive(item, currentDepth + 1, maxDepth, visited);
-                }
-            }
-        }
-    }
-
-    // CRITICAL: Delete uses depth-first order - children before parent for FK constraints
+    // CRITICAL: Delete uses bottom-up order - children before parent for FK constraints
     internal void AttachEntityGraphAsDeletedRecursive(TEntity entity, int maxDepth)
     {
-        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        AttachAsDeletedRecursive(entity, 0, ClampDepth(maxDepth), visited);
-    }
-
-    private void AttachAsDeletedRecursive(
-        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
-    {
-        if (!visited.Add(entity))
-        {
-            return;
-        }
-
-        var entry = _context.Entry(entity);
-
-        if (currentDepth < maxDepth)
-        {
-            DeleteChildrenRecursive(entry, currentDepth, maxDepth, visited);
-        }
-
-        entry.State = EntityState.Deleted;
-    }
-
-    private void DeleteChildrenRecursive(
-        EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited)
-    {
-        foreach (var navigation in entry.Navigations)
-        {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
-            {
-                continue;
-            }
-
-            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
-            {
-                AttachAsDeletedRecursive(item, currentDepth + 1, maxDepth, visited);
-            }
-        }
+        var visitor = new EntityStateVisitor();
+        _engine.Traverse(entity, maxDepth, visitor, EntityState.Deleted, AttachDeleteOptions);
     }
 
     private static int ClampDepth(int maxDepth) => DepthConstants.ClampDepth(maxDepth);
