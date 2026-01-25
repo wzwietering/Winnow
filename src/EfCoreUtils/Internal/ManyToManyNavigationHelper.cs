@@ -31,14 +31,14 @@ internal static class ManyToManyNavigationHelper
     /// <summary>
     /// For skip navigations, returns the target entity type (the "other side").
     /// For explicit joins, returns the join entity type.
-    /// Returns null for non-M2M navigations.
+    /// Returns null for non-many-to-many navigations.
     /// </summary>
     internal static Type? GetManyToManyTargetType(NavigationEntry navigation) =>
         IsManyToManyNavigation(navigation) ? navigation.Metadata.TargetEntityType.ClrType : null;
 
     /// <summary>
     /// For skip navigations, returns the join entity type that EF Core manages internally.
-    /// Returns null for explicit join entities or non-M2M navigations.
+    /// Returns null for explicit join entities or non-many-to-many navigations.
     /// </summary>
     internal static Type? GetSkipNavigationJoinType(NavigationEntry navigation) =>
         navigation.Metadata is ISkipNavigation skipNav ? skipNav.JoinEntityType.ClrType : null;

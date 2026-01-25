@@ -47,11 +47,23 @@ public class InsertGraphBatchOptions
         = ManyToManyInsertBehavior.AttachExisting;
 
     /// <summary>
-    /// When true and ManyToManyInsertBehavior is AttachExisting,
-    /// validates that related entities exist in the database before creating join records.
-    /// Prevents FK constraint violations at save time.
-    /// Default: true (safer).
+    /// When true, validates that related many-to-many entities exist in the database
+    /// before creating join records. Prevents FK constraint violations at save time.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This validation only applies when <see cref="ManyToManyInsertBehavior"/> is set to
+    /// <see cref="ManyToManyInsertBehavior.AttachExisting"/>. When using
+    /// <see cref="ManyToManyInsertBehavior.InsertIfNew"/>, entities with default keys
+    /// are inserted rather than validated for existence.
+    /// </para>
+    /// <para>
+    /// Validation performs batched database queries using AsNoTracking, which does not
+    /// affect the change tracker. If any referenced entities are missing, an
+    /// <see cref="InvalidOperationException"/> is thrown during processing.
+    /// </para>
+    /// </remarks>
+    /// <value>Default: <c>true</c> (safer).</value>
     public bool ValidateManyToManyEntitiesExist { get; set; } = true;
 
     /// <summary>

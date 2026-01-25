@@ -1,3 +1,4 @@
+using EfCoreUtils.Internal.Visitors;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 
@@ -8,10 +9,12 @@ internal class EntityDetachmentService<TEntity, TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly DbContext _context;
+    private readonly GraphTraversalEngine _engine;
 
     internal EntityDetachmentService(DbContext context)
     {
         _context = context;
+        _engine = new GraphTraversalEngine(context);
     }
 
     internal void DetachEntity(TEntity entity)
@@ -109,49 +112,12 @@ internal class EntityDetachmentService<TEntity, TKey>
 
     // ========== Recursive Detachment Methods ==========
 
+    // Traversal options matching original behavior - bottom-up, traverse all collections
+    private static readonly TraversalOptions DetachOptions = new() { BottomUp = true, SkipManyToMany = false };
+
     internal void DetachEntityGraphRecursive(TEntity entity, int maxDepth)
     {
-        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        DetachRecursive(entity, 0, ClampDepth(maxDepth), visited);
+        var visitor = new EntityStateVisitor();
+        _engine.Traverse(entity, maxDepth, visitor, EntityState.Detached, DetachOptions);
     }
-
-    private void DetachRecursive(
-        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
-    {
-        if (!visited.Add(entity))
-        {
-            return;
-        }
-
-        var entry = _context.Entry(entity);
-
-        if (currentDepth < maxDepth)
-        {
-            DetachChildrenRecursive(entry, currentDepth, maxDepth, visited);
-        }
-
-        if (entry.State != EntityState.Detached)
-        {
-            entry.State = EntityState.Detached;
-        }
-    }
-
-    private void DetachChildrenRecursive(
-        EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited)
-    {
-        foreach (var navigation in entry.Navigations)
-        {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
-            {
-                continue;
-            }
-
-            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
-            {
-                DetachRecursive(item, currentDepth + 1, maxDepth, visited);
-            }
-        }
-    }
-
-    private static int ClampDepth(int maxDepth) => DepthConstants.ClampDepth(maxDepth);
 }

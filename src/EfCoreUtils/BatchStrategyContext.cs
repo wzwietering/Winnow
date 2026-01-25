@@ -19,8 +19,13 @@ internal class BatchStrategyContext<TEntity, TKey>
     private readonly EntityAttachmentService<TEntity, TKey> _attachmentService;
     private readonly EntityDetachmentService<TEntity, TKey> _detachmentService;
     private readonly OrphanTrackingService<TEntity, TKey> _orphanService;
-    private readonly ManyToManyLinkService<TEntity, TKey> _manyToManyService;
     private readonly LinkChangeTrackingService<TEntity, TKey> _linkChangeService;
+
+    // Many-to-many services
+    private readonly ManyToManyIdQueryService _m2mIdQueryService;
+    private readonly ManyToManyValidationCache<TEntity, TKey> _m2mValidationCache;
+    private readonly ManyToManyInsertProcessor<TEntity, TKey> _m2mInsertProcessor;
+    private readonly ManyToManyDeleteProcessor<TEntity, TKey> _m2mDeleteProcessor;
 
     private GraphHierarchyBuilder<TKey>? _graphBuilder;
 
@@ -34,8 +39,13 @@ internal class BatchStrategyContext<TEntity, TKey>
         _attachmentService = new EntityAttachmentService<TEntity, TKey>(context);
         _detachmentService = new EntityDetachmentService<TEntity, TKey>(context);
         _orphanService = new OrphanTrackingService<TEntity, TKey>(context, _keyService);
-        _manyToManyService = new ManyToManyLinkService<TEntity, TKey>(context, _keyService);
         _linkChangeService = new LinkChangeTrackingService<TEntity, TKey>(context, _keyService);
+
+        // Many-to-many services with proper dependency chain
+        _m2mIdQueryService = new ManyToManyIdQueryService(context);
+        _m2mValidationCache = new ManyToManyValidationCache<TEntity, TKey>(context, _m2mIdQueryService);
+        _m2mInsertProcessor = new ManyToManyInsertProcessor<TEntity, TKey>(context, _m2mValidationCache);
+        _m2mDeleteProcessor = new ManyToManyDeleteProcessor<TEntity, TKey>(context);
     }
 
     private GraphHierarchyBuilder<TKey> GraphBuilder =>
@@ -175,18 +185,18 @@ internal class BatchStrategyContext<TEntity, TKey>
     internal (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) BuildGraphHierarchyWithReferences(
         TEntity entity, int maxDepth) => GraphBuilder.BuildWithReferences(entity, maxDepth);
 
-    // ========== Many-to-Many Link Service Delegation ==========
+    // ========== Many-to-Many Service Delegation ==========
 
     internal Internal.ManyToManyStatisticsTracker ProcessManyToManyForInsert(
         TEntity entity, InsertGraphBatchOptions options) =>
-        _manyToManyService.ProcessManyToManyForInsert(entity, options);
+        _m2mInsertProcessor.ProcessManyToManyForInsert(entity, options);
 
     internal Internal.ManyToManyStatisticsTracker ProcessManyToManyForDelete(TEntity entity) =>
-        _manyToManyService.ProcessManyToManyForDelete(entity);
+        _m2mDeleteProcessor.ProcessManyToManyForDelete(entity);
 
     internal void ValidateManyToManyEntitiesExistBatched(
         List<TEntity> entities, InsertGraphBatchOptions options) =>
-        _manyToManyService.ValidateManyToManyEntitiesExistBatched(entities, options);
+        _m2mValidationCache.ValidateManyToManyEntitiesExistBatched(entities, options);
 
     // ========== Link Change Tracking Service Delegation ==========
 

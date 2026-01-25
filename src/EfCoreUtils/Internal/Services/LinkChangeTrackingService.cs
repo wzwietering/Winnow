@@ -166,32 +166,40 @@ internal class LinkChangeTrackingService<TEntity, TKey>
 
     private void ApplyEntryLinkChanges(EntityEntry entry, ManyToManyStatisticsTracker tracker, int maxCollectionSize)
     {
-        var entityType = entry.Metadata.ClrType;
-        var entityId = EntityEntryHelper.GetEntityIdSafe(entry);
+        var (entityType, entityId) = CreateEntityKey(entry);
         var key = (entityType, entityId);
-        var entityTypeName = entityType.Name;
 
         if (!_originalLinks.TryGetValue(key, out var originalByNav))
         {
             return;
         }
 
+        var entityTypeName = entityType.Name;
         foreach (var navigation in ManyToManyNavigationHelper.GetManyToManyNavigations(entry))
         {
-            var navName = navigation.Metadata.Name;
-            var currentIds = CaptureRelatedIds(navigation);
-
-            ManyToManyValidation.ValidateCollectionSize(entityTypeName, navName, currentIds.Count, maxCollectionSize);
-
-            if (!originalByNav.TryGetValue(navName, out var originalIds))
-            {
-                originalIds = [];
-            }
-
-            var (added, removed) = DetectChanges(originalIds, currentIds);
-
-            RecordChanges(navigation, added, removed, tracker, entityTypeName, navName);
+            ProcessNavigationLinkChanges(navigation, originalByNav, tracker, entityTypeName, maxCollectionSize);
         }
+    }
+
+    private static (Type EntityType, object EntityId) CreateEntityKey(EntityEntry entry) =>
+        (entry.Metadata.ClrType, EntityEntryHelper.GetEntityIdSafe(entry));
+
+    private void ProcessNavigationLinkChanges(
+        NavigationEntry navigation,
+        Dictionary<string, HashSet<object>> originalByNav,
+        ManyToManyStatisticsTracker tracker,
+        string entityTypeName,
+        int maxCollectionSize)
+    {
+        var navName = navigation.Metadata.Name;
+        var currentIds = CaptureRelatedIds(navigation);
+
+        ManyToManyValidation.ValidateCollectionSize(entityTypeName, navName, currentIds.Count, maxCollectionSize);
+
+        var originalIds = originalByNav.GetValueOrDefault(navName) ?? [];
+        var (added, removed) = DetectChanges(originalIds, currentIds);
+
+        RecordChanges(navigation, added, removed, tracker, entityTypeName, navName);
     }
 
     private static (HashSet<object> Added, HashSet<object> Removed) DetectChanges(
@@ -243,8 +251,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
         NavigationEntry navigation, HashSet<object> removedIds,
         ManyToManyStatisticsTracker tracker, string entityTypeName, string navName)
     {
-        var targetType = navigation.Metadata.TargetEntityType;
-        var keyProperty = targetType.FindPrimaryKey()?.Properties.FirstOrDefault();
+        var keyProperty = GetNavigationKeyProperty(navigation);
         if (keyProperty == null)
         {
             return;
@@ -252,14 +259,24 @@ internal class LinkChangeTrackingService<TEntity, TKey>
 
         foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
         {
-            var itemEntry = _context.Entry(item);
-            var idValue = itemEntry.Property(keyProperty.Name).CurrentValue;
+            TryMarkJoinItemAsDeleted(item, keyProperty, removedIds, tracker, entityTypeName, navName);
+        }
+    }
 
-            if (idValue != null && removedIds.Contains(idValue))
-            {
-                itemEntry.State = EntityState.Deleted;
-                tracker.RecordJoinRemoved(entityTypeName, navName);
-            }
+    private static IProperty? GetNavigationKeyProperty(NavigationEntry navigation) =>
+        navigation.Metadata.TargetEntityType.FindPrimaryKey()?.Properties.FirstOrDefault();
+
+    private void TryMarkJoinItemAsDeleted(
+        object item, IProperty keyProperty, HashSet<object> removedIds,
+        ManyToManyStatisticsTracker tracker, string entityTypeName, string navName)
+    {
+        var itemEntry = _context.Entry(item);
+        var idValue = itemEntry.Property(keyProperty.Name).CurrentValue;
+
+        if (idValue != null && removedIds.Contains(idValue))
+        {
+            itemEntry.State = EntityState.Deleted;
+            tracker.RecordJoinRemoved(entityTypeName, navName);
         }
     }
 

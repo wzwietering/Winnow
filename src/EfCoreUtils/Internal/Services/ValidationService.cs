@@ -179,14 +179,13 @@ internal class ValidationService<TEntity, TKey>
             return;
         }
 
-        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        ValidateCascadeRecursive(entity, 0, ClampDepth(maxDepth), visited);
+        var ctx = GraphTraversalContext.Create(maxDepth);
+        ValidateCascadeRecursive(entity, 0, ctx);
     }
 
-    private void ValidateCascadeRecursive(
-        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    private void ValidateCascadeRecursive(object entity, int currentDepth, GraphTraversalContext ctx)
     {
-        if (!visited.Add(entity))
+        if (!ctx.TryVisit(entity))
         {
             return;
         }
@@ -194,29 +193,13 @@ internal class ValidationService<TEntity, TKey>
         var entry = _context.Entry(entity);
         ValidateEntityHasNoChildrenWithDepth(entry, currentDepth);
 
-        if (currentDepth >= maxDepth)
+        if (ctx.IsAtMaxDepth(currentDepth))
         {
             return;
         }
 
-        TraverseCollectionChildren(entry, child =>
-            ValidateCascadeRecursive(child, currentDepth + 1, maxDepth, visited));
-    }
-
-    private void TraverseCollectionChildren(EntityEntry entry, Action<object> action)
-    {
-        foreach (var navigation in entry.Navigations)
-        {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
-            {
-                continue;
-            }
-
-            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
-            {
-                action(item);
-            }
-        }
+        TraversalHelper.TraverseCollectionChildren(entry, child =>
+            ValidateCascadeRecursive(child, currentDepth + 1, ctx), skipManyToMany: false);
     }
 
     private void ValidateEntityHasNoChildren(EntityEntry entry, TKey entityId)
@@ -266,34 +249,31 @@ internal class ValidationService<TEntity, TKey>
         }
     }
 
-    private static int ClampDepth(int maxDepth) => DepthConstants.ClampDepth(maxDepth);
-
     // ========== Reference Validation Methods ==========
 
     internal void ValidateCircularReferences(TEntity entity, int maxDepth)
     {
-        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        ValidateCircularReferencesRecursive(entity, 0, ClampDepth(maxDepth), visited);
+        var ctx = GraphTraversalContext.Create(maxDepth);
+        ValidateCircularReferencesRecursive(entity, 0, ctx);
     }
 
-    private void ValidateCircularReferencesRecursive(
-        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    private void ValidateCircularReferencesRecursive(object entity, int currentDepth, GraphTraversalContext ctx)
     {
-        ThrowIfCircularReference(entity, currentDepth, visited);
+        ThrowIfCircularReference(entity, currentDepth, ctx);
 
-        if (currentDepth >= maxDepth)
+        if (ctx.IsAtMaxDepth(currentDepth))
         {
             return;
         }
 
         var entry = _context.Entry(entity);
-        ValidateCollectionReferencesRecursive(entry, currentDepth, maxDepth, visited);
-        ValidateReferenceNavigationsRecursive(entry, currentDepth, maxDepth, visited);
+        ValidateCollectionReferencesRecursive(entry, currentDepth, ctx);
+        ValidateReferenceNavigationsRecursive(entry, currentDepth, ctx);
     }
 
-    private void ThrowIfCircularReference(object entity, int currentDepth, HashSet<object> visited)
+    private void ThrowIfCircularReference(object entity, int currentDepth, GraphTraversalContext ctx)
     {
-        if (visited.Add(entity))
+        if (ctx.TryVisit(entity))
         {
             return;
         }
@@ -308,65 +288,48 @@ internal class ValidationService<TEntity, TKey>
     }
 
     private void ValidateCollectionReferencesRecursive(
-        EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited)
+        EntityEntry entry, int currentDepth, GraphTraversalContext ctx)
     {
-        foreach (var navigation in entry.Navigations)
-        {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
-            {
-                continue;
-            }
-
-            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
-            {
-                ValidateCircularReferencesRecursive(item, currentDepth + 1, maxDepth, visited);
-            }
-        }
+        TraversalHelper.TraverseCollectionChildren(entry, child =>
+            ValidateCircularReferencesRecursive(child, currentDepth + 1, ctx), skipManyToMany: false);
     }
 
     private void ValidateReferenceNavigationsRecursive(
-        EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited)
+        EntityEntry entry, int currentDepth, GraphTraversalContext ctx)
     {
-        foreach (var navigation in NavigationPropertyHelper.GetReferenceNavigations(entry))
+        TraversalHelper.TraverseReferenceNavigations(entry, refEntity =>
         {
-            var refEntity = NavigationPropertyHelper.GetReferenceValue(navigation);
-            if (refEntity == null)
-            {
-                continue;
-            }
-
-            ValidateSelfReference(entry, navigation, refEntity);
-            ValidateCircularReferencesRecursive(refEntity, currentDepth + 1, maxDepth, visited);
-        }
+            ValidateSelfReference(entry, refEntity);
+            ValidateCircularReferencesRecursive(refEntity, currentDepth + 1, ctx);
+        });
     }
 
-    private void ValidateSelfReference(EntityEntry entry, NavigationEntry navigation, object refEntity)
+    private void ValidateSelfReference(EntityEntry entry, object refEntity)
     {
         if (ReferenceEquals(entry.Entity, refEntity))
         {
             var entityType = entry.Metadata.ClrType.Name;
             var entityId = _keyService.GetEntityIdFromEntry(entry);
             throw new InvalidOperationException(
-                $"Entity '{entityType}' (Id={entityId}) references itself via navigation '{navigation.Metadata.Name}'. " +
+                $"Entity '{entityType}' (Id={entityId}) references itself. " +
                 $"Self-referential entities are not supported in graph batch operations.");
         }
     }
 
     internal void ValidateReferencedEntitiesExist(TEntity entity, int maxDepth)
     {
-        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        ValidateReferencedEntitiesExistRecursive(entity, 0, ClampDepth(maxDepth), visited);
+        var ctx = GraphTraversalContext.Create(maxDepth);
+        ValidateReferencedEntitiesExistRecursive(entity, 0, ctx);
     }
 
-    private void ValidateReferencedEntitiesExistRecursive(
-        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+    private void ValidateReferencedEntitiesExistRecursive(object entity, int currentDepth, GraphTraversalContext ctx)
     {
-        if (!visited.Add(entity))
+        if (!ctx.TryVisit(entity))
         {
             return;
         }
 
-        if (currentDepth >= maxDepth)
+        if (ctx.IsAtMaxDepth(currentDepth))
         {
             return;
         }
@@ -374,18 +337,8 @@ internal class ValidationService<TEntity, TKey>
         var entry = _context.Entry(entity);
         ValidateEntityReferencesExist(entry);
 
-        foreach (var navigation in entry.Navigations)
-        {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
-            {
-                continue;
-            }
-
-            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
-            {
-                ValidateReferencedEntitiesExistRecursive(item, currentDepth + 1, maxDepth, visited);
-            }
-        }
+        TraversalHelper.TraverseCollectionChildren(entry, child =>
+            ValidateReferencedEntitiesExistRecursive(child, currentDepth + 1, ctx), skipManyToMany: false);
     }
 
     private void ValidateEntityReferencesExist(EntityEntry entry)

@@ -54,7 +54,8 @@ public class GraphTraversalResult<TKey> where TKey : notnull, IEquatable<TKey>
 
     /// <summary>
     /// Many-to-many join operations grouped by navigation.
-    /// Key format: "FullTypeName.NavigationName" (e.g., "MyApp.Entities.Student.Courses")
+    /// Key format: "TypeName.NavigationName" (e.g., "Student.Courses").
+    /// Uses the simple type name (Type.Name), not the fully-qualified namespace.
     /// Value: (Created count, Removed count) for that navigation.
     /// Empty if IncludeManyToMany is false.
     /// </summary>
