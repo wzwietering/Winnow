@@ -32,6 +32,11 @@ public class TestDbContext : DbContext
                 .HasMaxLength(100);
             entity.Property(e => e.Description)
                 .HasMaxLength(500);
+
+            entity.HasOne(c => c.ParentCategory)
+                .WithMany(c => c.SubCategories)
+                .HasForeignKey(c => c.ParentCategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Product>(entity =>

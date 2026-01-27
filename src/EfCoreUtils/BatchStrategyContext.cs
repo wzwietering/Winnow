@@ -85,8 +85,11 @@ internal class BatchStrategyContext<TEntity, TKey>
         TEntity entity, int maxDepth, DeleteGraphBatchOptions options) =>
         _validationService.ValidateCascadeBehaviorRecursive(entity, maxDepth, options);
 
-    internal void ValidateCircularReferences(TEntity entity, int maxDepth) =>
-        _validationService.ValidateCircularReferences(entity, maxDepth);
+    internal void ValidateCircularReferences(
+        TEntity entity,
+        int maxDepth,
+        CircularReferenceHandling handling = CircularReferenceHandling.Throw) =>
+        _validationService.ValidateCircularReferences(entity, maxDepth, handling);
 
     internal void ValidateReferencedEntitiesExist(TEntity entity, int maxDepth) =>
         _validationService.ValidateReferencedEntitiesExist(entity, maxDepth);

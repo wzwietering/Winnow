@@ -320,6 +320,64 @@ var result = saver.UpdateGraphBatch(new[] { student }, new GraphBatchOptions
 | `ManyToManyInsertBehavior` | `AttachExisting` | `AttachExisting` (assume related entities exist) or `InsertIfNew` (insert if default ID) |
 | `ValidateManyToManyEntitiesExist` | `true` | Validate related entities exist before creating join records |
 
+## Self-Referencing Hierarchies
+
+Graph operations support self-referencing entities (parent-child hierarchies within the same type).
+
+### Example: Category Hierarchy
+
+```csharp
+public class Category
+{
+    public int Id { get; set; }
+    public string Name { get; set; }
+    public int? ParentCategoryId { get; set; }
+    public Category? ParentCategory { get; set; }
+    public ICollection<Category> SubCategories { get; set; } = [];
+}
+
+// Insert complete hierarchy
+var saver = new BatchSaver<Category, int>(context);
+
+var electronics = new Category
+{
+    Name = "Electronics",
+    SubCategories =
+    [
+        new Category
+        {
+            Name = "Computers",
+            SubCategories =
+            [
+                new Category { Name = "Laptops" },
+                new Category { Name = "Desktops" }
+            ]
+        },
+        new Category { Name = "Phones" }
+    ]
+};
+
+var result = saver.InsertGraphBatch([electronics]);
+// All levels inserted with IDs populated
+```
+
+### Circular Reference Handling
+
+For bidirectional navigations (both Parent->Child and Child->Parent loaded):
+
+```csharp
+var result = saver.UpdateGraphBatch(categories, new GraphBatchOptions
+{
+    CircularReferenceHandling = CircularReferenceHandling.Ignore
+});
+```
+
+| Mode | Behavior |
+|------|----------|
+| `Throw` (default) | Exception on circular reference - prevents infinite loops |
+| `Ignore` | Process each entity once, skip revisits. Direct self-references still throw. |
+| `IgnoreAll` | Allow all patterns including direct self-references (rare use case) |
+
 ## Strategies
 
 | Strategy | Best For | Round Trips |

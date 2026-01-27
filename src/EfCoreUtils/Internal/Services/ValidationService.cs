@@ -251,15 +251,29 @@ internal class ValidationService<TEntity, TKey>
 
     // ========== Reference Validation Methods ==========
 
-    internal void ValidateCircularReferences(TEntity entity, int maxDepth)
+    internal void ValidateCircularReferences(
+        TEntity entity,
+        int maxDepth,
+        CircularReferenceHandling handling = CircularReferenceHandling.Throw)
     {
         var ctx = GraphTraversalContext.Create(maxDepth);
-        ValidateCircularReferencesRecursive(entity, 0, ctx);
+        ValidateCircularReferencesRecursive(entity, 0, ctx, handling);
     }
 
-    private void ValidateCircularReferencesRecursive(object entity, int currentDepth, GraphTraversalContext ctx)
+    private void ValidateCircularReferencesRecursive(
+        object entity,
+        int currentDepth,
+        GraphTraversalContext ctx,
+        CircularReferenceHandling handling)
     {
-        ThrowIfCircularReference(entity, currentDepth, ctx);
+        if (!ctx.TryVisit(entity))
+        {
+            if (handling == CircularReferenceHandling.Throw)
+            {
+                ThrowCircularReferenceException(entity, currentDepth);
+            }
+            return; // Already visited - skip for Ignore/IgnoreAll modes
+        }
 
         if (ctx.IsAtMaxDepth(currentDepth))
         {
@@ -267,17 +281,12 @@ internal class ValidationService<TEntity, TKey>
         }
 
         var entry = _context.Entry(entity);
-        ValidateCollectionReferencesRecursive(entry, currentDepth, ctx);
-        ValidateReferenceNavigationsRecursive(entry, currentDepth, ctx);
+        ValidateCollectionReferencesRecursive(entry, currentDepth, ctx, handling);
+        ValidateReferenceNavigationsRecursive(entry, currentDepth, ctx, handling);
     }
 
-    private void ThrowIfCircularReference(object entity, int currentDepth, GraphTraversalContext ctx)
+    private void ThrowCircularReferenceException(object entity, int currentDepth)
     {
-        if (ctx.TryVisit(entity))
-        {
-            return;
-        }
-
         var entry = _context.Entry(entity);
         var entityType = entry.Metadata.ClrType.Name;
         var entityId = _keyService.GetEntityIdFromEntry(entry);
@@ -288,32 +297,55 @@ internal class ValidationService<TEntity, TKey>
     }
 
     private void ValidateCollectionReferencesRecursive(
-        EntityEntry entry, int currentDepth, GraphTraversalContext ctx)
+        EntityEntry entry,
+        int currentDepth,
+        GraphTraversalContext ctx,
+        CircularReferenceHandling handling)
     {
         TraversalHelper.TraverseCollectionChildren(entry, child =>
-            ValidateCircularReferencesRecursive(child, currentDepth + 1, ctx), skipManyToMany: false);
+        {
+            ValidateSelfReferenceInCollection(entry, child, handling);
+            ValidateCircularReferencesRecursive(child, currentDepth + 1, ctx, handling);
+        }, skipManyToMany: false);
     }
 
+    private void ValidateSelfReferenceInCollection(
+        EntityEntry entry, object child, CircularReferenceHandling handling) =>
+        ThrowIfSelfReference(entry, child, handling,
+            "contains itself in a collection navigation. An entity cannot be its own child");
+
     private void ValidateReferenceNavigationsRecursive(
-        EntityEntry entry, int currentDepth, GraphTraversalContext ctx)
+        EntityEntry entry,
+        int currentDepth,
+        GraphTraversalContext ctx,
+        CircularReferenceHandling handling)
     {
         TraversalHelper.TraverseReferenceNavigations(entry, refEntity =>
         {
-            ValidateSelfReference(entry, refEntity);
-            ValidateCircularReferencesRecursive(refEntity, currentDepth + 1, ctx);
+            ValidateSelfReference(entry, refEntity, handling);
+            ValidateCircularReferencesRecursive(refEntity, currentDepth + 1, ctx, handling);
         });
     }
 
-    private void ValidateSelfReference(EntityEntry entry, object refEntity)
+    private void ValidateSelfReference(
+        EntityEntry entry, object refEntity, CircularReferenceHandling handling) =>
+        ThrowIfSelfReference(entry, refEntity, handling,
+            "directly references itself. An entity cannot be its own parent");
+
+    private void ThrowIfSelfReference(
+        EntityEntry entry,
+        object relatedEntity,
+        CircularReferenceHandling handling,
+        string errorDescription)
     {
-        if (ReferenceEquals(entry.Entity, refEntity))
-        {
-            var entityType = entry.Metadata.ClrType.Name;
-            var entityId = _keyService.GetEntityIdFromEntry(entry);
-            throw new InvalidOperationException(
-                $"Entity '{entityType}' (Id={entityId}) references itself. " +
-                $"Self-referential entities are not supported in graph batch operations.");
-        }
+        if (!ReferenceEquals(entry.Entity, relatedEntity)) return;
+        if (handling == CircularReferenceHandling.IgnoreAll) return;
+
+        var entityType = entry.Metadata.ClrType.Name;
+        var entityId = _keyService.GetEntityIdFromEntry(entry);
+        throw new InvalidOperationException(
+            $"Entity '{entityType}' (Id={entityId}) {errorDescription}. " +
+            $"If this is intentional, set CircularReferenceHandling to IgnoreAll.");
     }
 
     internal void ValidateReferencedEntitiesExist(TEntity entity, int maxDepth)
