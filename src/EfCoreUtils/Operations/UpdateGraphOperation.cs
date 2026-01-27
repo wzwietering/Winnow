@@ -35,10 +35,10 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
         {
             context.ValidateNoOrphanedChildrenRecursive(entity, _options.MaxDepth, _options);
 
-            if (_options.IncludeReferences &&
-                _options.CircularReferenceHandling == CircularReferenceHandling.Throw)
+            if (_options.IncludeReferences)
             {
-                context.ValidateCircularReferences(entity, _options.MaxDepth);
+                context.ValidateCircularReferences(
+                    entity, _options.MaxDepth, _options.CircularReferenceHandling);
             }
         }
     }
