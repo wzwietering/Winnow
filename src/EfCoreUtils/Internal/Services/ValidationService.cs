@@ -266,8 +266,12 @@ internal class ValidationService<TEntity, TKey>
         GraphTraversalContext ctx,
         CircularReferenceHandling handling)
     {
-        if (!TryVisitOrThrowIfCircular(entity, currentDepth, ctx, handling))
+        if (!ctx.TryVisit(entity))
         {
+            if (handling == CircularReferenceHandling.Throw)
+            {
+                ThrowCircularReferenceException(entity, currentDepth);
+            }
             return; // Already visited - skip for Ignore/IgnoreAll modes
         }
 
@@ -281,27 +285,15 @@ internal class ValidationService<TEntity, TKey>
         ValidateReferenceNavigationsRecursive(entry, currentDepth, ctx, handling);
     }
 
-    private bool TryVisitOrThrowIfCircular(
-        object entity, int currentDepth, GraphTraversalContext ctx, CircularReferenceHandling handling)
+    private void ThrowCircularReferenceException(object entity, int currentDepth)
     {
-        if (ctx.TryVisit(entity))
-        {
-            return true; // First visit - continue traversal
-        }
+        var entry = _context.Entry(entity);
+        var entityType = entry.Metadata.ClrType.Name;
+        var entityId = _keyService.GetEntityIdFromEntry(entry);
 
-        // Already visited - behavior depends on handling mode
-        if (handling == CircularReferenceHandling.Throw)
-        {
-            var entry = _context.Entry(entity);
-            var entityType = entry.Metadata.ClrType.Name;
-            var entityId = _keyService.GetEntityIdFromEntry(entry);
-
-            throw new InvalidOperationException(
-                $"Circular reference detected: Entity '{entityType}' (Id={entityId}) at depth {currentDepth} " +
-                $"was already visited. Set CircularReferenceHandling to Ignore to process each entity once.");
-        }
-
-        return false; // Ignore/IgnoreAll: skip already-visited entities
+        throw new InvalidOperationException(
+            $"Circular reference detected: Entity '{entityType}' (Id={entityId}) at depth {currentDepth} " +
+            $"was already visited. Set CircularReferenceHandling to Ignore to process each entity once.");
     }
 
     private void ValidateCollectionReferencesRecursive(
@@ -318,25 +310,9 @@ internal class ValidationService<TEntity, TKey>
     }
 
     private void ValidateSelfReferenceInCollection(
-        EntityEntry entry, object child, CircularReferenceHandling handling)
-    {
-        if (!ReferenceEquals(entry.Entity, child))
-        {
-            return;
-        }
-
-        if (handling == CircularReferenceHandling.IgnoreAll)
-        {
-            return;
-        }
-
-        var entityType = entry.Metadata.ClrType.Name;
-        var entityId = _keyService.GetEntityIdFromEntry(entry);
-        throw new InvalidOperationException(
-            $"Entity '{entityType}' (Id={entityId}) contains itself in a collection navigation. " +
-            $"An entity cannot be its own child. " +
-            $"If this is intentional, set CircularReferenceHandling to IgnoreAll.");
-    }
+        EntityEntry entry, object child, CircularReferenceHandling handling) =>
+        ThrowIfSelfReference(entry, child, handling,
+            "contains itself in a collection navigation. An entity cannot be its own child");
 
     private void ValidateReferenceNavigationsRecursive(
         EntityEntry entry,
@@ -351,23 +327,24 @@ internal class ValidationService<TEntity, TKey>
         });
     }
 
-    private void ValidateSelfReference(EntityEntry entry, object refEntity, CircularReferenceHandling handling)
-    {
-        if (!ReferenceEquals(entry.Entity, refEntity))
-        {
-            return;
-        }
+    private void ValidateSelfReference(
+        EntityEntry entry, object refEntity, CircularReferenceHandling handling) =>
+        ThrowIfSelfReference(entry, refEntity, handling,
+            "directly references itself. An entity cannot be its own parent");
 
-        if (handling == CircularReferenceHandling.IgnoreAll)
-        {
-            return;
-        }
+    private void ThrowIfSelfReference(
+        EntityEntry entry,
+        object relatedEntity,
+        CircularReferenceHandling handling,
+        string errorDescription)
+    {
+        if (!ReferenceEquals(entry.Entity, relatedEntity)) return;
+        if (handling == CircularReferenceHandling.IgnoreAll) return;
 
         var entityType = entry.Metadata.ClrType.Name;
         var entityId = _keyService.GetEntityIdFromEntry(entry);
         throw new InvalidOperationException(
-            $"Entity '{entityType}' (Id={entityId}) directly references itself. " +
-            $"An entity cannot be its own parent. " +
+            $"Entity '{entityType}' (Id={entityId}) {errorDescription}. " +
             $"If this is intentional, set CircularReferenceHandling to IgnoreAll.");
     }
 

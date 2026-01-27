@@ -80,12 +80,6 @@ public class SelfReferencingHierarchyTests : TestBase
         context.ChangeTracker.Clear();
     }
 
-    private Category LoadCategoryWithDescendants(TestDbContext context, int rootId, int maxDepth = 5)
-    {
-        var categories = context.Categories.ToList();
-        return categories.First(c => c.Id == rootId);
-    }
-
     #endregion
 
     #region Insert Hierarchy Tests (8 tests)
