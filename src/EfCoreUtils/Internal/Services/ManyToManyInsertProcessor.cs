@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace EfCoreUtils.Internal.Services;
 
@@ -121,29 +122,51 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
             return;
         }
 
-        var keyProperty = targetType.FindPrimaryKey()?.Properties.FirstOrDefault();
-        if (keyProperty == null)
+        var keyProperties = targetType.FindPrimaryKey()?.Properties;
+        if (keyProperties == null || keyProperties.Count == 0)
         {
             return;
         }
 
-        var entityMissingIds = CollectEntityMissingIds(navigation, keyProperty.Name, missingIds);
+        var entityMissingIds = CollectEntityMissingIds(navigation, keyProperties, missingIds);
         ThrowIfMissingIds(parentEntry, navigation, clrType, entityMissingIds);
     }
 
-    private static List<object> CollectEntityMissingIds(
-        NavigationEntry navigation, string keyPropertyName, HashSet<object> missingIds)
+    private List<object> CollectEntityMissingIds(
+        NavigationEntry navigation, IReadOnlyList<IProperty> keyProperties, HashSet<object> missingIds)
     {
         var entityMissingIds = new List<object>();
         foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
         {
-            var idValue = ExtractEntityId(item, keyPropertyName);
+            var itemEntry = _context.Entry(item);
+            var idValue = ExtractEntityId(itemEntry, keyProperties);
             if (idValue != null && missingIds.Contains(idValue))
             {
                 entityMissingIds.Add(idValue);
             }
         }
         return entityMissingIds;
+    }
+
+    private static object? ExtractEntityId(EntityEntry entry, IReadOnlyList<IProperty> keyProperties)
+    {
+        if (keyProperties.Count == 1)
+        {
+            return entry.Property(keyProperties[0].Name).CurrentValue;
+        }
+
+        var values = new object[keyProperties.Count];
+        for (var i = 0; i < keyProperties.Count; i++)
+        {
+            var value = entry.Property(keyProperties[i].Name).CurrentValue;
+            if (value == null)
+            {
+                return null;
+            }
+
+            values[i] = value;
+        }
+        return new CompositeKey(values);
     }
 
     private static void ThrowIfMissingIds(
@@ -210,41 +233,35 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
 
     private static bool HasTemporaryKey(EntityEntry entry)
     {
-        var keyProperty = entry.Metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
-        if (keyProperty == null)
+        var keyProperties = entry.Metadata.FindPrimaryKey()?.Properties;
+        if (keyProperties == null || keyProperties.Count == 0)
         {
             return false;
         }
 
-        return entry.Property(keyProperty.Name).IsTemporary;
+        return keyProperties.Any(p => entry.Property(p.Name).IsTemporary);
     }
 
     private static bool HasDefaultKey(EntityEntry entry)
     {
-        var keyProperty = entry.Metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
-        if (keyProperty == null)
+        var keyProperties = entry.Metadata.FindPrimaryKey()?.Properties;
+        if (keyProperties == null || keyProperties.Count == 0)
         {
             return false;
         }
 
-        var keyValue = entry.Property(keyProperty.Name).CurrentValue;
-        if (keyValue == null)
+        return keyProperties.All(p => IsDefaultValue(entry.Property(p.Name).CurrentValue, p.ClrType));
+    }
+
+    private static bool IsDefaultValue(object? value, Type clrType)
+    {
+        if (value == null)
         {
             return true;
         }
 
-        var defaultValue = keyProperty.ClrType.IsValueType
-            ? Activator.CreateInstance(keyProperty.ClrType)
-            : null;
-
-        return keyValue.Equals(defaultValue);
-    }
-
-    private static object? ExtractEntityId(object item, string keyPropertyName)
-    {
-        var itemType = item.GetType();
-        var prop = itemType.GetProperty(keyPropertyName);
-        return prop?.GetValue(item);
+        var defaultValue = clrType.IsValueType ? Activator.CreateInstance(clrType) : null;
+        return value.Equals(defaultValue);
     }
 
     private static int CountNavigationItems(NavigationEntry navigation) =>

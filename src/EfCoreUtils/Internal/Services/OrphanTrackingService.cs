@@ -91,15 +91,15 @@ internal class OrphanTrackingService<TEntity, TKey>
         TKey parentId)
     {
         var entityType = navigation.Metadata.TargetEntityType;
-        var keyProperty = entityType.FindPrimaryKey()?.Properties.FirstOrDefault();
+        var keyProperties = entityType.FindPrimaryKey()?.Properties;
 
-        if (keyProperty?.ClrType != typeof(TKey))
+        if (!IsCompatibleKeyType(keyProperties))
         {
             return;
         }
 
-        var fkProperty = NavigationPropertyHelper.GetForeignKeyProperty(navigation);
-        if (fkProperty == null)
+        var fkProperties = NavigationPropertyHelper.GetForeignKeyProperties(navigation);
+        if (fkProperties == null || fkProperties.Count == 0)
         {
             return;
         }
@@ -112,19 +112,78 @@ internal class OrphanTrackingService<TEntity, TKey>
 
         foreach (var trackedEntry in deletedEntries)
         {
-            var fkValue = trackedEntry.Property(fkProperty.Name).CurrentValue;
-            if (fkValue is not TKey childParentId || !childParentId.Equals(parentId))
+            if (!ForeignKeyMatchesParent(trackedEntry, fkProperties, parentId))
             {
                 continue;
             }
 
-            var keyValue = trackedEntry.Property(keyProperty.Name).CurrentValue;
+            var keyValue = ExtractKey(trackedEntry, keyProperties!);
             if (keyValue is TKey id)
             {
                 childIds.Add(id);
                 deletedChildren.Add(trackedEntry.Entity);
             }
         }
+    }
+
+    private static bool IsCompatibleKeyType(IReadOnlyList<IProperty>? keyProperties)
+    {
+        if (keyProperties == null || keyProperties.Count == 0)
+        {
+            return false;
+        }
+
+        if (keyProperties.Count == 1)
+        {
+            return keyProperties[0].ClrType == typeof(TKey);
+        }
+
+        return typeof(TKey) == typeof(CompositeKey);
+    }
+
+    private static object? ExtractKey(EntityEntry entry, IReadOnlyList<IProperty> keyProperties)
+    {
+        if (keyProperties.Count == 1)
+        {
+            return entry.Property(keyProperties[0].Name).CurrentValue;
+        }
+
+        var values = new object[keyProperties.Count];
+        for (var i = 0; i < keyProperties.Count; i++)
+        {
+            var value = entry.Property(keyProperties[i].Name).CurrentValue;
+            if (value == null)
+            {
+                return null;
+            }
+
+            values[i] = value;
+        }
+        return new CompositeKey(values);
+    }
+
+    private static bool ForeignKeyMatchesParent(
+        EntityEntry entry, IReadOnlyList<IProperty> fkProperties, TKey parentId)
+    {
+        if (typeof(TKey) == typeof(CompositeKey) && fkProperties.Count > 1)
+        {
+            var fkValues = new object[fkProperties.Count];
+            for (var i = 0; i < fkProperties.Count; i++)
+            {
+                var value = entry.Property(fkProperties[i].Name).CurrentValue;
+                if (value == null)
+                {
+                    return false;
+                }
+
+                fkValues[i] = value;
+            }
+            var fkKey = new CompositeKey(fkValues);
+            return fkKey.Equals((CompositeKey)(object)parentId);
+        }
+
+        var fkValue = entry.Property(fkProperties[0].Name).CurrentValue;
+        return fkValue is TKey key && key.Equals(parentId);
     }
 
     internal List<TKey> GetChildIds(TEntity entity)
@@ -155,10 +214,10 @@ internal class OrphanTrackingService<TEntity, TKey>
         foreach (var item in collection)
         {
             var itemEntry = _context.Entry(item);
-            var keyProperty = itemEntry.Metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
-            if (keyProperty?.ClrType == typeof(TKey))
+            var keyProperties = itemEntry.Metadata.FindPrimaryKey()?.Properties;
+            if (IsCompatibleKeyType(keyProperties))
             {
-                var keyValue = itemEntry.Property(keyProperty.Name).CurrentValue;
+                var keyValue = ExtractKey(itemEntry, keyProperties!);
                 if (keyValue is TKey id)
                 {
                     childIds.Add(id);
@@ -329,15 +388,15 @@ internal class OrphanTrackingService<TEntity, TKey>
         NavigationEntry navigation, (string Type, TKey Id) parentKey)
     {
         var entityType = navigation.Metadata.TargetEntityType;
-        var keyProperty = entityType.FindPrimaryKey()?.Properties.FirstOrDefault();
+        var keyProperties = entityType.FindPrimaryKey()?.Properties;
 
-        if (keyProperty?.ClrType != typeof(TKey))
+        if (!IsCompatibleKeyType(keyProperties))
         {
             return;
         }
 
-        var fkProperty = NavigationPropertyHelper.GetForeignKeyProperty(navigation);
-        if (fkProperty == null)
+        var fkProperties = NavigationPropertyHelper.GetForeignKeyProperties(navigation);
+        if (fkProperties == null || fkProperties.Count == 0)
         {
             return;
         }
@@ -350,21 +409,20 @@ internal class OrphanTrackingService<TEntity, TKey>
 
         foreach (var trackedEntry in deletedEntries)
         {
-            AddDeletedChildIfBelongsToParent(trackedEntry, fkProperty, parentKey, keyProperty);
+            AddDeletedChildIfBelongsToParent(trackedEntry, fkProperties, parentKey, keyProperties!);
         }
     }
 
     private void AddDeletedChildIfBelongsToParent(
-        EntityEntry trackedEntry, IProperty fkProperty,
-        (string Type, TKey Id) parentKey, IProperty keyProperty)
+        EntityEntry trackedEntry, IReadOnlyList<IProperty> fkProperties,
+        (string Type, TKey Id) parentKey, IReadOnlyList<IProperty> keyProperties)
     {
-        var fkValue = trackedEntry.Property(fkProperty.Name).CurrentValue;
-        if (fkValue is not TKey childParentId || !childParentId.Equals(parentKey.Id))
+        if (!ForeignKeyMatchesParent(trackedEntry, fkProperties, parentKey.Id))
         {
             return;
         }
 
-        var keyValue = trackedEntry.Property(keyProperty.Name).CurrentValue;
+        var keyValue = ExtractKey(trackedEntry, keyProperties);
         if (keyValue is not TKey childId)
         {
             return;

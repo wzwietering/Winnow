@@ -305,3 +305,147 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
         Stopwatch stopwatch,
         BatchStrategyContext<TEntity, TKey> context) => BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
 }
+
+/// <summary>
+/// Batch saver with auto-detected key type.
+/// All keys are returned as CompositeKey - use key.GetValue&lt;T&gt;(0) for simple keys.
+/// </summary>
+public class BatchSaver<TEntity> : IBatchSaver<TEntity>
+    where TEntity : class
+{
+    private readonly BatchSaver<TEntity, CompositeKey> _innerSaver;
+    private readonly bool _isCompositeKey;
+
+    public BatchSaver(DbContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var entityType = context.Model.FindEntityType(typeof(TEntity))
+            ?? throw new InvalidOperationException(
+                $"Entity type {typeof(TEntity).Name} is not part of the model for this DbContext.");
+
+        var keyProperties = entityType.FindPrimaryKey()?.Properties
+            ?? throw new InvalidOperationException(
+                $"Entity type {typeof(TEntity).Name} does not have a primary key defined.");
+
+        _isCompositeKey = keyProperties.Count > 1;
+        _innerSaver = new BatchSaver<TEntity, CompositeKey>(context);
+    }
+
+    /// <inheritdoc />
+    public bool IsCompositeKey => _isCompositeKey;
+
+    // === UPDATE OPERATIONS ===
+
+    /// <inheritdoc />
+    public BatchResult<CompositeKey> UpdateBatch(IEnumerable<TEntity> entities) =>
+        _innerSaver.UpdateBatch(entities);
+
+    /// <inheritdoc />
+    public BatchResult<CompositeKey> UpdateBatch(IEnumerable<TEntity> entities, BatchOptions options) =>
+        _innerSaver.UpdateBatch(entities, options);
+
+    /// <inheritdoc />
+    public Task<BatchResult<CompositeKey>> UpdateBatchAsync(
+        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
+        _innerSaver.UpdateBatchAsync(entities, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<BatchResult<CompositeKey>> UpdateBatchAsync(
+        IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default) =>
+        _innerSaver.UpdateBatchAsync(entities, options, cancellationToken);
+
+    /// <inheritdoc />
+    public BatchResult<CompositeKey> UpdateGraphBatch(IEnumerable<TEntity> entities) =>
+        _innerSaver.UpdateGraphBatch(entities);
+
+    /// <inheritdoc />
+    public BatchResult<CompositeKey> UpdateGraphBatch(IEnumerable<TEntity> entities, GraphBatchOptions options) =>
+        _innerSaver.UpdateGraphBatch(entities, options);
+
+    /// <inheritdoc />
+    public Task<BatchResult<CompositeKey>> UpdateGraphBatchAsync(
+        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
+        _innerSaver.UpdateGraphBatchAsync(entities, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<BatchResult<CompositeKey>> UpdateGraphBatchAsync(
+        IEnumerable<TEntity> entities, GraphBatchOptions options, CancellationToken cancellationToken = default) =>
+        _innerSaver.UpdateGraphBatchAsync(entities, options, cancellationToken);
+
+    // === INSERT OPERATIONS ===
+
+    /// <inheritdoc />
+    public InsertBatchResult<CompositeKey> InsertBatch(IEnumerable<TEntity> entities) =>
+        _innerSaver.InsertBatch(entities);
+
+    /// <inheritdoc />
+    public InsertBatchResult<CompositeKey> InsertBatch(IEnumerable<TEntity> entities, InsertBatchOptions options) =>
+        _innerSaver.InsertBatch(entities, options);
+
+    /// <inheritdoc />
+    public Task<InsertBatchResult<CompositeKey>> InsertBatchAsync(
+        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
+        _innerSaver.InsertBatchAsync(entities, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<InsertBatchResult<CompositeKey>> InsertBatchAsync(
+        IEnumerable<TEntity> entities, InsertBatchOptions options, CancellationToken cancellationToken = default) =>
+        _innerSaver.InsertBatchAsync(entities, options, cancellationToken);
+
+    /// <inheritdoc />
+    public InsertBatchResult<CompositeKey> InsertGraphBatch(IEnumerable<TEntity> entities) =>
+        _innerSaver.InsertGraphBatch(entities);
+
+    /// <inheritdoc />
+    public InsertBatchResult<CompositeKey> InsertGraphBatch(IEnumerable<TEntity> entities, InsertGraphBatchOptions options) =>
+        _innerSaver.InsertGraphBatch(entities, options);
+
+    /// <inheritdoc />
+    public Task<InsertBatchResult<CompositeKey>> InsertGraphBatchAsync(
+        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
+        _innerSaver.InsertGraphBatchAsync(entities, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<InsertBatchResult<CompositeKey>> InsertGraphBatchAsync(
+        IEnumerable<TEntity> entities, InsertGraphBatchOptions options, CancellationToken cancellationToken = default) =>
+        _innerSaver.InsertGraphBatchAsync(entities, options, cancellationToken);
+
+    // === DELETE OPERATIONS ===
+
+    /// <inheritdoc />
+    public BatchResult<CompositeKey> DeleteBatch(IEnumerable<TEntity> entities) =>
+        _innerSaver.DeleteBatch(entities);
+
+    /// <inheritdoc />
+    public BatchResult<CompositeKey> DeleteBatch(IEnumerable<TEntity> entities, DeleteBatchOptions options) =>
+        _innerSaver.DeleteBatch(entities, options);
+
+    /// <inheritdoc />
+    public Task<BatchResult<CompositeKey>> DeleteBatchAsync(
+        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
+        _innerSaver.DeleteBatchAsync(entities, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<BatchResult<CompositeKey>> DeleteBatchAsync(
+        IEnumerable<TEntity> entities, DeleteBatchOptions options, CancellationToken cancellationToken = default) =>
+        _innerSaver.DeleteBatchAsync(entities, options, cancellationToken);
+
+    /// <inheritdoc />
+    public BatchResult<CompositeKey> DeleteGraphBatch(IEnumerable<TEntity> entities) =>
+        _innerSaver.DeleteGraphBatch(entities);
+
+    /// <inheritdoc />
+    public BatchResult<CompositeKey> DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options) =>
+        _innerSaver.DeleteGraphBatch(entities, options);
+
+    /// <inheritdoc />
+    public Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(
+        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
+        _innerSaver.DeleteGraphBatchAsync(entities, cancellationToken);
+
+    /// <inheritdoc />
+    public Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(
+        IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default) =>
+        _innerSaver.DeleteGraphBatchAsync(entities, options, cancellationToken);
+}

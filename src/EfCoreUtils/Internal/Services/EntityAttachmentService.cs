@@ -244,12 +244,21 @@ internal class EntityAttachmentService<TEntity, TKey>
 
     private static object GetEntityIdFromEntry(EntityEntry entry)
     {
-        var keyProperty = entry.Metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
-        if (keyProperty == null)
+        var keyProperties = entry.Metadata.FindPrimaryKey()?.Properties;
+        if (keyProperties == null || keyProperties.Count == 0)
         {
             return "unknown";
         }
-        return entry.Property(keyProperty.Name).CurrentValue ?? "unknown";
+
+        if (keyProperties.Count == 1)
+        {
+            return entry.Property(keyProperties[0].Name).CurrentValue ?? "unknown";
+        }
+
+        var values = keyProperties
+            .Select(p => entry.Property(p.Name).CurrentValue ?? "null")
+            .ToArray();
+        return $"({string.Join(", ", values)})";
     }
 
     private void AttachChildrenWithReferences(

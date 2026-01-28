@@ -48,9 +48,13 @@ public class StrategyComparisonTests : TestBase
         for (int i = 0; i < productsToUpdate.Count; i++)
         {
             if (i % 100 == 0)
+            {
                 productsToUpdate[i].Price = -10.00m;
+            }
             else
+            {
                 productsToUpdate[i].Price += 1.00m;
+            }
         }
 
         var oneByOneResult = RunWithStrategy(context, productsToUpdate, BatchStrategy.OneByOne);
@@ -60,9 +64,13 @@ public class StrategyComparisonTests : TestBase
         for (int i = 0; i < productsToUpdate2.Count; i++)
         {
             if (i % 100 == 0)
+            {
                 productsToUpdate2[i].Price = -10.00m;
+            }
             else
+            {
                 productsToUpdate2[i].Price += 1.00m;
+            }
         }
         var divideAndConquerResult = RunWithStrategy(context, productsToUpdate2, BatchStrategy.DivideAndConquer);
 
@@ -84,9 +92,13 @@ public class StrategyComparisonTests : TestBase
         for (int i = 0; i < productsToUpdate.Count; i++)
         {
             if (i % 20 == 0)
+            {
                 productsToUpdate[i].Price = -10.00m;
+            }
             else
+            {
                 productsToUpdate[i].Price += 1.00m;
+            }
         }
 
         var oneByOneResult = RunWithStrategy(context, productsToUpdate, BatchStrategy.OneByOne);
@@ -96,9 +108,13 @@ public class StrategyComparisonTests : TestBase
         for (int i = 0; i < productsToUpdate2.Count; i++)
         {
             if (i % 20 == 0)
+            {
                 productsToUpdate2[i].Price = -10.00m;
+            }
             else
+            {
                 productsToUpdate2[i].Price += 1.00m;
+            }
         }
         var divideAndConquerResult = RunWithStrategy(context, productsToUpdate2, BatchStrategy.DivideAndConquer);
 
@@ -121,9 +137,13 @@ public class StrategyComparisonTests : TestBase
         for (int i = 0; i < productsToUpdate.Count; i++)
         {
             if (i % 4 == 0)
+            {
                 productsToUpdate[i].Price = -10.00m;
+            }
             else
+            {
                 productsToUpdate[i].Price += 1.00m;
+            }
         }
 
         var oneByOneResult = RunWithStrategy(context, productsToUpdate, BatchStrategy.OneByOne);
@@ -133,9 +153,13 @@ public class StrategyComparisonTests : TestBase
         for (int i = 0; i < productsToUpdate2.Count; i++)
         {
             if (i % 4 == 0)
+            {
                 productsToUpdate2[i].Price = -10.00m;
+            }
             else
+            {
                 productsToUpdate2[i].Price += 1.00m;
+            }
         }
         var divideAndConquerResult = RunWithStrategy(context, productsToUpdate2, BatchStrategy.DivideAndConquer);
 
@@ -158,9 +182,13 @@ public class StrategyComparisonTests : TestBase
         for (int i = 0; i < productsToUpdate.Count; i++)
         {
             if (i % 2 == 0)
+            {
                 productsToUpdate[i].Price = -10.00m;
+            }
             else
+            {
                 productsToUpdate[i].Price += 1.00m;
+            }
         }
 
         var oneByOneResult = RunWithStrategy(context, productsToUpdate, BatchStrategy.OneByOne);
@@ -170,9 +198,13 @@ public class StrategyComparisonTests : TestBase
         for (int i = 0; i < productsToUpdate2.Count; i++)
         {
             if (i % 2 == 0)
+            {
                 productsToUpdate2[i].Price = -10.00m;
+            }
             else
+            {
                 productsToUpdate2[i].Price += 1.00m;
+            }
         }
         var divideAndConquerResult = RunWithStrategy(context, productsToUpdate2, BatchStrategy.DivideAndConquer);
 

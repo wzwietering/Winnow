@@ -19,7 +19,12 @@ internal static class NavigationPropertyHelper
 
     internal static IProperty? GetForeignKeyProperty(NavigationEntry navigation) =>
         navigation.Metadata is INavigation navMetadata ?
-        (navMetadata.ForeignKey?.Properties.FirstOrDefault()) :
+        navMetadata.ForeignKey?.Properties.FirstOrDefault() :
+        null;
+
+    internal static IReadOnlyList<IProperty>? GetForeignKeyProperties(NavigationEntry navigation) =>
+        navigation.Metadata is INavigation navMetadata ?
+        navMetadata.ForeignKey?.Properties :
         null;
 
     /// <summary>

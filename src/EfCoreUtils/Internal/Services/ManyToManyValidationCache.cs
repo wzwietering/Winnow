@@ -96,8 +96,8 @@ internal class ManyToManyValidationCache<TEntity, TKey>
         NavigationEntry navigation, Dictionary<Type, (IEntityType Metadata, HashSet<object> Ids)> idsByTargetType)
     {
         var targetType = navigation.Metadata.TargetEntityType;
-        var keyProperty = targetType.FindPrimaryKey()?.Properties.FirstOrDefault();
-        if (keyProperty == null)
+        var keyProperties = targetType.FindPrimaryKey()?.Properties;
+        if (keyProperties == null || keyProperties.Count == 0)
         {
             return;
         }
@@ -107,7 +107,7 @@ internal class ManyToManyValidationCache<TEntity, TKey>
 
         foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
         {
-            var idValue = ExtractEntityId(item, keyProperty.Name);
+            var idValue = ExtractEntityId(item, keyProperties);
             if (idValue != null)
             {
                 idSet.Add(idValue);
@@ -127,11 +127,29 @@ internal class ManyToManyValidationCache<TEntity, TKey>
         return existing.Ids;
     }
 
-    private static object? ExtractEntityId(object item, string keyPropertyName)
+    private static object? ExtractEntityId(object item, IReadOnlyList<IProperty> keyProperties)
     {
         var itemType = item.GetType();
-        var prop = itemType.GetProperty(keyPropertyName);
-        return prop?.GetValue(item);
+
+        if (keyProperties.Count == 1)
+        {
+            var prop = itemType.GetProperty(keyProperties[0].Name);
+            return prop?.GetValue(item);
+        }
+
+        var values = new object[keyProperties.Count];
+        for (var i = 0; i < keyProperties.Count; i++)
+        {
+            var prop = itemType.GetProperty(keyProperties[i].Name);
+            var value = prop?.GetValue(item);
+            if (value == null)
+            {
+                return null;
+            }
+
+            values[i] = value;
+        }
+        return new CompositeKey(values);
     }
 
     private void CollectChildRelatedIds(
@@ -181,16 +199,23 @@ internal class ManyToManyValidationCache<TEntity, TKey>
             return [];
         }
 
-        var keyProperty = GetKeyPropertyOrNull(metadata);
-        if (keyProperty == null)
+        var keyProperties = GetKeyPropertiesOrNull(metadata);
+        if (keyProperties == null || keyProperties.Count == 0)
         {
             return [];
         }
 
-        var existingIds = _queryService.QueryExistingIds(clrType, keyProperty.Name, ids.ToList());
+        // For composite keys, skip database validation for now
+        // The query service currently only supports single-column key queries
+        if (keyProperties.Count > 1)
+        {
+            return [];
+        }
+
+        var existingIds = _queryService.QueryExistingIds(clrType, keyProperties[0].Name, ids.ToList());
         return ids.Except(existingIds).ToHashSet();
     }
 
-    private static IProperty? GetKeyPropertyOrNull(IEntityType metadata) =>
-        metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
+    private static IReadOnlyList<IProperty>? GetKeyPropertiesOrNull(IEntityType metadata) =>
+        metadata.FindPrimaryKey()?.Properties;
 }

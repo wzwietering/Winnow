@@ -264,9 +264,14 @@ public class TestDbContext : DbContext
         foreach (var product in products)
         {
             if (product.Price <= 0)
+            {
                 throw new InvalidOperationException($"{typeName} {product.DisplayId}: Price must be greater than 0");
+            }
+
             if (product.Stock < 0)
+            {
                 throw new InvalidOperationException($"{typeName} {product.DisplayId}: Stock cannot be negative");
+            }
         }
     }
 
@@ -279,9 +284,14 @@ public class TestDbContext : DbContext
         foreach (var order in orders)
         {
             if (order.TotalAmount < 0)
+            {
                 throw new InvalidOperationException($"CustomerOrder {order.Id}: TotalAmount cannot be negative");
+            }
+
             if (string.IsNullOrWhiteSpace(order.CustomerName))
+            {
                 throw new InvalidOperationException($"CustomerOrder {order.Id}: CustomerName is required");
+            }
         }
     }
 
@@ -294,15 +304,25 @@ public class TestDbContext : DbContext
         foreach (var item in items)
         {
             if (item.Quantity <= 0)
+            {
                 throw new InvalidOperationException($"OrderItem {item.Id}: Quantity must be greater than 0");
+            }
+
             if (item.UnitPrice < 0)
+            {
                 throw new InvalidOperationException($"OrderItem {item.Id}: UnitPrice cannot be negative");
+            }
+
             if (item.Subtotal < 0)
+            {
                 throw new InvalidOperationException($"OrderItem {item.Id}: Subtotal cannot be negative");
+            }
 
             var expectedSubtotal = item.Quantity * item.UnitPrice;
             if (Math.Abs(item.Subtotal - expectedSubtotal) > 0.01m)
+            {
                 throw new InvalidOperationException($"OrderItem {item.Id}: Subtotal mismatch");
+            }
         }
     }
 
@@ -315,11 +335,16 @@ public class TestDbContext : DbContext
         foreach (var reservation in reservations)
         {
             if (reservation.ReservedQuantity <= 0)
+            {
                 throw new InvalidOperationException(
                     $"ItemReservation {reservation.Id}: ReservedQuantity must be greater than 0");
+            }
+
             if (string.IsNullOrWhiteSpace(reservation.WarehouseLocation))
+            {
                 throw new InvalidOperationException(
                     $"ItemReservation {reservation.Id}: WarehouseLocation is required");
+            }
         }
     }
 }
