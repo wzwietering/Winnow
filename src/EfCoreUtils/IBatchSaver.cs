@@ -53,6 +53,86 @@ public interface IBatchSaver<TEntity, TKey>
     Task<BatchResult<TKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default);
 }
 
+/// <summary>
+/// Batch saver interface that automatically detects entity key type at runtime.
+/// </summary>
+/// <remarks>
+/// <para>
+/// This interface provides batch operations for entities where the key type is determined
+/// at runtime. All results return <see cref="CompositeKey"/> to maintain a consistent API surface.
+/// </para>
+/// <para>
+/// <strong>When to use:</strong> Use this when working with entities that have composite keys,
+/// or when the key type isn't known at compile time.
+/// </para>
+/// <para>
+/// <strong>When NOT to use:</strong> For entities with known simple keys (int, long, Guid),
+/// prefer <see cref="IBatchSaver{TEntity, TKey}"/> for better type safety.
+/// </para>
+/// <para>
+/// <strong>Example (simple key):</strong>
+/// <code>
+/// var saver = new BatchSaver&lt;Product&gt;(context);
+/// var result = saver.InsertBatch(products);
+/// int id = result.InsertedIds[0].GetValue&lt;int&gt;(0);
+/// </code>
+/// </para>
+/// <para>
+/// <strong>Example (composite key):</strong>
+/// <code>
+/// var saver = new BatchSaver&lt;OrderLine&gt;(context);
+/// var result = saver.InsertBatch(orderLines);
+/// int orderId = result.InsertedIds[0].GetValue&lt;int&gt;(0);
+/// int lineNum = result.InsertedIds[0].GetValue&lt;int&gt;(1);
+/// </code>
+/// </para>
+/// </remarks>
+/// <typeparam name="TEntity">The entity type to save</typeparam>
+public interface IBatchSaver<TEntity>
+    where TEntity : class
+{
+    /// <summary>
+    /// Returns true if the entity has a composite primary key (more than one column).
+    /// </summary>
+    bool IsCompositeKey { get; }
+
+    // === UPDATE OPERATIONS ===
+
+    BatchResult<CompositeKey> UpdateBatch(IEnumerable<TEntity> entities);
+    BatchResult<CompositeKey> UpdateBatch(IEnumerable<TEntity> entities, BatchOptions options);
+    Task<BatchResult<CompositeKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    Task<BatchResult<CompositeKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default);
+
+    BatchResult<CompositeKey> UpdateGraphBatch(IEnumerable<TEntity> entities);
+    BatchResult<CompositeKey> UpdateGraphBatch(IEnumerable<TEntity> entities, GraphBatchOptions options);
+    Task<BatchResult<CompositeKey>> UpdateGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    Task<BatchResult<CompositeKey>> UpdateGraphBatchAsync(IEnumerable<TEntity> entities, GraphBatchOptions options, CancellationToken cancellationToken = default);
+
+    // === INSERT OPERATIONS ===
+
+    InsertBatchResult<CompositeKey> InsertBatch(IEnumerable<TEntity> entities);
+    InsertBatchResult<CompositeKey> InsertBatch(IEnumerable<TEntity> entities, InsertBatchOptions options);
+    Task<InsertBatchResult<CompositeKey>> InsertBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    Task<InsertBatchResult<CompositeKey>> InsertBatchAsync(IEnumerable<TEntity> entities, InsertBatchOptions options, CancellationToken cancellationToken = default);
+
+    InsertBatchResult<CompositeKey> InsertGraphBatch(IEnumerable<TEntity> entities);
+    InsertBatchResult<CompositeKey> InsertGraphBatch(IEnumerable<TEntity> entities, InsertGraphBatchOptions options);
+    Task<InsertBatchResult<CompositeKey>> InsertGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    Task<InsertBatchResult<CompositeKey>> InsertGraphBatchAsync(IEnumerable<TEntity> entities, InsertGraphBatchOptions options, CancellationToken cancellationToken = default);
+
+    // === DELETE OPERATIONS ===
+
+    BatchResult<CompositeKey> DeleteBatch(IEnumerable<TEntity> entities);
+    BatchResult<CompositeKey> DeleteBatch(IEnumerable<TEntity> entities, DeleteBatchOptions options);
+    Task<BatchResult<CompositeKey>> DeleteBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    Task<BatchResult<CompositeKey>> DeleteBatchAsync(IEnumerable<TEntity> entities, DeleteBatchOptions options, CancellationToken cancellationToken = default);
+
+    BatchResult<CompositeKey> DeleteGraphBatch(IEnumerable<TEntity> entities);
+    BatchResult<CompositeKey> DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options);
+    Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default);
+}
+
 public class BatchOptions
 {
     public BatchStrategy Strategy { get; set; } = BatchStrategy.OneByOne;

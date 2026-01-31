@@ -21,7 +21,47 @@ internal class ValidationService<TEntity, TKey>
         { typeof(Guid), v => v is Guid g && g == Guid.Empty },
         { typeof(Guid?), v => v is Guid g && g == Guid.Empty },
         { typeof(string), v => v is string s && string.IsNullOrEmpty(s) },
+        { typeof(CompositeKey), v => v is CompositeKey ck && IsCompositeKeyDefault(ck) },
     };
+
+    private static bool IsCompositeKeyDefault(CompositeKey key)
+    {
+        if (key.Count == 0)
+        {
+            return true;
+        }
+
+        foreach (var value in key.Values)
+        {
+            if (!IsComponentDefault(value))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsComponentDefault(object? value)
+    {
+        if (value == null)
+        {
+            return true;
+        }
+
+        var type = value.GetType();
+        if (DefaultValueCheckers.TryGetValue(type, out var checker))
+        {
+            return checker(value);
+        }
+
+        if (type.IsValueType)
+        {
+            return value.Equals(Activator.CreateInstance(type));
+        }
+
+        return false;
+    }
 
     private readonly DbContext _context;
     private readonly EntityKeyService<TEntity, TKey> _keyService;
@@ -338,8 +378,15 @@ internal class ValidationService<TEntity, TKey>
         CircularReferenceHandling handling,
         string errorDescription)
     {
-        if (!ReferenceEquals(entry.Entity, relatedEntity)) return;
-        if (handling == CircularReferenceHandling.IgnoreAll) return;
+        if (!ReferenceEquals(entry.Entity, relatedEntity))
+        {
+            return;
+        }
+
+        if (handling == CircularReferenceHandling.IgnoreAll)
+        {
+            return;
+        }
 
         var entityType = entry.Metadata.ClrType.Name;
         var entityId = _keyService.GetEntityIdFromEntry(entry);

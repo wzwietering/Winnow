@@ -8,6 +8,13 @@ namespace EfCoreUtils.Internal.Services;
 /// Service for pre-validating many-to-many entity existence and caching results.
 /// Performs batched queries to minimize database round trips.
 /// </summary>
+/// <remarks>
+/// <para>
+/// <strong>Limitation:</strong> Many-to-many validation is currently not supported for entities
+/// with composite primary keys. When a related entity has a composite key, validation is skipped
+/// unless <see cref="InsertGraphBatchOptions.ThrowOnUnsupportedValidation"/> is set to true.
+/// </para>
+/// </remarks>
 internal class ManyToManyValidationCache<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
@@ -15,6 +22,7 @@ internal class ManyToManyValidationCache<TEntity, TKey>
     private readonly DbContext _context;
     private readonly ManyToManyIdQueryService _queryService;
     private Dictionary<Type, HashSet<object>> _missingIdsByType = [];
+    private bool _throwOnUnsupportedValidation;
 
     internal ManyToManyValidationCache(DbContext context, ManyToManyIdQueryService queryService)
     {
@@ -29,6 +37,7 @@ internal class ManyToManyValidationCache<TEntity, TKey>
         ArgumentNullException.ThrowIfNull(options);
 
         _missingIdsByType.Clear();
+        _throwOnUnsupportedValidation = options.ThrowOnUnsupportedValidation;
 
         if (!options.ValidateManyToManyEntitiesExist ||
             options.ManyToManyInsertBehavior != ManyToManyInsertBehavior.AttachExisting)
@@ -96,8 +105,8 @@ internal class ManyToManyValidationCache<TEntity, TKey>
         NavigationEntry navigation, Dictionary<Type, (IEntityType Metadata, HashSet<object> Ids)> idsByTargetType)
     {
         var targetType = navigation.Metadata.TargetEntityType;
-        var keyProperty = targetType.FindPrimaryKey()?.Properties.FirstOrDefault();
-        if (keyProperty == null)
+        var keyProperties = targetType.FindPrimaryKey()?.Properties;
+        if (keyProperties == null || keyProperties.Count == 0)
         {
             return;
         }
@@ -107,7 +116,7 @@ internal class ManyToManyValidationCache<TEntity, TKey>
 
         foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
         {
-            var idValue = ExtractEntityId(item, keyProperty.Name);
+            var idValue = CompositeKeyHelper.ExtractEntityId(item, keyProperties);
             if (idValue != null)
             {
                 idSet.Add(idValue);
@@ -125,13 +134,6 @@ internal class ManyToManyValidationCache<TEntity, TKey>
             idsByTargetType[clrType] = existing;
         }
         return existing.Ids;
-    }
-
-    private static object? ExtractEntityId(object item, string keyPropertyName)
-    {
-        var itemType = item.GetType();
-        var prop = itemType.GetProperty(keyPropertyName);
-        return prop?.GetValue(item);
     }
 
     private void CollectChildRelatedIds(
@@ -181,16 +183,36 @@ internal class ManyToManyValidationCache<TEntity, TKey>
             return [];
         }
 
-        var keyProperty = GetKeyPropertyOrNull(metadata);
-        if (keyProperty == null)
+        var keyProperties = GetKeyPropertiesOrNull(metadata);
+        if (keyProperties == null || keyProperties.Count == 0)
         {
             return [];
         }
 
-        var existingIds = _queryService.QueryExistingIds(clrType, keyProperty.Name, ids.ToList());
+        if (keyProperties.Count > 1)
+        {
+            return HandleCompositeKeyValidation(clrType, ids.Count);
+        }
+
+        var existingIds = _queryService.QueryExistingIds(clrType, keyProperties[0].Name, ids.ToList());
         return ids.Except(existingIds).ToHashSet();
     }
 
-    private static IProperty? GetKeyPropertyOrNull(IEntityType metadata) =>
-        metadata.FindPrimaryKey()?.Properties.FirstOrDefault();
+    private HashSet<object> HandleCompositeKeyValidation(Type clrType, int entityCount)
+    {
+        if (_throwOnUnsupportedValidation)
+        {
+            throw new NotSupportedException(
+                $"Many-to-many validation for entities with composite keys is not yet supported. " +
+                $"Entity type '{clrType.Name}' has a composite primary key and {entityCount} related entity(ies) " +
+                $"could not be validated for existence. " +
+                $"Set InsertGraphBatchOptions.ThrowOnUnsupportedValidation=false to skip validation silently, " +
+                $"or set ValidateManyToManyEntitiesExist=false to disable validation entirely.");
+        }
+
+        return [];
+    }
+
+    private static IReadOnlyList<IProperty>? GetKeyPropertiesOrNull(IEntityType metadata) =>
+        metadata.FindPrimaryKey()?.Properties;
 }

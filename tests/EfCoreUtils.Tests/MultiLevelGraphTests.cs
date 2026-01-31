@@ -304,9 +304,14 @@ public class MultiLevelGraphTests : TestBase
         context.ChangeTracker.Clear();
         context.CustomerOrders.Find(orderId).ShouldBeNull();
         foreach (var itemId in itemIds)
+        {
             context.OrderItems.Find(itemId).ShouldBeNull();
+        }
+
         foreach (var reservationId in reservationIds)
+        {
             context.ItemReservations.Find(reservationId).ShouldBeNull();
+        }
     }
 
     [Fact]

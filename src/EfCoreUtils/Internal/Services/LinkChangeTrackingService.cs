@@ -103,9 +103,9 @@ internal class LinkChangeTrackingService<TEntity, TKey>
     {
         var ids = new HashSet<object>();
         var targetType = navigation.Metadata.TargetEntityType;
-        var keyProperty = targetType.FindPrimaryKey()?.Properties.FirstOrDefault();
+        var keyProperties = targetType.FindPrimaryKey()?.Properties;
 
-        if (keyProperty == null)
+        if (keyProperties == null || keyProperties.Count == 0)
         {
             return ids;
         }
@@ -113,7 +113,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
         foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
         {
             var itemEntry = _context.Entry(item);
-            var idValue = itemEntry.Property(keyProperty.Name).CurrentValue;
+            var idValue = CompositeKeyHelper.ExtractEntityId(itemEntry, keyProperties);
             if (idValue != null)
             {
                 ids.Add(idValue);
@@ -251,27 +251,27 @@ internal class LinkChangeTrackingService<TEntity, TKey>
         NavigationEntry navigation, HashSet<object> removedIds,
         ManyToManyStatisticsTracker tracker, string entityTypeName, string navName)
     {
-        var keyProperty = GetNavigationKeyProperty(navigation);
-        if (keyProperty == null)
+        var keyProperties = GetNavigationKeyProperties(navigation);
+        if (keyProperties == null || keyProperties.Count == 0)
         {
             return;
         }
 
         foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
         {
-            TryMarkJoinItemAsDeleted(item, keyProperty, removedIds, tracker, entityTypeName, navName);
+            TryMarkJoinItemAsDeleted(item, keyProperties, removedIds, tracker, entityTypeName, navName);
         }
     }
 
-    private static IProperty? GetNavigationKeyProperty(NavigationEntry navigation) =>
-        navigation.Metadata.TargetEntityType.FindPrimaryKey()?.Properties.FirstOrDefault();
+    private static IReadOnlyList<IProperty>? GetNavigationKeyProperties(NavigationEntry navigation) =>
+        navigation.Metadata.TargetEntityType.FindPrimaryKey()?.Properties;
 
     private void TryMarkJoinItemAsDeleted(
-        object item, IProperty keyProperty, HashSet<object> removedIds,
+        object item, IReadOnlyList<IProperty> keyProperties, HashSet<object> removedIds,
         ManyToManyStatisticsTracker tracker, string entityTypeName, string navName)
     {
         var itemEntry = _context.Entry(item);
-        var idValue = itemEntry.Property(keyProperty.Name).CurrentValue;
+        var idValue = CompositeKeyHelper.ExtractEntityId(itemEntry, keyProperties);
 
         if (idValue != null && removedIds.Contains(idValue))
         {

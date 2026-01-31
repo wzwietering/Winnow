@@ -479,7 +479,10 @@ public class SelfReferencingHierarchyTests : TestBase
             CreateTwoLevelHierarchy("Root1", 2),
             CreateTwoLevelHierarchy("Root2", 2)
         };
-        foreach (var r in roots) SeedCategoryHierarchy(context, r);
+        foreach (var r in roots)
+        {
+            SeedCategoryHierarchy(context, r);
+        }
 
         var loaded = context.Categories
             .Include(c => c.SubCategories)
@@ -508,7 +511,10 @@ public class SelfReferencingHierarchyTests : TestBase
         var roots = Enumerable.Range(1, 4)
             .Select(i => CreateTwoLevelHierarchy($"Root{i}", 2))
             .ToList();
-        foreach (var r in roots) SeedCategoryHierarchy(context, r);
+        foreach (var r in roots)
+        {
+            SeedCategoryHierarchy(context, r);
+        }
 
         var loaded = context.Categories
             .Include(c => c.SubCategories)
@@ -636,7 +642,10 @@ public class SelfReferencingHierarchyTests : TestBase
         using var context = CreateContext();
         var root1 = CreateTwoLevelHierarchy("Root1", 2);
         var root2 = CreateTwoLevelHierarchy("Root2", 2);
-        foreach (var r in new[] { root1, root2 }) SeedCategoryHierarchy(context, r);
+        foreach (var r in new[] { root1, root2 })
+        {
+            SeedCategoryHierarchy(context, r);
+        }
 
         var loaded = context.Categories
             .Include(c => c.SubCategories)

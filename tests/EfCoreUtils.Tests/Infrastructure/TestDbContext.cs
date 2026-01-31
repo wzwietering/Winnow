@@ -17,6 +17,9 @@ public class TestDbContext : DbContext
     public DbSet<Student> Students => Set<Student>();
     public DbSet<Course> Courses => Set<Course>();
     public DbSet<Enrollment> Enrollments => Set<Enrollment>();
+    public DbSet<OrderLine> OrderLines => Set<OrderLine>();
+    public DbSet<OrderLineNote> OrderLineNotes => Set<OrderLineNote>();
+    public DbSet<InventoryLocation> InventoryLocations => Set<InventoryLocation>();
 
     public TestDbContext(DbContextOptions<TestDbContext> options) : base(options)
     {
@@ -227,6 +230,52 @@ public class TestDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<OrderLine>(entity =>
+        {
+            entity.HasKey(ol => new { ol.OrderId, ol.LineNumber });
+            entity.Property(ol => ol.UnitPrice).HasPrecision(18, 2);
+            entity.Property(ol => ol.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            entity.HasOne(ol => ol.Order)
+                .WithMany()
+                .HasForeignKey(ol => ol.OrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(ol => ol.Product)
+                .WithMany()
+                .HasForeignKey(ol => ol.ProductId)
+                .IsRequired(false);
+        });
+
+        modelBuilder.Entity<OrderLineNote>(entity =>
+        {
+            entity.HasKey(n => n.Id);
+            entity.Property(n => n.Note).IsRequired().HasMaxLength(500);
+            entity.Property(n => n.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+
+            entity.HasOne(n => n.OrderLine)
+                .WithMany(ol => ol.Notes)
+                .HasForeignKey(n => new { n.OrderId, n.LineNumber })
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<InventoryLocation>(entity =>
+        {
+            entity.HasKey(il => new { il.WarehouseCode, il.AisleNumber, il.BinCode });
+            entity.Property(il => il.WarehouseCode).HasMaxLength(10);
+            entity.Property(il => il.BinCode).HasMaxLength(10);
+            entity.Property(il => il.Version)
+                .IsRequired()
+                .IsRowVersion()
+                .HasDefaultValue(new byte[] { 0, 0, 0, 0, 0, 0, 0, 0 });
+        });
+
         base.OnModelCreating(modelBuilder);
     }
 
@@ -251,6 +300,7 @@ public class TestDbContext : DbContext
         ValidateCustomerOrders();
         ValidateOrderItems();
         ValidateItemReservations();
+        ValidateOrderLines();
     }
 
     private void ValidateProductEntities<TProduct>() where TProduct : class, IProductEntity
@@ -264,9 +314,14 @@ public class TestDbContext : DbContext
         foreach (var product in products)
         {
             if (product.Price <= 0)
+            {
                 throw new InvalidOperationException($"{typeName} {product.DisplayId}: Price must be greater than 0");
+            }
+
             if (product.Stock < 0)
+            {
                 throw new InvalidOperationException($"{typeName} {product.DisplayId}: Stock cannot be negative");
+            }
         }
     }
 
@@ -279,9 +334,14 @@ public class TestDbContext : DbContext
         foreach (var order in orders)
         {
             if (order.TotalAmount < 0)
+            {
                 throw new InvalidOperationException($"CustomerOrder {order.Id}: TotalAmount cannot be negative");
+            }
+
             if (string.IsNullOrWhiteSpace(order.CustomerName))
+            {
                 throw new InvalidOperationException($"CustomerOrder {order.Id}: CustomerName is required");
+            }
         }
     }
 
@@ -294,15 +354,25 @@ public class TestDbContext : DbContext
         foreach (var item in items)
         {
             if (item.Quantity <= 0)
+            {
                 throw new InvalidOperationException($"OrderItem {item.Id}: Quantity must be greater than 0");
+            }
+
             if (item.UnitPrice < 0)
+            {
                 throw new InvalidOperationException($"OrderItem {item.Id}: UnitPrice cannot be negative");
+            }
+
             if (item.Subtotal < 0)
+            {
                 throw new InvalidOperationException($"OrderItem {item.Id}: Subtotal cannot be negative");
+            }
 
             var expectedSubtotal = item.Quantity * item.UnitPrice;
             if (Math.Abs(item.Subtotal - expectedSubtotal) > 0.01m)
+            {
                 throw new InvalidOperationException($"OrderItem {item.Id}: Subtotal mismatch");
+            }
         }
     }
 
@@ -315,11 +385,38 @@ public class TestDbContext : DbContext
         foreach (var reservation in reservations)
         {
             if (reservation.ReservedQuantity <= 0)
+            {
                 throw new InvalidOperationException(
                     $"ItemReservation {reservation.Id}: ReservedQuantity must be greater than 0");
+            }
+
             if (string.IsNullOrWhiteSpace(reservation.WarehouseLocation))
+            {
                 throw new InvalidOperationException(
                     $"ItemReservation {reservation.Id}: WarehouseLocation is required");
+            }
+        }
+    }
+
+    private void ValidateOrderLines()
+    {
+        var items = ChangeTracker.Entries<OrderLine>()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
+            .Select(e => e.Entity);
+
+        foreach (var item in items)
+        {
+            if (item.Quantity <= 0)
+            {
+                throw new InvalidOperationException(
+                    $"OrderLine ({item.OrderId}, {item.LineNumber}): Quantity must be greater than 0");
+            }
+
+            if (item.UnitPrice < 0)
+            {
+                throw new InvalidOperationException(
+                    $"OrderLine ({item.OrderId}, {item.LineNumber}): UnitPrice cannot be negative");
+            }
         }
     }
 }
