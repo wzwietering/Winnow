@@ -113,7 +113,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
         foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
         {
             var itemEntry = _context.Entry(item);
-            var idValue = ExtractEntityId(itemEntry, keyProperties);
+            var idValue = CompositeKeyHelper.ExtractEntityId(itemEntry, keyProperties);
             if (idValue != null)
             {
                 ids.Add(idValue);
@@ -121,27 +121,6 @@ internal class LinkChangeTrackingService<TEntity, TKey>
         }
 
         return ids;
-    }
-
-    private static object? ExtractEntityId(EntityEntry entry, IReadOnlyList<IProperty> keyProperties)
-    {
-        if (keyProperties.Count == 1)
-        {
-            return entry.Property(keyProperties[0].Name).CurrentValue;
-        }
-
-        var values = new object[keyProperties.Count];
-        for (var i = 0; i < keyProperties.Count; i++)
-        {
-            var value = entry.Property(keyProperties[i].Name).CurrentValue;
-            if (value == null)
-            {
-                return null;
-            }
-
-            values[i] = value;
-        }
-        return new CompositeKey(values);
     }
 
     private void CaptureChildLinks(EntityEntry entry, HashSet<object> visited, int depth, int maxDepth)
@@ -292,7 +271,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
         ManyToManyStatisticsTracker tracker, string entityTypeName, string navName)
     {
         var itemEntry = _context.Entry(item);
-        var idValue = ExtractEntityId(itemEntry, keyProperties);
+        var idValue = CompositeKeyHelper.ExtractEntityId(itemEntry, keyProperties);
 
         if (idValue != null && removedIds.Contains(idValue))
         {

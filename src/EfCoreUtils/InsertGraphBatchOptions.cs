@@ -72,4 +72,19 @@ public class InsertGraphBatchOptions
     /// Default: 0 (no limit). Set to a positive value to enable.
     /// </summary>
     public int MaxManyToManyCollectionSize { get; set; } = 0;
+
+    /// <summary>
+    /// When true, throws an exception if many-to-many validation cannot be performed
+    /// for entities with composite primary keys.
+    /// When false, validation is silently skipped for composite key entities.
+    /// Default: false (backwards compatible).
+    /// </summary>
+    /// <remarks>
+    /// Many-to-many validation currently requires single-column primary keys.
+    /// For entities with composite keys, the query service cannot perform
+    /// existence validation. Set this to true to be explicitly notified
+    /// when validation is skipped, ensuring you're aware of potential
+    /// FK constraint violations at save time.
+    /// </remarks>
+    public bool ThrowOnUnsupportedValidation { get; set; } = false;
 }

@@ -139,34 +139,13 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
         foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
         {
             var itemEntry = _context.Entry(item);
-            var idValue = ExtractEntityId(itemEntry, keyProperties);
+            var idValue = CompositeKeyHelper.ExtractEntityId(itemEntry, keyProperties);
             if (idValue != null && missingIds.Contains(idValue))
             {
                 entityMissingIds.Add(idValue);
             }
         }
         return entityMissingIds;
-    }
-
-    private static object? ExtractEntityId(EntityEntry entry, IReadOnlyList<IProperty> keyProperties)
-    {
-        if (keyProperties.Count == 1)
-        {
-            return entry.Property(keyProperties[0].Name).CurrentValue;
-        }
-
-        var values = new object[keyProperties.Count];
-        for (var i = 0; i < keyProperties.Count; i++)
-        {
-            var value = entry.Property(keyProperties[i].Name).CurrentValue;
-            if (value == null)
-            {
-                return null;
-            }
-
-            values[i] = value;
-        }
-        return new CompositeKey(values);
     }
 
     private static void ThrowIfMissingIds(

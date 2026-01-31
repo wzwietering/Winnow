@@ -8,6 +8,13 @@ namespace EfCoreUtils.Internal.Services;
 /// Service for pre-validating many-to-many entity existence and caching results.
 /// Performs batched queries to minimize database round trips.
 /// </summary>
+/// <remarks>
+/// <para>
+/// <strong>Limitation:</strong> Many-to-many validation is currently not supported for entities
+/// with composite primary keys. When a related entity has a composite key, validation is skipped
+/// unless <see cref="InsertGraphBatchOptions.ThrowOnUnsupportedValidation"/> is set to true.
+/// </para>
+/// </remarks>
 internal class ManyToManyValidationCache<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
@@ -15,6 +22,7 @@ internal class ManyToManyValidationCache<TEntity, TKey>
     private readonly DbContext _context;
     private readonly ManyToManyIdQueryService _queryService;
     private Dictionary<Type, HashSet<object>> _missingIdsByType = [];
+    private bool _throwOnUnsupportedValidation;
 
     internal ManyToManyValidationCache(DbContext context, ManyToManyIdQueryService queryService)
     {
@@ -29,6 +37,7 @@ internal class ManyToManyValidationCache<TEntity, TKey>
         ArgumentNullException.ThrowIfNull(options);
 
         _missingIdsByType.Clear();
+        _throwOnUnsupportedValidation = options.ThrowOnUnsupportedValidation;
 
         if (!options.ValidateManyToManyEntitiesExist ||
             options.ManyToManyInsertBehavior != ManyToManyInsertBehavior.AttachExisting)
@@ -107,7 +116,7 @@ internal class ManyToManyValidationCache<TEntity, TKey>
 
         foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
         {
-            var idValue = ExtractEntityId(item, keyProperties);
+            var idValue = CompositeKeyHelper.ExtractEntityId(item, keyProperties);
             if (idValue != null)
             {
                 idSet.Add(idValue);
@@ -125,31 +134,6 @@ internal class ManyToManyValidationCache<TEntity, TKey>
             idsByTargetType[clrType] = existing;
         }
         return existing.Ids;
-    }
-
-    private static object? ExtractEntityId(object item, IReadOnlyList<IProperty> keyProperties)
-    {
-        var itemType = item.GetType();
-
-        if (keyProperties.Count == 1)
-        {
-            var prop = itemType.GetProperty(keyProperties[0].Name);
-            return prop?.GetValue(item);
-        }
-
-        var values = new object[keyProperties.Count];
-        for (var i = 0; i < keyProperties.Count; i++)
-        {
-            var prop = itemType.GetProperty(keyProperties[i].Name);
-            var value = prop?.GetValue(item);
-            if (value == null)
-            {
-                return null;
-            }
-
-            values[i] = value;
-        }
-        return new CompositeKey(values);
     }
 
     private void CollectChildRelatedIds(
@@ -205,15 +189,28 @@ internal class ManyToManyValidationCache<TEntity, TKey>
             return [];
         }
 
-        // For composite keys, skip database validation for now
-        // The query service currently only supports single-column key queries
         if (keyProperties.Count > 1)
         {
-            return [];
+            return HandleCompositeKeyValidation(clrType, ids.Count);
         }
 
         var existingIds = _queryService.QueryExistingIds(clrType, keyProperties[0].Name, ids.ToList());
         return ids.Except(existingIds).ToHashSet();
+    }
+
+    private HashSet<object> HandleCompositeKeyValidation(Type clrType, int entityCount)
+    {
+        if (_throwOnUnsupportedValidation)
+        {
+            throw new NotSupportedException(
+                $"Many-to-many validation for entities with composite keys is not yet supported. " +
+                $"Entity type '{clrType.Name}' has a composite primary key and {entityCount} related entity(ies) " +
+                $"could not be validated for existence. " +
+                $"Set InsertGraphBatchOptions.ThrowOnUnsupportedValidation=false to skip validation silently, " +
+                $"or set ValidateManyToManyEntitiesExist=false to disable validation entirely.");
+        }
+
+        return [];
     }
 
     private static IReadOnlyList<IProperty>? GetKeyPropertiesOrNull(IEntityType metadata) =>

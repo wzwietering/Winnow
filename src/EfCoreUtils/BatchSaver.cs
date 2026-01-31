@@ -307,9 +307,41 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 }
 
 /// <summary>
-/// Batch saver with auto-detected key type.
-/// All keys are returned as CompositeKey - use key.GetValue&lt;T&gt;(0) for simple keys.
+/// Batch saver that automatically detects entity key type at runtime.
 /// </summary>
+/// <remarks>
+/// <para>
+/// This overload inspects the DbContext model to determine if the entity has a simple
+/// or composite primary key. All results return <see cref="CompositeKey"/> to maintain
+/// a consistent API surface.
+/// </para>
+/// <para>
+/// <strong>When to use:</strong> Use this when working with entities that have composite keys,
+/// or when the key type isn't known at compile time.
+/// </para>
+/// <para>
+/// <strong>When NOT to use:</strong> For entities with known simple keys (int, long, Guid),
+/// prefer <see cref="BatchSaver{TEntity, TKey}"/> for better type safety.
+/// </para>
+/// <para>
+/// <strong>Example (simple key):</strong>
+/// <code>
+/// var saver = new BatchSaver&lt;Product&gt;(context);
+/// var result = saver.InsertBatch(products);
+/// int id = result.InsertedIds[0].GetValue&lt;int&gt;(0);
+/// </code>
+/// </para>
+/// <para>
+/// <strong>Example (composite key):</strong>
+/// <code>
+/// var saver = new BatchSaver&lt;OrderLine&gt;(context);
+/// var result = saver.InsertBatch(orderLines);
+/// int orderId = result.InsertedIds[0].GetValue&lt;int&gt;(0);
+/// int lineNum = result.InsertedIds[0].GetValue&lt;int&gt;(1);
+/// </code>
+/// </para>
+/// </remarks>
+/// <typeparam name="TEntity">The entity type to save</typeparam>
 public class BatchSaver<TEntity> : IBatchSaver<TEntity>
     where TEntity : class
 {

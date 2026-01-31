@@ -1,3 +1,4 @@
+using EfCoreUtils.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -93,7 +94,7 @@ internal class OrphanTrackingService<TEntity, TKey>
         var entityType = navigation.Metadata.TargetEntityType;
         var keyProperties = entityType.FindPrimaryKey()?.Properties;
 
-        if (!IsCompatibleKeyType(keyProperties))
+        if (!CompositeKeyHelper.IsCompatibleKeyType<TKey>(keyProperties))
         {
             return;
         }
@@ -104,6 +105,17 @@ internal class OrphanTrackingService<TEntity, TKey>
             return;
         }
 
+        AddMatchingDeletedChildren(entityType, fkProperties, keyProperties!, parentId, childIds, deletedChildren);
+    }
+
+    private void AddMatchingDeletedChildren(
+        IEntityType entityType,
+        IReadOnlyList<IProperty> fkProperties,
+        IReadOnlyList<IProperty> keyProperties,
+        TKey parentId,
+        HashSet<TKey> childIds,
+        List<object> deletedChildren)
+    {
         var deletedIndex = GetOrBuildDeletedIndex();
         if (!deletedIndex.TryGetValue(entityType, out var deletedEntries))
         {
@@ -112,78 +124,29 @@ internal class OrphanTrackingService<TEntity, TKey>
 
         foreach (var trackedEntry in deletedEntries)
         {
-            if (!ForeignKeyMatchesParent(trackedEntry, fkProperties, parentId))
-            {
-                continue;
-            }
-
-            var keyValue = ExtractKey(trackedEntry, keyProperties!);
-            if (keyValue is TKey id)
-            {
-                childIds.Add(id);
-                deletedChildren.Add(trackedEntry.Entity);
-            }
+            TryAddDeletedChild(trackedEntry, fkProperties, keyProperties, parentId, childIds, deletedChildren);
         }
     }
 
-    private static bool IsCompatibleKeyType(IReadOnlyList<IProperty>? keyProperties)
+    private static void TryAddDeletedChild(
+        EntityEntry trackedEntry,
+        IReadOnlyList<IProperty> fkProperties,
+        IReadOnlyList<IProperty> keyProperties,
+        TKey parentId,
+        HashSet<TKey> childIds,
+        List<object> deletedChildren)
     {
-        if (keyProperties == null || keyProperties.Count == 0)
+        if (!CompositeKeyHelper.ForeignKeyMatchesParent(trackedEntry, fkProperties, parentId))
         {
-            return false;
+            return;
         }
 
-        if (keyProperties.Count == 1)
+        var keyValue = CompositeKeyHelper.ExtractEntityId(trackedEntry, keyProperties);
+        if (keyValue is TKey id)
         {
-            return keyProperties[0].ClrType == typeof(TKey);
+            childIds.Add(id);
+            deletedChildren.Add(trackedEntry.Entity);
         }
-
-        return typeof(TKey) == typeof(CompositeKey);
-    }
-
-    private static object? ExtractKey(EntityEntry entry, IReadOnlyList<IProperty> keyProperties)
-    {
-        if (keyProperties.Count == 1)
-        {
-            return entry.Property(keyProperties[0].Name).CurrentValue;
-        }
-
-        var values = new object[keyProperties.Count];
-        for (var i = 0; i < keyProperties.Count; i++)
-        {
-            var value = entry.Property(keyProperties[i].Name).CurrentValue;
-            if (value == null)
-            {
-                return null;
-            }
-
-            values[i] = value;
-        }
-        return new CompositeKey(values);
-    }
-
-    private static bool ForeignKeyMatchesParent(
-        EntityEntry entry, IReadOnlyList<IProperty> fkProperties, TKey parentId)
-    {
-        if (typeof(TKey) == typeof(CompositeKey) && fkProperties.Count > 1)
-        {
-            var fkValues = new object[fkProperties.Count];
-            for (var i = 0; i < fkProperties.Count; i++)
-            {
-                var value = entry.Property(fkProperties[i].Name).CurrentValue;
-                if (value == null)
-                {
-                    return false;
-                }
-
-                fkValues[i] = value;
-            }
-            var fkKey = new CompositeKey(fkValues);
-            return fkKey.Equals((CompositeKey)(object)parentId);
-        }
-
-        var fkValue = entry.Property(fkProperties[0].Name).CurrentValue;
-        return fkValue is TKey key && key.Equals(parentId);
     }
 
     internal List<TKey> GetChildIds(TEntity entity)
@@ -215,9 +178,9 @@ internal class OrphanTrackingService<TEntity, TKey>
         {
             var itemEntry = _context.Entry(item);
             var keyProperties = itemEntry.Metadata.FindPrimaryKey()?.Properties;
-            if (IsCompatibleKeyType(keyProperties))
+            if (CompositeKeyHelper.IsCompatibleKeyType<TKey>(keyProperties))
             {
-                var keyValue = ExtractKey(itemEntry, keyProperties!);
+                var keyValue = CompositeKeyHelper.ExtractEntityId(itemEntry, keyProperties!);
                 if (keyValue is TKey id)
                 {
                     childIds.Add(id);
@@ -390,7 +353,7 @@ internal class OrphanTrackingService<TEntity, TKey>
         var entityType = navigation.Metadata.TargetEntityType;
         var keyProperties = entityType.FindPrimaryKey()?.Properties;
 
-        if (!IsCompatibleKeyType(keyProperties))
+        if (!CompositeKeyHelper.IsCompatibleKeyType<TKey>(keyProperties))
         {
             return;
         }
@@ -401,6 +364,15 @@ internal class OrphanTrackingService<TEntity, TKey>
             return;
         }
 
+        ProcessDeletedEntriesForNavigation(entityType, fkProperties, keyProperties!, parentKey);
+    }
+
+    private void ProcessDeletedEntriesForNavigation(
+        IEntityType entityType,
+        IReadOnlyList<IProperty> fkProperties,
+        IReadOnlyList<IProperty> keyProperties,
+        (string Type, TKey Id) parentKey)
+    {
         var deletedIndex = GetOrBuildDeletedIndex();
         if (!deletedIndex.TryGetValue(entityType, out var deletedEntries))
         {
@@ -409,7 +381,7 @@ internal class OrphanTrackingService<TEntity, TKey>
 
         foreach (var trackedEntry in deletedEntries)
         {
-            AddDeletedChildIfBelongsToParent(trackedEntry, fkProperties, parentKey, keyProperties!);
+            AddDeletedChildIfBelongsToParent(trackedEntry, fkProperties, parentKey, keyProperties);
         }
     }
 
@@ -417,17 +389,23 @@ internal class OrphanTrackingService<TEntity, TKey>
         EntityEntry trackedEntry, IReadOnlyList<IProperty> fkProperties,
         (string Type, TKey Id) parentKey, IReadOnlyList<IProperty> keyProperties)
     {
-        if (!ForeignKeyMatchesParent(trackedEntry, fkProperties, parentKey.Id))
+        if (!CompositeKeyHelper.ForeignKeyMatchesParent(trackedEntry, fkProperties, parentKey.Id))
         {
             return;
         }
 
-        var keyValue = ExtractKey(trackedEntry, keyProperties);
+        var keyValue = CompositeKeyHelper.ExtractEntityId(trackedEntry, keyProperties);
         if (keyValue is not TKey childId)
         {
             return;
         }
 
+        AddChildToTracking(trackedEntry, parentKey, childId);
+    }
+
+    private void AddChildToTracking(
+        EntityEntry trackedEntry, (string Type, TKey Id) parentKey, TKey childId)
+    {
         var childKey = (trackedEntry.Metadata.ClrType.Name, childId);
 
         if (!_originalChildIdsByParentRecursive.TryGetValue(parentKey, out var originalIds))
