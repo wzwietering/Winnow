@@ -87,6 +87,37 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
         return GetValue<T>(0);
     }
 
+    /// <summary>
+    /// Returns true if all components have their default values.
+    /// </summary>
+    /// <remarks>
+    /// Default values: int/long/short/byte = 0, Guid = Guid.Empty, string = null or empty.
+    /// </remarks>
+    public bool IsAllDefaults()
+    {
+        foreach (var value in _values)
+        {
+            if (!IsDefaultValue(value))
+                return false;
+        }
+        return true;
+    }
+
+    private static bool IsDefaultValue(object value)
+    {
+        return value switch
+        {
+            int i => i == 0,
+            long l => l == 0L,
+            short s => s == 0,
+            byte b => b == 0,
+            Guid g => g == Guid.Empty,
+            string str => string.IsNullOrEmpty(str),
+            _ when value.GetType().IsValueType => value.Equals(Activator.CreateInstance(value.GetType())),
+            _ => false
+        };
+    }
+
     private static T TryConvertValue<T>(object value, int index)
     {
         if (value is IConvertible && typeof(IConvertible).IsAssignableFrom(typeof(T)))

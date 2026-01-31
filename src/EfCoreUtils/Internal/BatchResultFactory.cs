@@ -57,6 +57,33 @@ internal static class BatchResultFactory
             TraversalInfo = result.TraversalInfo
         };
 
+    internal static UpsertBatchResult<TKey> CreateEmptyUpsert<TKey>(TimeSpan duration, bool includeGraph = false)
+        where TKey : notnull, IEquatable<TKey> => new()
+        {
+            InsertedEntities = [],
+            UpdatedEntities = [],
+            Failures = [],
+            Duration = duration,
+            DatabaseRoundTrips = 0,
+            GraphHierarchy = includeGraph ? new Dictionary<TKey, GraphNode<TKey>>() : null,
+            TraversalInfo = includeGraph ? CreateEmptyTraversalInfo<TKey>() : null
+        };
+
+    internal static UpsertBatchResult<TKey> EnrichUpsert<TKey>(
+        UpsertBatchResult<TKey> result,
+        TimeSpan duration,
+        int roundTrips)
+        where TKey : notnull, IEquatable<TKey> => new()
+        {
+            InsertedEntities = result.InsertedEntities,
+            UpdatedEntities = result.UpdatedEntities,
+            Failures = result.Failures,
+            Duration = duration,
+            DatabaseRoundTrips = roundTrips,
+            GraphHierarchy = result.GraphHierarchy,
+            TraversalInfo = result.TraversalInfo
+        };
+
     private static GraphTraversalResult<TKey> CreateEmptyTraversalInfo<TKey>()
         where TKey : notnull, IEquatable<TKey> => new()
         {

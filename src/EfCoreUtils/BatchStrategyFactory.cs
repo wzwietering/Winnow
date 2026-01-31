@@ -62,4 +62,23 @@ internal static class BatchStrategyFactory
             BatchStrategy.DivideAndConquer => new DivideAndConquerDeleteGraphStrategy<TEntity, TKey>(),
             _ => throw UnknownStrategyException(strategy)
         };
+
+    internal static IBatchUpsertStrategy<TEntity, TKey> CreateUpsertStrategy<TEntity, TKey>(BatchStrategy strategy)
+        where TEntity : class
+        where TKey : notnull, IEquatable<TKey> => strategy switch
+        {
+            BatchStrategy.OneByOne => new OneByOneUpsertStrategy<TEntity, TKey>(),
+            BatchStrategy.DivideAndConquer => new DivideAndConquerUpsertStrategy<TEntity, TKey>(),
+            _ => throw UnknownStrategyException(strategy)
+        };
+
+    internal static IBatchUpsertGraphStrategy<TEntity, TKey> CreateUpsertGraphStrategy<TEntity, TKey>(
+        BatchStrategy strategy)
+        where TEntity : class
+        where TKey : notnull, IEquatable<TKey> => strategy switch
+        {
+            BatchStrategy.OneByOne => new OneByOneUpsertGraphStrategy<TEntity, TKey>(),
+            BatchStrategy.DivideAndConquer => new DivideAndConquerUpsertGraphStrategy<TEntity, TKey>(),
+            _ => throw UnknownStrategyException(strategy)
+        };
 }

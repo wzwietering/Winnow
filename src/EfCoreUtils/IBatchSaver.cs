@@ -51,6 +51,28 @@ public interface IBatchSaver<TEntity, TKey>
     BatchResult<TKey> DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options);
     Task<BatchResult<TKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
     Task<BatchResult<TKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default);
+
+    // === UPSERT OPERATIONS ===
+
+    /// <summary>
+    /// Upserts a batch of entities: inserts if key is default, updates if key is non-default.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>NOT a database MERGE:</strong> This is NOT atomic MERGE/INSERT ON CONFLICT.
+    /// It performs conditional INSERT or UPDATE based on key detection.</para>
+    /// </remarks>
+    UpsertBatchResult<TKey> UpsertBatch(IEnumerable<TEntity> entities);
+    UpsertBatchResult<TKey> UpsertBatch(IEnumerable<TEntity> entities, UpsertBatchOptions options);
+    Task<UpsertBatchResult<TKey>> UpsertBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    Task<UpsertBatchResult<TKey>> UpsertBatchAsync(IEnumerable<TEntity> entities, UpsertBatchOptions options, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Upserts entity graphs (parent + children). Each entity is routed to INSERT or UPDATE based on its key.
+    /// </summary>
+    UpsertBatchResult<TKey> UpsertGraphBatch(IEnumerable<TEntity> entities);
+    UpsertBatchResult<TKey> UpsertGraphBatch(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options);
+    Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -131,6 +153,18 @@ public interface IBatchSaver<TEntity>
     BatchResult<CompositeKey> DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options);
     Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
     Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default);
+
+    // === UPSERT OPERATIONS ===
+
+    UpsertBatchResult<CompositeKey> UpsertBatch(IEnumerable<TEntity> entities);
+    UpsertBatchResult<CompositeKey> UpsertBatch(IEnumerable<TEntity> entities, UpsertBatchOptions options);
+    Task<UpsertBatchResult<CompositeKey>> UpsertBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    Task<UpsertBatchResult<CompositeKey>> UpsertBatchAsync(IEnumerable<TEntity> entities, UpsertBatchOptions options, CancellationToken cancellationToken = default);
+
+    UpsertBatchResult<CompositeKey> UpsertGraphBatch(IEnumerable<TEntity> entities);
+    UpsertBatchResult<CompositeKey> UpsertGraphBatch(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options);
+    Task<UpsertBatchResult<CompositeKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+    Task<UpsertBatchResult<CompositeKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options, CancellationToken cancellationToken = default);
 }
 
 public class BatchOptions

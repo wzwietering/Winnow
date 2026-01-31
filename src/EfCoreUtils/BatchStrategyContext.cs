@@ -94,6 +94,9 @@ internal class BatchStrategyContext<TEntity, TKey>
     internal void ValidateReferencedEntitiesExist(TEntity entity, int maxDepth) =>
         _validationService.ValidateReferencedEntitiesExist(entity, maxDepth);
 
+    internal bool HasDefaultKeyValue(TEntity entity) =>
+        _validationService.HasDefaultKeyValue(entity);
+
     // ========== Attachment Service Delegation ==========
 
     internal void AttachEntityAsDeleted(TEntity entity) =>
@@ -124,6 +127,14 @@ internal class BatchStrategyContext<TEntity, TKey>
     internal ReferenceTrackingResult AttachEntityGraphAsModifiedWithReferences(
         TEntity entity, int maxDepth, CircularReferenceHandling circularHandling) =>
         _attachmentService.AttachEntityGraphAsModifiedWithReferences(entity, maxDepth, circularHandling);
+
+    internal void AttachEntityGraphAsUpsertRecursive(TEntity entity, int maxDepth) =>
+        _attachmentService.AttachEntityGraphAsUpsertRecursive(entity, maxDepth, _validationService);
+
+    internal ReferenceTrackingResult AttachEntityGraphAsUpsertWithReferences(
+        TEntity entity, int maxDepth, CircularReferenceHandling circularHandling) =>
+        _attachmentService.AttachEntityGraphAsUpsertWithReferences(
+            entity, maxDepth, circularHandling, _validationService);
 
     // ========== Detachment Service Delegation ==========
 

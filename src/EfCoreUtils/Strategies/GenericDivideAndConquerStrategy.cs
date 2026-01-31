@@ -36,6 +36,20 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         return operation.CreateResult();
     }
 
+    internal UpsertBatchResult<TKey> ExecuteUpsert(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation)
+    {
+        operation.ValidateAll(entities, context);
+        context.DetachAllEntities(entities);
+
+        var indexedEntities = entities.Select((e, i) => (Entity: e, Index: i)).ToList();
+        ProcessUpsertBatch(indexedEntities, context, operation);
+
+        return operation.CreateResult();
+    }
+
     private void ProcessBatch(
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
@@ -85,6 +99,31 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         SplitAndRecurseInsert(indexedEntities, context, operation);
     }
 
+    private void ProcessUpsertBatch(
+        List<(TEntity Entity, int Index)> indexedEntities,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation)
+    {
+        if (indexedEntities.Count == 0)
+        {
+            return;
+        }
+
+        if (indexedEntities.Count == 1)
+        {
+            var (entity, index) = indexedEntities[0];
+            ProcessSingleUpsert(entity, index, context, operation);
+            return;
+        }
+
+        if (TryBatchUpsert(indexedEntities, context, operation))
+        {
+            return;
+        }
+
+        SplitAndRecurseUpsert(indexedEntities, context, operation);
+    }
+
     private static void ProcessSingleEntity(
         TEntity entity,
         BatchStrategyContext<TEntity, TKey> context,
@@ -113,6 +152,30 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         int index,
         BatchStrategyContext<TEntity, TKey> context,
         IBatchInsertOperation<TEntity, TKey> operation)
+    {
+        try
+        {
+            operation.PrepareEntity(entity, index, context);
+            context.Context.SaveChanges();
+            context.IncrementRoundTrip();
+            operation.RecordSuccess(entity, index, context);
+        }
+        catch (Exception ex)
+        {
+            context.IncrementRoundTrip();
+            operation.RecordFailure(entity, index, ex, context);
+        }
+        finally
+        {
+            operation.CleanupEntity(entity, context);
+        }
+    }
+
+    private static void ProcessSingleUpsert(
+        TEntity entity,
+        int index,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -184,6 +247,32 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         }
     }
 
+    private static bool TryBatchUpsert(
+        List<(TEntity Entity, int Index)> indexedEntities,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation)
+    {
+        try
+        {
+            foreach (var (entity, index) in indexedEntities)
+            {
+                operation.PrepareEntity(entity, index, context);
+            }
+
+            context.Context.SaveChanges();
+            context.IncrementRoundTrip();
+
+            RecordAllUpsertSuccesses(indexedEntities, context, operation);
+            return true;
+        }
+        catch
+        {
+            context.IncrementRoundTrip();
+            CleanupAllUpsertEntities(indexedEntities, context, operation);
+            return false;
+        }
+    }
+
     private static void RecordAllSuccesses(
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
@@ -208,6 +297,18 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         }
     }
 
+    private static void RecordAllUpsertSuccesses(
+        List<(TEntity Entity, int Index)> indexedEntities,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation)
+    {
+        foreach (var (entity, index) in indexedEntities)
+        {
+            operation.RecordSuccess(entity, index, context);
+            operation.CleanupEntity(entity, context);
+        }
+    }
+
     private static void CleanupAllEntities(
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
@@ -223,6 +324,17 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         List<(TEntity Entity, int Index)> indexedEntities,
         BatchStrategyContext<TEntity, TKey> context,
         IBatchInsertOperation<TEntity, TKey> operation)
+    {
+        foreach (var (entity, _) in indexedEntities)
+        {
+            operation.CleanupEntity(entity, context);
+        }
+    }
+
+    private static void CleanupAllUpsertEntities(
+        List<(TEntity Entity, int Index)> indexedEntities,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation)
     {
         foreach (var (entity, _) in indexedEntities)
         {
@@ -254,5 +366,18 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
         ProcessInsertBatch(firstHalf, context, operation);
         ProcessInsertBatch(secondHalf, context, operation);
+    }
+
+    private void SplitAndRecurseUpsert(
+        List<(TEntity Entity, int Index)> indexedEntities,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation)
+    {
+        var midpoint = indexedEntities.Count / 2;
+        var firstHalf = indexedEntities.Take(midpoint).ToList();
+        var secondHalf = indexedEntities.Skip(midpoint).ToList();
+
+        ProcessUpsertBatch(firstHalf, context, operation);
+        ProcessUpsertBatch(secondHalf, context, operation);
     }
 }

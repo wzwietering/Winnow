@@ -454,6 +454,16 @@ internal class ValidationService<TEntity, TKey>
             $"Set ValidateReferencedEntitiesExist to false to skip this validation.");
     }
 
+    // ========== Key Detection Methods ==========
+
+    internal bool HasDefaultKeyValue(TEntity entity)
+    {
+        var entry = _context.Entry(entity);
+        return HasDefaultKeyValue(entry);
+    }
+
+    internal bool HasDefaultKeyValueForEntry(EntityEntry entry) => HasDefaultKeyValue(entry);
+
     private static bool HasDefaultKeyValue(EntityEntry entry)
     {
         var keyProperties = entry.Metadata.FindPrimaryKey()?.Properties;

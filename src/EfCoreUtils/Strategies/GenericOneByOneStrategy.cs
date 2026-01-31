@@ -41,6 +41,22 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         return operation.CreateResult();
     }
 
+    internal UpsertBatchResult<TKey> ExecuteUpsert(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation)
+    {
+        operation.ValidateAll(entities, context);
+        context.DetachAllEntities(entities);
+
+        for (var i = 0; i < entities.Count; i++)
+        {
+            ProcessSingleUpsert(entities[i], i, context, operation);
+        }
+
+        return operation.CreateResult();
+    }
+
     private static void ProcessSingleEntity(
         TEntity entity,
         BatchStrategyContext<TEntity, TKey> context,
@@ -69,6 +85,30 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         int index,
         BatchStrategyContext<TEntity, TKey> context,
         IBatchInsertOperation<TEntity, TKey> operation)
+    {
+        try
+        {
+            operation.PrepareEntity(entity, index, context);
+            context.Context.SaveChanges();
+            context.IncrementRoundTrip();
+            operation.RecordSuccess(entity, index, context);
+        }
+        catch (Exception ex)
+        {
+            context.IncrementRoundTrip();
+            operation.RecordFailure(entity, index, ex, context);
+        }
+        finally
+        {
+            operation.CleanupEntity(entity, context);
+        }
+    }
+
+    private static void ProcessSingleUpsert(
+        TEntity entity,
+        int index,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation)
     {
         try
         {
