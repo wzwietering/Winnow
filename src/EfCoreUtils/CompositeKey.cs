@@ -19,9 +19,9 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
     }
 
     /// <summary>
-    /// Gets a copy of the key values in order.
+    /// Gets the key values in order.
     /// </summary>
-    public IReadOnlyList<object> Values => _values.ToArray();
+    public IReadOnlyList<object> Values => _values;
 
     /// <summary>
     /// Gets the number of key components.
@@ -65,22 +65,22 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
     }
 
     /// <summary>
-    /// Returns true if this is a simple (single-component) key.
+    /// Returns true if this is a single-component key.
     /// </summary>
-    public bool IsSimple => _values.Length == 1;
+    public bool IsSingle => _values.Length == 1;
 
     /// <summary>
     /// Gets the single key value as the specified type.
-    /// Use this for cleaner extraction when working with simple keys via the auto-detect API.
+    /// Use this for cleaner extraction when working with single-component keys via the auto-detect API.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when key has multiple components.</exception>
     /// <exception cref="InvalidCastException">Thrown when value cannot be converted to T.</exception>
-    public T AsSimple<T>()
+    public T AsSingle<T>()
     {
         if (_values.Length != 1)
         {
             throw new InvalidOperationException(
-                $"Cannot use AsSimple() on composite key with {_values.Length} components. " +
+                $"Cannot use AsSingle() on composite key with {_values.Length} components. " +
                 "Use GetValue<T>(index) to access individual components.");
         }
 
@@ -126,6 +126,52 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
     public static bool operator ==(CompositeKey left, CompositeKey right) => left.Equals(right);
 
     public static bool operator !=(CompositeKey left, CompositeKey right) => !left.Equals(right);
+
+    /// <summary>
+    /// Deconstructs a 2-part composite key.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when key does not have exactly 2 components.</exception>
+    public void Deconstruct(out object first, out object second)
+    {
+        ValidateDeconstructCount(2);
+        first = _values[0];
+        second = _values[1];
+    }
+
+    /// <summary>
+    /// Deconstructs a 3-part composite key.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when key does not have exactly 3 components.</exception>
+    public void Deconstruct(out object first, out object second, out object third)
+    {
+        ValidateDeconstructCount(3);
+        first = _values[0];
+        second = _values[1];
+        third = _values[2];
+    }
+
+    /// <summary>
+    /// Deconstructs a 4-part composite key.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Thrown when key does not have exactly 4 components.</exception>
+    public void Deconstruct(out object first, out object second, out object third, out object fourth)
+    {
+        ValidateDeconstructCount(4);
+        first = _values[0];
+        second = _values[1];
+        third = _values[2];
+        fourth = _values[3];
+    }
+
+    private void ValidateDeconstructCount(int expectedCount)
+    {
+        if (_values.Length != expectedCount)
+        {
+            throw new InvalidOperationException(
+                $"Cannot deconstruct into {expectedCount} components. " +
+                $"CompositeKey has {_values.Length} component(s).");
+        }
+    }
 
     private static object[] ValidateAndCopy(object[] values)
     {
