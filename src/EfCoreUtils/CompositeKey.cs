@@ -7,15 +7,21 @@ namespace EfCoreUtils;
 /// <remarks>
 /// Creates a composite key from multiple values.
 /// </remarks>
-public readonly struct CompositeKey(params object[] values) : IEquatable<CompositeKey>
+public readonly struct CompositeKey : IEquatable<CompositeKey>
 {
-    private readonly object[] _values = ValidateValues(values);
-    private readonly int _hashCode = ComputeHashCode(values);
+    private readonly object[] _values;
+    private readonly int _hashCode;
+
+    public CompositeKey(params object[] values)
+    {
+        _values = ValidateAndCopy(values);
+        _hashCode = ComputeHashCode(_values);
+    }
 
     /// <summary>
-    /// Gets the key values in order.
+    /// Gets a copy of the key values in order.
     /// </summary>
-    public IReadOnlyList<object> Values => _values;
+    public IReadOnlyList<object> Values => _values.ToArray();
 
     /// <summary>
     /// Gets the number of key components.
@@ -48,7 +54,7 @@ public readonly struct CompositeKey(params object[] values) : IEquatable<Composi
     /// <exception cref="InvalidCastException">Thrown when the component cannot be cast to the specified type.</exception>
     public T GetValue<T>(int index)
     {
-        var value = GetValueAtIndex(index);
+        var value = this[index];
 
         if (value is T typedValue)
         {
@@ -81,17 +87,6 @@ public readonly struct CompositeKey(params object[] values) : IEquatable<Composi
         return GetValue<T>(0);
     }
 
-    private object GetValueAtIndex(int index)
-    {
-        if (index < 0 || index >= _values.Length)
-        {
-            throw new ArgumentOutOfRangeException(nameof(index),
-                $"Index {index} is out of range. CompositeKey has {_values.Length} component(s).");
-        }
-
-        return _values[index];
-    }
-
     private static T TryConvertValue<T>(object value, int index)
     {
         if (value is IConvertible && typeof(IConvertible).IsAssignableFrom(typeof(T)))
@@ -110,7 +105,17 @@ public readonly struct CompositeKey(params object[] values) : IEquatable<Composi
             $"Cannot convert key component at index {index} from {value.GetType().Name} to {typeof(T).Name}.");
     }
 
-    public bool Equals(CompositeKey other) => _values.SequenceEqual(other._values);
+    public bool Equals(CompositeKey other)
+    {
+        if (_hashCode != other._hashCode) return false;
+        if (_values.Length != other._values.Length) return false;
+
+        for (var i = 0; i < _values.Length; i++)
+        {
+            if (!_values[i].Equals(other._values[i])) return false;
+        }
+        return true;
+    }
 
     public override bool Equals(object? obj) => obj is CompositeKey other && Equals(other);
 
@@ -122,7 +127,7 @@ public readonly struct CompositeKey(params object[] values) : IEquatable<Composi
 
     public static bool operator !=(CompositeKey left, CompositeKey right) => !left.Equals(right);
 
-    private static object[] ValidateValues(object[] values)
+    private static object[] ValidateAndCopy(object[] values)
     {
         ArgumentNullException.ThrowIfNull(values);
         if (values.Length == 0)
@@ -130,14 +135,13 @@ public readonly struct CompositeKey(params object[] values) : IEquatable<Composi
             throw new ArgumentException("Composite key must have at least one component.", nameof(values));
         }
 
+        var copy = new object[values.Length];
         for (var i = 0; i < values.Length; i++)
         {
-            if (values[i] == null)
-            {
-                throw new ArgumentException($"Composite key component at index {i} cannot be null.", nameof(values));
-            }
+            copy[i] = values[i] ?? throw new ArgumentException(
+                $"Composite key component at index {i} cannot be null.", nameof(values));
         }
-        return values;
+        return copy;
     }
 
     private static int ComputeHashCode(object[] values)

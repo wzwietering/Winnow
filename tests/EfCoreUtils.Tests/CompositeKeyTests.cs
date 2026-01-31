@@ -898,6 +898,40 @@ public class CompositeKeyTests : TestBase
         ex.Message.ShouldContain("index 1");
     }
 
+    [Fact]
+    public void CompositeKey_DifferentOrder_NotEqual()
+    {
+        var key1 = new CompositeKey(1, 2);
+        var key2 = new CompositeKey(2, 1);
+
+        key1.ShouldNotBe(key2);
+        key1.GetHashCode().ShouldNotBe(key2.GetHashCode());
+    }
+
+    [Fact]
+    public void CompositeKey_ArrayMutation_DoesNotAffectKey()
+    {
+        var values = new object[] { 1, 2 };
+        var key = new CompositeKey(values);
+        var originalHash = key.GetHashCode();
+
+        values[0] = 999; // Mutate original array
+
+        key[0].ShouldBe(1); // Key unchanged
+        key.GetHashCode().ShouldBe(originalHash);
+    }
+
+    [Fact]
+    public void CompositeKey_BoxedValues_AreEqual()
+    {
+        var key1 = new CompositeKey(1, 2);
+        object[] values = { 1, 2 };
+        var key2 = new CompositeKey(values);
+
+        key1.ShouldBe(key2);
+        key1.GetHashCode().ShouldBe(key2.GetHashCode());
+    }
+
     #endregion
 
     #region Helper Methods

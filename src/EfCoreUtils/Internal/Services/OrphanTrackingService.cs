@@ -61,28 +61,24 @@ internal class OrphanTrackingService<TEntity, TKey>
     private void CaptureOriginalChildIdsFromChangeTracker(TEntity entity)
     {
         var parentId = _keyService.GetEntityId(entity);
-        var childIds = new HashSet<TKey>();
-        var deletedChildren = new List<object>();
-
-        var currentIds = GetChildIds(entity);
-        foreach (var id in currentIds)
-        {
-            childIds.Add(id);
-        }
-
-        var entry = _context.Entry(entity);
-        foreach (var navigation in entry.Navigations)
-        {
-            if (!navigation.Metadata.IsCollection)
-            {
-                continue;
-            }
-
-            AddDeletedChildrenFromChangeTracker(navigation, childIds, deletedChildren, parentId);
-        }
+        var (childIds, deletedChildren) = CollectChildrenAndDeleted(entity, parentId);
 
         _originalChildIdsByParent[parentId] = childIds;
         _deletedChildrenByParent[parentId] = deletedChildren;
+    }
+
+    private (HashSet<TKey> childIds, List<object> deleted) CollectChildrenAndDeleted(TEntity entity, TKey parentId)
+    {
+        var childIds = GetChildIds(entity).ToHashSet();
+        var deletedChildren = new List<object>();
+
+        var entry = _context.Entry(entity);
+        foreach (var navigation in entry.Navigations.Where(n => n.Metadata.IsCollection))
+        {
+            AddDeletedChildrenFromChangeTracker(navigation, childIds, deletedChildren, parentId);
+        }
+
+        return (childIds, deletedChildren);
     }
 
     private void AddDeletedChildrenFromChangeTracker(
@@ -272,10 +268,7 @@ internal class OrphanTrackingService<TEntity, TKey>
     private void CaptureChildIdsRecursive(
         object entity, int currentDepth, int maxDepth, HashSet<object> visited)
     {
-        if (!visited.Add(entity))
-        {
-            return;
-        }
+        if (!visited.Add(entity)) return;
 
         var entry = _context.Entry(entity);
         var parentKey = _keyService.CreateEntityKey(entry);
@@ -283,17 +276,18 @@ internal class OrphanTrackingService<TEntity, TKey>
         CaptureDirectChildIds(entry, parentKey);
         CaptureDeletedChildrenFromTracker(entry, parentKey);
 
-        if (currentDepth >= maxDepth)
+        if (currentDepth < maxDepth)
         {
-            return;
+            TraverseChildNavigations(entry, currentDepth, maxDepth, visited);
         }
+    }
 
+    private void TraverseChildNavigations(
+        EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited)
+    {
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
-            {
-                continue;
-            }
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation)) continue;
 
             foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {

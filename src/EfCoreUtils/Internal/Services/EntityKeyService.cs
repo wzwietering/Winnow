@@ -51,24 +51,27 @@ internal class EntityKeyService<TEntity, TKey>
     {
         var keyValue = entry.Property(keyProperty.Name).CurrentValue;
 
-        // Auto-detect mode: wrap simple keys in CompositeKey
-        if (typeof(TKey) == typeof(CompositeKey))
-        {
-            if (keyValue == null)
-            {
-                throw new InvalidOperationException(
-                    $"Entity {entry.Metadata.ClrType.Name} has null primary key value.");
-            }
+        return IsAutoDetectMode()
+            ? WrapInCompositeKey(entry, keyValue)
+            : GetTypedKey(entry, keyValue, keyProperty);
+    }
 
-            var compositeKey = new CompositeKey(keyValue);
-            return (TKey)(object)compositeKey;
+    private static bool IsAutoDetectMode() => typeof(TKey) == typeof(CompositeKey);
+
+    private static TKey WrapInCompositeKey(EntityEntry entry, object? keyValue)
+    {
+        if (keyValue == null)
+        {
+            throw new InvalidOperationException(
+                $"Entity {entry.Metadata.ClrType.Name} has null primary key value.");
         }
 
-        // Explicit mode: return typed key
-        if (keyValue is TKey id)
-        {
-            return id;
-        }
+        return (TKey)(object)new CompositeKey(keyValue);
+    }
+
+    private static TKey GetTypedKey(EntityEntry entry, object? keyValue, IProperty keyProperty)
+    {
+        if (keyValue is TKey id) return id;
 
         throw new InvalidOperationException(
             $"Primary key type mismatch for entity {entry.Metadata.ClrType.Name}. " +
@@ -78,25 +81,30 @@ internal class EntityKeyService<TEntity, TKey>
 
     private static TKey GetCompositeKey(EntityEntry entry, IReadOnlyList<IProperty> keyProperties)
     {
-        if (typeof(TKey) != typeof(CompositeKey))
-        {
-            var keyTypes = string.Join(", ", keyProperties.Select(p => $"{p.Name}: {p.ClrType.Name}"));
-            throw new InvalidOperationException(
-                $"Entity {entry.Metadata.ClrType.Name} has composite primary key ({keyTypes}), " +
-                $"but BatchSaver was configured with key type {typeof(TKey).Name}. " +
-                $"Use BatchSaver<{entry.Metadata.ClrType.Name}> for auto-detection, or " +
-                $"BatchSaver<{entry.Metadata.ClrType.Name}, CompositeKey> for explicit typing.");
-        }
+        ValidateCompositeKeyType(entry, keyProperties);
+        return CreateCompositeKeyResult(entry, keyProperties);
+    }
 
+    private static void ValidateCompositeKeyType(EntityEntry entry, IReadOnlyList<IProperty> keyProperties)
+    {
+        if (typeof(TKey) == typeof(CompositeKey)) return;
+
+        var keyTypes = string.Join(", ", keyProperties.Select(p => $"{p.Name}: {p.ClrType.Name}"));
+        throw new InvalidOperationException(
+            $"Entity {entry.Metadata.ClrType.Name} has composite primary key ({keyTypes}), " +
+            $"but BatchSaver was configured with key type {typeof(TKey).Name}. " +
+            $"Use BatchSaver<{entry.Metadata.ClrType.Name}> for auto-detection, or " +
+            $"BatchSaver<{entry.Metadata.ClrType.Name}, CompositeKey> for explicit typing.");
+    }
+
+    private static TKey CreateCompositeKeyResult(EntityEntry entry, IReadOnlyList<IProperty> keyProperties)
+    {
         var values = ExtractKeyValues(entry, keyProperties);
         var compositeKey = new CompositeKey(values);
 
-        if (compositeKey is TKey result)
-        {
-            return result;
-        }
-
-        throw new InvalidOperationException($"Failed to create composite key for {entry.Metadata.ClrType.Name}");
+        return compositeKey is TKey result
+            ? result
+            : throw new InvalidOperationException($"Failed to create composite key for {entry.Metadata.ClrType.Name}");
     }
 
     private static object[] ExtractKeyValues(EntityEntry entry, IReadOnlyList<IProperty> keyProperties)
