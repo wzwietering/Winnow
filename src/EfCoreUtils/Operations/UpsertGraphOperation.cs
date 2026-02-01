@@ -42,6 +42,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         if (_options.IncludeManyToMany)
         {
             context.CaptureOriginalManyToManyLinks(entities, _options.MaxDepth);
+            context.ValidateManyToManyEntitiesExistBatched(entities, ToInsertGraphOptions());
         }
 
         foreach (var entity in entities)
@@ -161,9 +162,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         InsertedEntities = _insertedEntities,
         UpdatedEntities = _updatedEntities,
         Failures = _failures,
-        GraphHierarchy = _graphHierarchy.ToDictionary(
-            n => n.EntityId,
-            n => n),
+        GraphHierarchy = _graphHierarchy,
         TraversalInfo = _statsTracker.CreateTraversalInfo(),
         WasCancelled = wasCancelled
     };
@@ -183,6 +182,9 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         IncludeReferences = _options.IncludeReferences,
         CircularReferenceHandling = _options.CircularReferenceHandling,
         IncludeManyToMany = _options.IncludeManyToMany,
-        ManyToManyInsertBehavior = _options.ManyToManyInsertBehavior
+        ManyToManyInsertBehavior = _options.ManyToManyInsertBehavior,
+        ValidateManyToManyEntitiesExist = _options.ValidateManyToManyEntitiesExist,
+        MaxManyToManyCollectionSize = _options.MaxManyToManyCollectionSize,
+        ThrowOnUnsupportedValidation = _options.ThrowOnUnsupportedValidation
     };
 }

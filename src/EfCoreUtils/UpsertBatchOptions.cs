@@ -5,6 +5,9 @@ namespace EfCoreUtils;
 /// </summary>
 public class UpsertBatchOptions
 {
+    /// <summary>
+    /// The batch processing strategy to use. Default is OneByOne for maximum failure isolation.
+    /// </summary>
     public BatchStrategy Strategy { get; set; } = BatchStrategy.OneByOne;
 
     /// <summary>

@@ -357,8 +357,8 @@ public class BatchSaverUpsertGraphTests : TestBase
 
         foreach (var order in orders)
         {
-            result.GraphHierarchy!.ContainsKey(order.Id).ShouldBeTrue();
-            var node = result.GraphHierarchy![order.Id];
+            result.GraphHierarchy!.ShouldContain(n => n.EntityId.Equals(order.Id));
+            var node = result.GraphHierarchy!.First(n => n.EntityId.Equals(order.Id));
             node.GetChildIds().Count.ShouldBe(3);
         }
     }

@@ -12,19 +12,32 @@ namespace EfCoreUtils;
 /// </remarks>
 public class UpsertBatchResult<TKey> where TKey : notnull, IEquatable<TKey>
 {
+    // === CACHED BACKING FIELDS ===
+
+    private IReadOnlyList<UpsertedEntity<TKey>>? _allUpsertedEntities;
+    private IReadOnlyList<TKey>? _insertedIds;
+    private IReadOnlyList<TKey>? _updatedIds;
+    private IReadOnlyList<TKey>? _successfulIds;
+
     // === ENTITY TRACKING ===
 
     public IReadOnlyList<UpsertedEntity<TKey>> InsertedEntities { get; init; } = [];
     public IReadOnlyList<UpsertedEntity<TKey>> UpdatedEntities { get; init; } = [];
 
     public IReadOnlyList<UpsertedEntity<TKey>> AllUpsertedEntities =>
-        InsertedEntities.Concat(UpdatedEntities).OrderBy(e => e.OriginalIndex).ToList();
+        _allUpsertedEntities ??= InsertedEntities.Concat(UpdatedEntities)
+            .OrderBy(e => e.OriginalIndex).ToList();
 
     // === ID CONVENIENCE ===
 
-    public IReadOnlyList<TKey> InsertedIds => InsertedEntities.Select(e => e.Id).ToList();
-    public IReadOnlyList<TKey> UpdatedIds => UpdatedEntities.Select(e => e.Id).ToList();
-    public IReadOnlyList<TKey> SuccessfulIds => InsertedIds.Concat(UpdatedIds).ToList();
+    public IReadOnlyList<TKey> InsertedIds =>
+        _insertedIds ??= InsertedEntities.Select(e => e.Id).ToList();
+
+    public IReadOnlyList<TKey> UpdatedIds =>
+        _updatedIds ??= UpdatedEntities.Select(e => e.Id).ToList();
+
+    public IReadOnlyList<TKey> SuccessfulIds =>
+        _successfulIds ??= InsertedIds.Concat(UpdatedIds).ToList();
 
     // === COUNTS ===
 
@@ -50,10 +63,10 @@ public class UpsertBatchResult<TKey> where TKey : notnull, IEquatable<TKey>
     // === GRAPH SUPPORT ===
 
     /// <summary>
-    /// For graph upserts only: Full hierarchy of upserted entities keyed by root ID.
+    /// For graph upserts only: Full hierarchy of upserted entities.
     /// Null for parent-only UpsertBatch operations.
     /// </summary>
-    public IReadOnlyDictionary<TKey, GraphNode<TKey>>? GraphHierarchy { get; init; }
+    public IReadOnlyList<GraphNode<TKey>>? GraphHierarchy { get; init; }
 
     /// <summary>
     /// For graph upserts only: Statistics about the traversal.

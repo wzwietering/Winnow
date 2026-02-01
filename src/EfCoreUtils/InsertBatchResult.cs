@@ -6,8 +6,12 @@ namespace EfCoreUtils;
 /// </summary>
 public class InsertBatchResult<TKey> where TKey : notnull, IEquatable<TKey>
 {
+    private IReadOnlyList<TKey>? _insertedIds;
+
     public IReadOnlyList<InsertedEntity<TKey>> InsertedEntities { get; init; } = [];
-    public IReadOnlyList<TKey> InsertedIds => InsertedEntities.Select(e => e.Id).ToList();
+
+    public IReadOnlyList<TKey> InsertedIds =>
+        _insertedIds ??= InsertedEntities.Select(e => e.Id).ToList();
     public int SuccessCount => InsertedEntities.Count;
 
     public IReadOnlyList<InsertBatchFailure> Failures { get; init; } = [];

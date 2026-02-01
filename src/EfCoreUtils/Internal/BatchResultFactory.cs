@@ -67,7 +67,7 @@ internal static class BatchResultFactory
             Failures = [],
             Duration = duration,
             DatabaseRoundTrips = 0,
-            GraphHierarchy = includeGraph ? new Dictionary<TKey, GraphNode<TKey>>() : null,
+            GraphHierarchy = includeGraph ? [] : null,
             TraversalInfo = includeGraph ? CreateEmptyTraversalInfo<TKey>() : null
         };
 
