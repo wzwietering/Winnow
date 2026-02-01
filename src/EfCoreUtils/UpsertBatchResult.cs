@@ -24,6 +24,7 @@ public class UpsertBatchResult<TKey> where TKey : notnull, IEquatable<TKey>
 
     public IReadOnlyList<TKey> InsertedIds => InsertedEntities.Select(e => e.Id).ToList();
     public IReadOnlyList<TKey> UpdatedIds => UpdatedEntities.Select(e => e.Id).ToList();
+    public IReadOnlyList<TKey> SuccessfulIds => InsertedIds.Concat(UpdatedIds).ToList();
 
     // === COUNTS ===
 

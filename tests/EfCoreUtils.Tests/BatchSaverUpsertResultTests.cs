@@ -114,8 +114,8 @@ public class BatchSaverUpsertResultTests : TestBase
         var inserted = result.InsertedEntities.Single();
         var updated = result.UpdatedEntities.Single();
 
-        inserted.Operation.ShouldBe(UpsertOperation.Insert);
-        updated.Operation.ShouldBe(UpsertOperation.Update);
+        inserted.Operation.ShouldBe(UpsertOperationType.Insert);
+        updated.Operation.ShouldBe(UpsertOperationType.Update);
     }
 
     [Fact]

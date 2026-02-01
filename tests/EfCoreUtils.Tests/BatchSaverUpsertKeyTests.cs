@@ -176,7 +176,7 @@ public class BatchSaverUpsertKeyTests : TestBase
         // The operation is detected as INSERT (null = default for string)
         // but fails because EF Core can't insert without a valid string key
         result.FailureCount.ShouldBe(1);
-        result.Failures[0].AttemptedOperation.ShouldBe(UpsertOperation.Insert);
+        result.Failures[0].AttemptedOperation.ShouldBe(UpsertOperationType.Insert);
     }
 
     [Fact]
@@ -428,8 +428,8 @@ public class BatchSaverUpsertKeyTests : TestBase
         result.InsertedCount.ShouldBe(4);
         result.UpdatedCount.ShouldBe(3);
 
-        result.InsertedEntities.ShouldAllBe(e => e.Operation == UpsertOperation.Insert);
-        result.UpdatedEntities.ShouldAllBe(e => e.Operation == UpsertOperation.Update);
+        result.InsertedEntities.ShouldAllBe(e => e.Operation == UpsertOperationType.Insert);
+        result.UpdatedEntities.ShouldAllBe(e => e.Operation == UpsertOperationType.Update);
 
         context.ChangeTracker.Clear();
         context.Products.Count().ShouldBe(9);

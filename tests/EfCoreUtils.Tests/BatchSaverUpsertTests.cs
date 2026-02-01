@@ -165,7 +165,7 @@ public class BatchSaverUpsertTests : TestBase
         var result = saver.UpsertBatch(products);
 
         result.InsertedEntities.Count.ShouldBe(3);
-        result.InsertedEntities.ShouldAllBe(e => e.Operation == UpsertOperation.Insert);
+        result.InsertedEntities.ShouldAllBe(e => e.Operation == UpsertOperationType.Insert);
         result.InsertedEntities.ShouldAllBe(e => e.Id > 0);
     }
 
@@ -185,7 +185,7 @@ public class BatchSaverUpsertTests : TestBase
         var result = saver.UpsertBatch(products);
 
         result.UpdatedEntities.Count.ShouldBe(3);
-        result.UpdatedEntities.ShouldAllBe(e => e.Operation == UpsertOperation.Update);
+        result.UpdatedEntities.ShouldAllBe(e => e.Operation == UpsertOperationType.Update);
         result.UpdatedEntities.ShouldAllBe(e => e.Id > 0);
     }
 

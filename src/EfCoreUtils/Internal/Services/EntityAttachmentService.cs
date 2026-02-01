@@ -347,6 +347,20 @@ internal class EntityAttachmentService<TEntity, TKey>
 
     // ========== Upsert Attachment Methods ==========
 
+    private static void SetUpsertStateIfDetached<TValidationEntity, TValidationKey>(
+        EntityEntry entry, ValidationService<TValidationEntity, TValidationKey> validationService)
+        where TValidationEntity : class
+        where TValidationKey : notnull, IEquatable<TValidationKey>
+    {
+        if (entry.State != EntityState.Detached)
+        {
+            return;
+        }
+
+        var isNew = validationService.HasDefaultKeyValueForEntry(entry);
+        entry.State = isNew ? EntityState.Added : EntityState.Modified;
+    }
+
     internal void AttachEntityGraphAsUpsertRecursive<TValidationEntity, TValidationKey>(
         TEntity entity, int maxDepth, ValidationService<TValidationEntity, TValidationKey> validationService)
         where TValidationEntity : class
@@ -490,12 +504,7 @@ internal class EntityAttachmentService<TEntity, TKey>
     {
         var refEntry = _context.Entry(refEntity);
         TrackReference(refEntry, refResult, currentDepth + 1);
-
-        var isNew = validationService.HasDefaultKeyValueForEntry(refEntry);
-        if (refEntry.State == EntityState.Detached)
-        {
-            refEntry.State = isNew ? EntityState.Added : EntityState.Modified;
-        }
+        SetUpsertStateIfDetached(refEntry, validationService);
 
         if (currentDepth + 1 >= maxDepth)
         {

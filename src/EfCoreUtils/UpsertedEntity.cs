@@ -3,7 +3,7 @@ namespace EfCoreUtils;
 /// <summary>
 /// The type of operation performed during upsert.
 /// </summary>
-public enum UpsertOperation
+public enum UpsertOperationType
 {
     /// <summary>Entity was inserted (had default key value).</summary>
     Insert,
@@ -35,5 +35,5 @@ public class UpsertedEntity<TKey> where TKey : notnull, IEquatable<TKey>
     /// <summary>
     /// The operation that was performed on this entity.
     /// </summary>
-    public UpsertOperation Operation { get; init; }
+    public UpsertOperationType Operation { get; init; }
 }

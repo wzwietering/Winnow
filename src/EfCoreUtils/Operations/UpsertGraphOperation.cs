@@ -6,6 +6,20 @@ namespace EfCoreUtils.Operations;
 /// Upsert operation behavior for entity graphs (parent + children).
 /// Routes each entity to INSERT or UPDATE based on key value detection.
 /// </summary>
+/// <remarks>
+/// <para><strong>Race Condition Warning:</strong></para>
+/// <para>
+/// This operation has a potential race condition between key detection and SaveChanges.
+/// If another process inserts a row with the same key between these steps, the operation
+/// may fail with a conflict error (classified as <see cref="FailureReason.Conflict"/>).
+/// </para>
+/// <para><strong>Mitigation strategies:</strong></para>
+/// <list type="bullet">
+/// <item>Implement retry logic for failed operations</item>
+/// <item>Use database-level MERGE/INSERT ON CONFLICT for high-concurrency scenarios</item>
+/// <item>Add optimistic concurrency tokens to detect conflicts</item>
+/// </list>
+/// </remarks>
 internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
@@ -15,7 +29,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
     private readonly List<UpsertedEntity<TKey>> _updatedEntities = [];
     private readonly List<UpsertBatchFailure<TKey>> _failures = [];
     private readonly List<GraphNode<TKey>> _graphHierarchy = [];
-    private readonly Dictionary<int, UpsertOperation> _operationDecisions = [];
+    private readonly Dictionary<int, UpsertOperationType> _operationDecisions = [];
     private readonly GraphStatisticsTracker<TKey> _statsTracker = new();
 
     internal UpsertGraphOperation(UpsertGraphBatchOptions options) => _options = options;
@@ -49,7 +63,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
     public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
     {
         var isInsert = context.HasDefaultKeyValue(entity);
-        _operationDecisions[index] = isInsert ? UpsertOperation.Insert : UpsertOperation.Update;
+        _operationDecisions[index] = isInsert ? UpsertOperationType.Insert : UpsertOperationType.Update;
 
         if (_options.IncludeReferences)
         {
@@ -91,7 +105,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
     public void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
-        var operation = _operationDecisions.GetValueOrDefault(index, UpsertOperation.Insert);
+        var operation = _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert);
 
         var upsertedEntity = new UpsertedEntity<TKey>
         {
@@ -101,7 +115,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
             Operation = operation
         };
 
-        if (operation == UpsertOperation.Insert)
+        if (operation == UpsertOperationType.Insert)
         {
             _insertedEntities.Add(upsertedEntity);
         }
@@ -119,10 +133,10 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
 
     public void RecordFailure(TEntity entity, int index, Exception ex, BatchStrategyContext<TEntity, TKey> context)
     {
-        var operation = _operationDecisions.GetValueOrDefault(index, UpsertOperation.Insert);
+        var operation = _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert);
         TKey? entityId = default;
 
-        if (operation == UpsertOperation.Update)
+        if (operation == UpsertOperationType.Update)
         {
             entityId = context.GetEntityId(entity);
         }

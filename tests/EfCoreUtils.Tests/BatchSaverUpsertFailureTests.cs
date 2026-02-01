@@ -136,8 +136,8 @@ public class BatchSaverUpsertFailureTests : TestBase
 
         result.FailureCount.ShouldBe(2);
         result.Failures.ShouldAllBe(f =>
-            f.AttemptedOperation == UpsertOperation.Insert ||
-            f.AttemptedOperation == UpsertOperation.Update);
+            f.AttemptedOperation == UpsertOperationType.Insert ||
+            f.AttemptedOperation == UpsertOperationType.Update);
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public class BatchSaverUpsertFailureTests : TestBase
         var result = saver.UpsertBatch([product]);
 
         result.FailureCount.ShouldBe(1);
-        result.Failures[0].AttemptedOperation.ShouldBe(UpsertOperation.Insert);
+        result.Failures[0].AttemptedOperation.ShouldBe(UpsertOperationType.Insert);
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public class BatchSaverUpsertFailureTests : TestBase
         var result = saver.UpsertBatch([product]);
 
         result.FailureCount.ShouldBe(1);
-        result.Failures[0].AttemptedOperation.ShouldBe(UpsertOperation.Update);
+        result.Failures[0].AttemptedOperation.ShouldBe(UpsertOperationType.Update);
     }
 
     [Fact]
@@ -237,7 +237,7 @@ public class BatchSaverUpsertFailureTests : TestBase
         var result = saver.UpsertBatch([product]);
 
         result.FailureCount.ShouldBe(1);
-        result.Failures[0].AttemptedOperation.ShouldBe(UpsertOperation.Update);
+        result.Failures[0].AttemptedOperation.ShouldBe(UpsertOperationType.Update);
     }
 
     [Fact]
@@ -275,7 +275,7 @@ public class BatchSaverUpsertFailureTests : TestBase
 
         result.IsCompleteFailure.ShouldBeTrue();
         result.FailureCount.ShouldBe(1);
-        result.Failures[0].AttemptedOperation.ShouldBe(UpsertOperation.Insert);
+        result.Failures[0].AttemptedOperation.ShouldBe(UpsertOperationType.Insert);
     }
 
     [Fact]

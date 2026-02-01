@@ -22,5 +22,5 @@ public class UpsertBatchFailure<TKey> where TKey : notnull, IEquatable<TKey>
     /// <summary>
     /// The operation that was attempted when failure occurred.
     /// </summary>
-    public UpsertOperation AttemptedOperation { get; init; }
+    public UpsertOperationType AttemptedOperation { get; init; }
 }
