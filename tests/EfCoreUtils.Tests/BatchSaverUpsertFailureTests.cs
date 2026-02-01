@@ -109,7 +109,7 @@ public class BatchSaverUpsertFailureTests : TestBase
         var result = saver.UpsertBatch([order2]);
 
         result.FailureCount.ShouldBe(1);
-        result.Failures[0].Reason.ShouldBe(FailureReason.DatabaseConstraint);
+        result.Failures[0].Reason.ShouldBe(FailureReason.DuplicateKey);
     }
 
     [Fact]

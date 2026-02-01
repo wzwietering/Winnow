@@ -54,6 +54,7 @@ public enum FailureReason
     ValidationError,
     ConcurrencyConflict,
     DatabaseConstraint,
+    DuplicateKey,
     Cancelled,
     UnknownError
 }

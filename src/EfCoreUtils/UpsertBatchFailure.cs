@@ -23,4 +23,10 @@ public class UpsertBatchFailure<TKey> where TKey : notnull, IEquatable<TKey>
     /// The operation that was attempted when failure occurred.
     /// </summary>
     public UpsertOperationType AttemptedOperation { get; init; }
+
+    /// <summary>
+    /// True if the entity had a default key when the operation was attempted.
+    /// When true, EntityId will be default(TKey) and EntityIndex should be used to identify the entity.
+    /// </summary>
+    public bool IsDefaultKey { get; init; }
 }

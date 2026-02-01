@@ -34,7 +34,8 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
 
     internal UpsertGraphOperation(UpsertGraphBatchOptions options) => _options = options;
 
-    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
+    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context,
+        CancellationToken cancellationToken = default)
     {
         // Capture original child IDs for orphan detection (applies to update paths)
         context.CaptureAllOriginalChildIdsRecursive(entities, _options.MaxDepth);
@@ -149,7 +150,8 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
             ErrorMessage = $"Graph upsert ({operation}) failed: {ex.Message}",
             Reason = FailureClassifier.Classify(ex),
             Exception = ex,
-            AttemptedOperation = operation
+            AttemptedOperation = operation,
+            IsDefaultKey = operation == UpsertOperationType.Insert
         };
         _failures.Add(failure);
     }
@@ -187,4 +189,30 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         MaxManyToManyCollectionSize = _options.MaxManyToManyCollectionSize,
         ThrowOnUnsupportedValidation = _options.ThrowOnUnsupportedValidation
     };
+
+    public bool WasInsertAttempt(int index) =>
+        _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert) == UpsertOperationType.Insert;
+
+    public DuplicateKeyStrategy DuplicateKeyStrategy => _options.DuplicateKeyStrategy;
+
+    public void RecordSuccessAsUpdate(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
+    {
+        var entityId = context.GetEntityId(entity);
+        _operationDecisions[index] = UpsertOperationType.Update;
+
+        var upsertedEntity = new UpsertedEntity<TKey>
+        {
+            Id = entityId,
+            OriginalIndex = index,
+            Entity = entity,
+            Operation = UpsertOperationType.Update
+        };
+        _updatedEntities.Add(upsertedEntity);
+
+        var (node, stats) = _options.IncludeReferences
+            ? context.BuildGraphHierarchyWithReferences(entity, _options.MaxDepth)
+            : context.BuildGraphHierarchy(entity, _options.MaxDepth);
+        _graphHierarchy.Add(node);
+        _statsTracker.AggregateStats(stats);
+    }
 }

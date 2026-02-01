@@ -297,4 +297,174 @@ public class BatchSaverUpsertConcurrencyTests : TestBase
         result.WasCancelled.ShouldBeTrue();
         result.TotalProcessed.ShouldBeLessThan(10);
     }
+
+    [Fact]
+    public void UpsertBatch_DuplicateKey_IsDefaultKeySetCorrectly()
+    {
+        // Verifies that IsDefaultKey is true when INSERT attempt fails with duplicate key
+        using var context = CreateContext();
+
+        // Insert existing order
+        var existingOrder = new CustomerOrder
+        {
+            OrderNumber = "ORD-DUP-001",
+            CustomerName = "First Customer",
+            CustomerId = 1,
+            Status = CustomerOrderStatus.Pending,
+            TotalAmount = 100.00m,
+            OrderDate = DateTimeOffset.UtcNow
+        };
+        context.CustomerOrders.Add(existingOrder);
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+
+        // Try to insert new order with duplicate OrderNumber (Id = 0 → INSERT attempt)
+        var duplicateOrder = new CustomerOrder
+        {
+            OrderNumber = "ORD-DUP-001", // Duplicate unique constraint
+            CustomerName = "Second Customer",
+            CustomerId = 2,
+            Status = CustomerOrderStatus.Pending,
+            TotalAmount = 200.00m,
+            OrderDate = DateTimeOffset.UtcNow
+        };
+
+        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var result = saver.UpsertBatch([duplicateOrder]);
+
+        result.FailureCount.ShouldBe(1);
+        result.Failures[0].Reason.ShouldBe(FailureReason.DuplicateKey);
+        result.Failures[0].IsDefaultKey.ShouldBeTrue();
+        result.Failures[0].AttemptedOperation.ShouldBe(UpsertOperationType.Insert);
+        result.Failures[0].EntityId.ShouldBe(0); // Default for int key
+    }
+
+    [Fact]
+    public async Task UpsertBatchAsync_DuplicateKey_RetryAsUpdate_RetriesSuccessfully()
+    {
+        // Tests that DuplicateKeyStrategy.RetryAsUpdate handles the scenario
+        // where an UPDATE uses the existing entity with proper concurrency token
+        using var context = CreateContext();
+
+        // Insert existing order
+        var existingOrder = new CustomerOrder
+        {
+            OrderNumber = "ORD-RETRY-001",
+            CustomerName = "Original Customer",
+            CustomerId = 1,
+            Status = CustomerOrderStatus.Pending,
+            TotalAmount = 100.00m,
+            OrderDate = DateTimeOffset.UtcNow
+        };
+        context.CustomerOrders.Add(existingOrder);
+        await context.SaveChangesAsync();
+        var existingId = existingOrder.Id;
+        var existingVersion = existingOrder.Version;
+        context.ChangeTracker.Clear();
+
+        // Create entity with the existing ID and Version for proper update
+        var updatingOrder = new CustomerOrder
+        {
+            Id = existingId, // Non-default ID → treated as UPDATE
+            OrderNumber = "ORD-RETRY-001",
+            CustomerName = "Updated Customer",
+            CustomerId = 1,
+            Status = CustomerOrderStatus.Completed,
+            TotalAmount = 150.00m,
+            OrderDate = DateTimeOffset.UtcNow,
+            Version = existingVersion // Must match for concurrency check
+        };
+
+        var options = new UpsertBatchOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate };
+        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var result = await saver.UpsertBatchAsync([updatingOrder], options);
+
+        // Should succeed as UPDATE
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.UpdatedCount.ShouldBe(1);
+
+        // Verify changes were persisted
+        context.ChangeTracker.Clear();
+        var savedOrder = context.CustomerOrders.Find(existingId);
+        savedOrder!.CustomerName.ShouldBe("Updated Customer");
+        savedOrder.TotalAmount.ShouldBe(150.00m);
+    }
+
+    [Fact]
+    public async Task UpsertBatchAsync_DuplicateKey_Skip_DoesNotRecordFailure()
+    {
+        // Tests that DuplicateKeyStrategy.Skip silently skips duplicate key errors
+        using var context = CreateContext();
+
+        // Insert existing order
+        var existingOrder = new CustomerOrder
+        {
+            OrderNumber = "ORD-SKIP-001",
+            CustomerName = "Existing Customer",
+            CustomerId = 1,
+            Status = CustomerOrderStatus.Pending,
+            TotalAmount = 100.00m,
+            OrderDate = DateTimeOffset.UtcNow
+        };
+        context.CustomerOrders.Add(existingOrder);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        // Try to insert with duplicate order number
+        var duplicateOrder = new CustomerOrder
+        {
+            OrderNumber = "ORD-SKIP-001", // Duplicate
+            CustomerName = "New Customer",
+            CustomerId = 2,
+            Status = CustomerOrderStatus.Pending,
+            TotalAmount = 200.00m,
+            OrderDate = DateTimeOffset.UtcNow
+        };
+
+        // Add a valid order to verify partial success
+        var validOrder = new CustomerOrder
+        {
+            OrderNumber = "ORD-SKIP-002",
+            CustomerName = "Valid Customer",
+            CustomerId = 3,
+            Status = CustomerOrderStatus.Pending,
+            TotalAmount = 300.00m,
+            OrderDate = DateTimeOffset.UtcNow
+        };
+
+        var options = new UpsertBatchOptions
+        {
+            DuplicateKeyStrategy = DuplicateKeyStrategy.Skip,
+            Strategy = BatchStrategy.OneByOne // Ensure entity isolation
+        };
+        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var result = await saver.UpsertBatchAsync([duplicateOrder, validOrder], options);
+
+        // Duplicate should be skipped (not recorded as failure), valid should succeed
+        result.FailureCount.ShouldBe(0);
+        result.InsertedCount.ShouldBe(1);
+        result.InsertedEntities[0].Entity.ShouldBe(validOrder);
+    }
+
+    [Fact]
+    public void UpsertBatch_UpdateFailure_IsDefaultKeyIsFalse()
+    {
+        // Verifies that IsDefaultKey is false when UPDATE attempt fails
+        using var context = CreateContext();
+        SeedData(context, 1);
+
+        // Load existing product and make invalid changes
+        var existingProduct = context.Products.First();
+        var productId = existingProduct.Id;
+        existingProduct.Price = -10.00m; // Invalid - will fail validation
+        context.ChangeTracker.Clear();
+
+        var saver = new BatchSaver<Product, int>(context);
+        var result = saver.UpsertBatch([existingProduct]);
+
+        result.FailureCount.ShouldBe(1);
+        result.Failures[0].IsDefaultKey.ShouldBeFalse();
+        result.Failures[0].AttemptedOperation.ShouldBe(UpsertOperationType.Update);
+        result.Failures[0].EntityId.ShouldBe(productId);
+    }
 }

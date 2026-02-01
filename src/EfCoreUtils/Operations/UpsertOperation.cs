@@ -33,7 +33,8 @@ internal class UpsertOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, T
 
     internal UpsertOperation(UpsertBatchOptions options) => _options = options;
 
-    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
+    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context,
+        CancellationToken cancellationToken = default)
     {
         if (!_options.ValidateNavigationProperties)
         {
@@ -94,7 +95,8 @@ internal class UpsertOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, T
             ErrorMessage = $"Upsert ({operation}) failed: {ex.Message}",
             Reason = FailureClassifier.Classify(ex),
             Exception = ex,
-            AttemptedOperation = operation
+            AttemptedOperation = operation,
+            IsDefaultKey = operation == UpsertOperationType.Insert
         };
         _failures.Add(failure);
     }
@@ -109,4 +111,24 @@ internal class UpsertOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, T
         Failures = _failures,
         WasCancelled = wasCancelled
     };
+
+    public bool WasInsertAttempt(int index) =>
+        _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert) == UpsertOperationType.Insert;
+
+    public DuplicateKeyStrategy DuplicateKeyStrategy => _options.DuplicateKeyStrategy;
+
+    public void RecordSuccessAsUpdate(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
+    {
+        var entityId = context.GetEntityId(entity);
+        _operationDecisions[index] = UpsertOperationType.Update;
+
+        var upsertedEntity = new UpsertedEntity<TKey>
+        {
+            Id = entityId,
+            OriginalIndex = index,
+            Entity = entity,
+            Operation = UpsertOperationType.Update
+        };
+        _updatedEntities.Add(upsertedEntity);
+    }
 }
