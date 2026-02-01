@@ -15,4 +15,15 @@ internal class OneByOneInsertGraphStrategy<TEntity, TKey> : IBatchInsertGraphStr
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.ExecuteInsert(entities, context, operation);
     }
+
+    public Task<InsertBatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        InsertGraphBatchOptions options,
+        CancellationToken cancellationToken)
+    {
+        var operation = new InsertGraphOperation<TEntity, TKey>(options);
+        var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
+        return strategy.ExecuteInsertAsync(entities, context, operation, cancellationToken);
+    }
 }

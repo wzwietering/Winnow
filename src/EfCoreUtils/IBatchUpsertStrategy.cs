@@ -11,6 +11,12 @@ internal interface IBatchUpsertStrategy<TEntity, TKey>
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
         UpsertBatchOptions options);
+
+    Task<UpsertBatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        UpsertBatchOptions options,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -24,4 +30,10 @@ internal interface IBatchUpsertGraphStrategy<TEntity, TKey>
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
         UpsertGraphBatchOptions options);
+
+    Task<UpsertBatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        UpsertGraphBatchOptions options,
+        CancellationToken cancellationToken);
 }

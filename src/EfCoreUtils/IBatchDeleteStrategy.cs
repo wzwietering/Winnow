@@ -11,6 +11,12 @@ internal interface IBatchDeleteStrategy<TEntity, TKey>
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
         DeleteBatchOptions options);
+
+    Task<BatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        DeleteBatchOptions options,
+        CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -24,4 +30,10 @@ internal interface IBatchDeleteGraphStrategy<TEntity, TKey>
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
         DeleteGraphBatchOptions options);
+
+    Task<BatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        DeleteGraphBatchOptions options,
+        CancellationToken cancellationToken);
 }

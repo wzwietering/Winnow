@@ -37,7 +37,8 @@ internal interface IBatchOperation<TEntity, TKey>
     /// <summary>
     /// Creates the final result from tracked successes and failures.
     /// </summary>
-    BatchResult<TKey> CreateResult();
+    /// <param name="wasCancelled">Whether the operation was cancelled before completing.</param>
+    BatchResult<TKey> CreateResult(bool wasCancelled = false);
 }
 
 /// <summary>
@@ -76,5 +77,6 @@ internal interface IBatchInsertOperation<TEntity, TKey>
     /// <summary>
     /// Creates the final result from tracked successes and failures.
     /// </summary>
-    InsertBatchResult<TKey> CreateResult();
+    /// <param name="wasCancelled">Whether the operation was cancelled before completing.</param>
+    InsertBatchResult<TKey> CreateResult(bool wasCancelled = false);
 }

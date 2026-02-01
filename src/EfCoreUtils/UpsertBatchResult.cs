@@ -63,9 +63,15 @@ public class UpsertBatchResult<TKey> where TKey : notnull, IEquatable<TKey>
 
     // === STATUS HELPERS ===
 
-    public bool IsCompleteSuccess => FailureCount == 0 && SuccessCount > 0;
+    public bool IsCompleteSuccess => FailureCount == 0 && SuccessCount > 0 && !WasCancelled;
     public bool IsCompleteFailure => SuccessCount == 0 && FailureCount > 0;
     public bool IsPartialSuccess => SuccessCount > 0 && FailureCount > 0;
+
+    /// <summary>
+    /// Indicates whether the operation was cancelled before completing.
+    /// When true, some entities may not have been processed.
+    /// </summary>
+    public bool WasCancelled { get; init; }
 
     // === CONVENIENCE METHODS ===
 

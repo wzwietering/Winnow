@@ -13,5 +13,10 @@ internal interface IBatchUpsertOperation<TEntity, TKey>
     void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context);
     void RecordFailure(TEntity entity, int index, Exception ex, BatchStrategyContext<TEntity, TKey> context);
     void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context);
-    UpsertBatchResult<TKey> CreateResult();
+
+    /// <summary>
+    /// Creates the final result from tracked successes and failures.
+    /// </summary>
+    /// <param name="wasCancelled">Whether the operation was cancelled before completing.</param>
+    UpsertBatchResult<TKey> CreateResult(bool wasCancelled = false);
 }

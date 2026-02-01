@@ -49,9 +49,10 @@ internal class UpdateOperation<TEntity, TKey> : IBatchOperation<TEntity, TKey>
 
     public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.Context.Entry(entity).State = EntityState.Detached;
 
-    public BatchResult<TKey> CreateResult() => new()
+    public BatchResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {
         SuccessfulIds = _successfulIds,
-        Failures = _failures
+        Failures = _failures,
+        WasCancelled = wasCancelled
     };
 }

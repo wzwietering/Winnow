@@ -29,7 +29,8 @@ internal static class BatchResultFactory
             Duration = duration,
             DatabaseRoundTrips = roundTrips,
             GraphHierarchy = result.GraphHierarchy,
-            TraversalInfo = result.TraversalInfo
+            TraversalInfo = result.TraversalInfo,
+            WasCancelled = result.WasCancelled
         };
 
     internal static InsertBatchResult<TKey> CreateEmptyInsert<TKey>(TimeSpan duration, bool includeGraph = false)
@@ -54,7 +55,8 @@ internal static class BatchResultFactory
             Duration = duration,
             DatabaseRoundTrips = roundTrips,
             GraphHierarchy = result.GraphHierarchy,
-            TraversalInfo = result.TraversalInfo
+            TraversalInfo = result.TraversalInfo,
+            WasCancelled = result.WasCancelled
         };
 
     internal static UpsertBatchResult<TKey> CreateEmptyUpsert<TKey>(TimeSpan duration, bool includeGraph = false)
@@ -81,7 +83,8 @@ internal static class BatchResultFactory
             Duration = duration,
             DatabaseRoundTrips = roundTrips,
             GraphHierarchy = result.GraphHierarchy,
-            TraversalInfo = result.TraversalInfo
+            TraversalInfo = result.TraversalInfo,
+            WasCancelled = result.WasCancelled
         };
 
     private static GraphTraversalResult<TKey> CreateEmptyTraversalInfo<TKey>()

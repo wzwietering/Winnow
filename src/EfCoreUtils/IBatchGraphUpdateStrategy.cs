@@ -8,4 +8,10 @@ internal interface IBatchGraphUpdateStrategy<TEntity, TKey>
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
         GraphBatchOptions options);
+
+    Task<BatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        GraphBatchOptions options,
+        CancellationToken cancellationToken);
 }

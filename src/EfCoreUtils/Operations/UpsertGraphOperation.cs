@@ -156,7 +156,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
     public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) =>
         context.DetachEntityWithOrphansRecursive(entity, _options.MaxDepth);
 
-    public UpsertBatchResult<TKey> CreateResult() => new()
+    public UpsertBatchResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {
         InsertedEntities = _insertedEntities,
         UpdatedEntities = _updatedEntities,
@@ -164,7 +164,8 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         GraphHierarchy = _graphHierarchy.ToDictionary(
             n => n.EntityId,
             n => n),
-        TraversalInfo = _statsTracker.CreateTraversalInfo()
+        TraversalInfo = _statsTracker.CreateTraversalInfo(),
+        WasCancelled = wasCancelled
     };
 
     private GraphBatchOptions ToGraphBatchOptions() => new()

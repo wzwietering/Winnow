@@ -50,9 +50,29 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
         return EnrichResultWithMetrics(result, stopwatch, strategyContext);
     }
 
-    public Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) => Task.FromResult(UpdateBatch(entities));
+    public Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
+        UpdateBatchAsync(entities, new BatchOptions(), cancellationToken);
 
-    public Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default) => Task.FromResult(UpdateBatch(entities, options));
+    public async Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategy = BatchStrategyFactory.CreateStrategy<TEntity, TKey>(options.Strategy);
+        var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
+
+        stopwatch.Stop();
+
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
+    }
 
     /// <summary>
     /// Updates a batch of entity graphs (parent + children) using the default options.
@@ -92,12 +112,32 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
     public Task<BatchResult<TKey>> UpdateGraphBatchAsync(
         IEnumerable<TEntity> entities,
-        CancellationToken cancellationToken = default) => Task.FromResult(UpdateGraphBatch(entities));
+        CancellationToken cancellationToken = default) =>
+        UpdateGraphBatchAsync(entities, new GraphBatchOptions(), cancellationToken);
 
-    public Task<BatchResult<TKey>> UpdateGraphBatchAsync(
+    public async Task<BatchResult<TKey>> UpdateGraphBatchAsync(
         IEnumerable<TEntity> entities,
         GraphBatchOptions options,
-        CancellationToken cancellationToken = default) => Task.FromResult(UpdateGraphBatch(entities, options));
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyGraphResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategy = BatchStrategyFactory.CreateGraphStrategy<TEntity, TKey>(options.Strategy);
+        var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
+
+        stopwatch.Stop();
+
+        return EnrichGraphResultWithMetrics(result, stopwatch, strategyContext);
+    }
 
     // === INSERT OPERATIONS ===
 
@@ -132,12 +172,32 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
     public Task<InsertBatchResult<TKey>> InsertBatchAsync(
         IEnumerable<TEntity> entities,
-        CancellationToken cancellationToken = default) => Task.FromResult(InsertBatch(entities));
+        CancellationToken cancellationToken = default) =>
+        InsertBatchAsync(entities, new InsertBatchOptions(), cancellationToken);
 
-    public Task<InsertBatchResult<TKey>> InsertBatchAsync(
+    public async Task<InsertBatchResult<TKey>> InsertBatchAsync(
         IEnumerable<TEntity> entities,
         InsertBatchOptions options,
-        CancellationToken cancellationToken = default) => Task.FromResult(InsertBatch(entities, options));
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyInsertResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategy = BatchStrategyFactory.CreateInsertStrategy<TEntity, TKey>(options.Strategy);
+        var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
+
+        stopwatch.Stop();
+
+        return EnrichInsertResultWithMetrics(result, stopwatch, strategyContext);
+    }
 
     /// <summary>
     /// Inserts a batch of entity graphs (parent + children) using the default options.
@@ -172,12 +232,32 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
     public Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(
         IEnumerable<TEntity> entities,
-        CancellationToken cancellationToken = default) => Task.FromResult(InsertGraphBatch(entities));
+        CancellationToken cancellationToken = default) =>
+        InsertGraphBatchAsync(entities, new InsertGraphBatchOptions(), cancellationToken);
 
-    public Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(
+    public async Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(
         IEnumerable<TEntity> entities,
         InsertGraphBatchOptions options,
-        CancellationToken cancellationToken = default) => Task.FromResult(InsertGraphBatch(entities, options));
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyInsertGraphResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategy = BatchStrategyFactory.CreateInsertGraphStrategy<TEntity, TKey>(options.Strategy);
+        var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
+
+        stopwatch.Stop();
+
+        return EnrichInsertGraphResultWithMetrics(result, stopwatch, strategyContext);
+    }
 
     // === DELETE OPERATIONS ===
 
@@ -212,12 +292,32 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
     public Task<BatchResult<TKey>> DeleteBatchAsync(
         IEnumerable<TEntity> entities,
-        CancellationToken cancellationToken = default) => Task.FromResult(DeleteBatch(entities));
+        CancellationToken cancellationToken = default) =>
+        DeleteBatchAsync(entities, new DeleteBatchOptions(), cancellationToken);
 
-    public Task<BatchResult<TKey>> DeleteBatchAsync(
+    public async Task<BatchResult<TKey>> DeleteBatchAsync(
         IEnumerable<TEntity> entities,
         DeleteBatchOptions options,
-        CancellationToken cancellationToken = default) => Task.FromResult(DeleteBatch(entities, options));
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategy = BatchStrategyFactory.CreateDeleteStrategy<TEntity, TKey>(options.Strategy);
+        var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
+
+        stopwatch.Stop();
+
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
+    }
 
     /// <summary>
     /// Deletes a batch of entity graphs (parent + children) using the default options.
@@ -252,12 +352,32 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
     public Task<BatchResult<TKey>> DeleteGraphBatchAsync(
         IEnumerable<TEntity> entities,
-        CancellationToken cancellationToken = default) => Task.FromResult(DeleteGraphBatch(entities));
+        CancellationToken cancellationToken = default) =>
+        DeleteGraphBatchAsync(entities, new DeleteGraphBatchOptions(), cancellationToken);
 
-    public Task<BatchResult<TKey>> DeleteGraphBatchAsync(
+    public async Task<BatchResult<TKey>> DeleteGraphBatchAsync(
         IEnumerable<TEntity> entities,
         DeleteGraphBatchOptions options,
-        CancellationToken cancellationToken = default) => Task.FromResult(DeleteGraphBatch(entities, options));
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyGraphResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategy = BatchStrategyFactory.CreateDeleteGraphStrategy<TEntity, TKey>(options.Strategy);
+        var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
+
+        stopwatch.Stop();
+
+        return EnrichGraphResultWithMetrics(result, stopwatch, strategyContext);
+    }
 
     // === UPSERT OPERATIONS ===
 
@@ -290,12 +410,32 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
     public Task<UpsertBatchResult<TKey>> UpsertBatchAsync(
         IEnumerable<TEntity> entities,
-        CancellationToken cancellationToken = default) => Task.FromResult(UpsertBatch(entities));
+        CancellationToken cancellationToken = default) =>
+        UpsertBatchAsync(entities, new UpsertBatchOptions(), cancellationToken);
 
-    public Task<UpsertBatchResult<TKey>> UpsertBatchAsync(
+    public async Task<UpsertBatchResult<TKey>> UpsertBatchAsync(
         IEnumerable<TEntity> entities,
         UpsertBatchOptions options,
-        CancellationToken cancellationToken = default) => Task.FromResult(UpsertBatch(entities, options));
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyUpsertResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategy = BatchStrategyFactory.CreateUpsertStrategy<TEntity, TKey>(options.Strategy);
+        var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
+
+        stopwatch.Stop();
+
+        return EnrichUpsertResultWithMetrics(result, stopwatch, strategyContext);
+    }
 
     /// <summary>
     /// Upserts entity graphs (parent + children). Each graph succeeds or fails as a unit.
@@ -326,12 +466,32 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
     public Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(
         IEnumerable<TEntity> entities,
-        CancellationToken cancellationToken = default) => Task.FromResult(UpsertGraphBatch(entities));
+        CancellationToken cancellationToken = default) =>
+        UpsertGraphBatchAsync(entities, new UpsertGraphBatchOptions(), cancellationToken);
 
-    public Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(
+    public async Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(
         IEnumerable<TEntity> entities,
         UpsertGraphBatchOptions options,
-        CancellationToken cancellationToken = default) => Task.FromResult(UpsertGraphBatch(entities, options));
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(entities);
+
+        var stopwatch = Stopwatch.StartNew();
+        var entityList = entities.ToList();
+
+        if (entityList.Count == 0)
+        {
+            return CreateEmptyUpsertGraphResult(stopwatch);
+        }
+
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategy = BatchStrategyFactory.CreateUpsertGraphStrategy<TEntity, TKey>(options.Strategy);
+        var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
+
+        stopwatch.Stop();
+
+        return EnrichUpsertResultWithMetrics(result, stopwatch, strategyContext);
+    }
 
     // === PRIVATE HELPERS ===
 

@@ -15,4 +15,15 @@ internal class OneByOneUpdateStrategy<TEntity, TKey> : IBatchUpdateStrategy<TEnt
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
+
+    public Task<BatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        BatchOptions options,
+        CancellationToken cancellationToken)
+    {
+        var operation = new UpdateOperation<TEntity, TKey>(options);
+        var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
+        return strategy.ExecuteAsync(entities, context, operation, cancellationToken);
+    }
 }

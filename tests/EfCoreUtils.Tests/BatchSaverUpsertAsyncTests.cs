@@ -61,7 +61,7 @@ public class BatchSaverUpsertAsyncTests : TestBase
     }
 
     [Fact]
-    public async Task UpsertBatchAsync_Cancellation_Throws()
+    public async Task UpsertBatchAsync_Cancellation_ReturnsWasCancelled()
     {
         using var context = CreateContext();
 
@@ -78,10 +78,11 @@ public class BatchSaverUpsertAsyncTests : TestBase
 
         var saver = new BatchSaver<Product, int>(context);
 
-        // The current implementation doesn't check cancellation token at the start
-        // but this test ensures the API accepts the token
         var result = await saver.UpsertBatchAsync(products, cts.Token);
-        result.IsCompleteSuccess.ShouldBeTrue();
+
+        result.WasCancelled.ShouldBeTrue();
+        result.IsCompleteSuccess.ShouldBeFalse();
+        result.SuccessCount.ShouldBe(0);
     }
 
     [Fact]
@@ -141,7 +142,7 @@ public class BatchSaverUpsertAsyncTests : TestBase
     }
 
     [Fact]
-    public async Task UpsertGraphBatchAsync_Cancellation_Throws()
+    public async Task UpsertGraphBatchAsync_Cancellation_ReturnsWasCancelled()
     {
         using var context = CreateContext();
 
@@ -171,9 +172,10 @@ public class BatchSaverUpsertAsyncTests : TestBase
 
         var saver = new BatchSaver<CustomerOrder, int>(context);
 
-        // The current implementation doesn't check cancellation token at the start
-        // but this test ensures the API accepts the token
         var result = await saver.UpsertGraphBatchAsync(orders, cts.Token);
-        result.IsCompleteSuccess.ShouldBeTrue();
+
+        result.WasCancelled.ShouldBeTrue();
+        result.IsCompleteSuccess.ShouldBeFalse();
+        result.SuccessCount.ShouldBe(0);
     }
 }

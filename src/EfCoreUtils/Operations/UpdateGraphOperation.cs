@@ -101,12 +101,12 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
 
     public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.DetachEntityWithOrphansRecursive(entity, _options.MaxDepth);
 
-    public BatchResult<TKey> CreateResult() => new()
+    public BatchResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {
         SuccessfulIds = _successfulIds,
         Failures = _failures,
         GraphHierarchy = _graphHierarchy,
-        TraversalInfo = _statsTracker.CreateTraversalInfo()
+        TraversalInfo = _statsTracker.CreateTraversalInfo(),
+        WasCancelled = wasCancelled
     };
-
 }

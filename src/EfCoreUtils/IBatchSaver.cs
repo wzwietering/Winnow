@@ -8,24 +8,12 @@ public interface IBatchSaver<TEntity, TKey>
 
     BatchResult<TKey> UpdateBatch(IEnumerable<TEntity> entities);
     BatchResult<TKey> UpdateBatch(IEnumerable<TEntity> entities, BatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default);
 
     BatchResult<TKey> UpdateGraphBatch(IEnumerable<TEntity> entities);
     BatchResult<TKey> UpdateGraphBatch(IEnumerable<TEntity> entities, GraphBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<TKey>> UpdateGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<TKey>> UpdateGraphBatchAsync(IEnumerable<TEntity> entities, GraphBatchOptions options, CancellationToken cancellationToken = default);
 
     // === INSERT OPERATIONS ===
@@ -35,13 +23,7 @@ public interface IBatchSaver<TEntity, TKey>
     /// </summary>
     InsertBatchResult<TKey> InsertBatch(IEnumerable<TEntity> entities);
     InsertBatchResult<TKey> InsertBatch(IEnumerable<TEntity> entities, InsertBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<InsertBatchResult<TKey>> InsertBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<InsertBatchResult<TKey>> InsertBatchAsync(IEnumerable<TEntity> entities, InsertBatchOptions options, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -49,13 +31,7 @@ public interface IBatchSaver<TEntity, TKey>
     /// </summary>
     InsertBatchResult<TKey> InsertGraphBatch(IEnumerable<TEntity> entities);
     InsertBatchResult<TKey> InsertGraphBatch(IEnumerable<TEntity> entities, InsertGraphBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(IEnumerable<TEntity> entities, InsertGraphBatchOptions options, CancellationToken cancellationToken = default);
 
     // === DELETE OPERATIONS ===
@@ -65,13 +41,7 @@ public interface IBatchSaver<TEntity, TKey>
     /// </summary>
     BatchResult<TKey> DeleteBatch(IEnumerable<TEntity> entities);
     BatchResult<TKey> DeleteBatch(IEnumerable<TEntity> entities, DeleteBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<TKey>> DeleteBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<TKey>> DeleteBatchAsync(IEnumerable<TEntity> entities, DeleteBatchOptions options, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -79,13 +49,7 @@ public interface IBatchSaver<TEntity, TKey>
     /// </summary>
     BatchResult<TKey> DeleteGraphBatch(IEnumerable<TEntity> entities);
     BatchResult<TKey> DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<TKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<TKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default);
 
     // === UPSERT OPERATIONS ===
@@ -99,13 +63,7 @@ public interface IBatchSaver<TEntity, TKey>
     /// </remarks>
     UpsertBatchResult<TKey> UpsertBatch(IEnumerable<TEntity> entities);
     UpsertBatchResult<TKey> UpsertBatch(IEnumerable<TEntity> entities, UpsertBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<UpsertBatchResult<TKey>> UpsertBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<UpsertBatchResult<TKey>> UpsertBatchAsync(IEnumerable<TEntity> entities, UpsertBatchOptions options, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -113,13 +71,7 @@ public interface IBatchSaver<TEntity, TKey>
     /// </summary>
     UpsertBatchResult<TKey> UpsertGraphBatch(IEnumerable<TEntity> entities);
     UpsertBatchResult<TKey> UpsertGraphBatch(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options, CancellationToken cancellationToken = default);
 }
 
@@ -170,96 +122,48 @@ public interface IBatchSaver<TEntity>
 
     BatchResult<CompositeKey> UpdateBatch(IEnumerable<TEntity> entities);
     BatchResult<CompositeKey> UpdateBatch(IEnumerable<TEntity> entities, BatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<CompositeKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<CompositeKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default);
 
     BatchResult<CompositeKey> UpdateGraphBatch(IEnumerable<TEntity> entities);
     BatchResult<CompositeKey> UpdateGraphBatch(IEnumerable<TEntity> entities, GraphBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<CompositeKey>> UpdateGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<CompositeKey>> UpdateGraphBatchAsync(IEnumerable<TEntity> entities, GraphBatchOptions options, CancellationToken cancellationToken = default);
 
     // === INSERT OPERATIONS ===
 
     InsertBatchResult<CompositeKey> InsertBatch(IEnumerable<TEntity> entities);
     InsertBatchResult<CompositeKey> InsertBatch(IEnumerable<TEntity> entities, InsertBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<InsertBatchResult<CompositeKey>> InsertBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<InsertBatchResult<CompositeKey>> InsertBatchAsync(IEnumerable<TEntity> entities, InsertBatchOptions options, CancellationToken cancellationToken = default);
 
     InsertBatchResult<CompositeKey> InsertGraphBatch(IEnumerable<TEntity> entities);
     InsertBatchResult<CompositeKey> InsertGraphBatch(IEnumerable<TEntity> entities, InsertGraphBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<InsertBatchResult<CompositeKey>> InsertGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<InsertBatchResult<CompositeKey>> InsertGraphBatchAsync(IEnumerable<TEntity> entities, InsertGraphBatchOptions options, CancellationToken cancellationToken = default);
 
     // === DELETE OPERATIONS ===
 
     BatchResult<CompositeKey> DeleteBatch(IEnumerable<TEntity> entities);
     BatchResult<CompositeKey> DeleteBatch(IEnumerable<TEntity> entities, DeleteBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<CompositeKey>> DeleteBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<CompositeKey>> DeleteBatchAsync(IEnumerable<TEntity> entities, DeleteBatchOptions options, CancellationToken cancellationToken = default);
 
     BatchResult<CompositeKey> DeleteGraphBatch(IEnumerable<TEntity> entities);
     BatchResult<CompositeKey> DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default);
 
     // === UPSERT OPERATIONS ===
 
     UpsertBatchResult<CompositeKey> UpsertBatch(IEnumerable<TEntity> entities);
     UpsertBatchResult<CompositeKey> UpsertBatch(IEnumerable<TEntity> entities, UpsertBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<UpsertBatchResult<CompositeKey>> UpsertBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<UpsertBatchResult<CompositeKey>> UpsertBatchAsync(IEnumerable<TEntity> entities, UpsertBatchOptions options, CancellationToken cancellationToken = default);
 
     UpsertBatchResult<CompositeKey> UpsertGraphBatch(IEnumerable<TEntity> entities);
     UpsertBatchResult<CompositeKey> UpsertGraphBatch(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<UpsertBatchResult<CompositeKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
-    /// <remarks>
-    /// <para><strong>Note:</strong> The cancellation token is currently not honored during execution.</para>
-    /// </remarks>
     Task<UpsertBatchResult<CompositeKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options, CancellationToken cancellationToken = default);
 }
 

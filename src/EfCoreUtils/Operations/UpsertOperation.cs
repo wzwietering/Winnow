@@ -102,10 +102,11 @@ internal class UpsertOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, T
     public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) =>
         context.Context.Entry(entity).State = EntityState.Detached;
 
-    public UpsertBatchResult<TKey> CreateResult() => new()
+    public UpsertBatchResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {
         InsertedEntities = _insertedEntities,
         UpdatedEntities = _updatedEntities,
-        Failures = _failures
+        Failures = _failures,
+        WasCancelled = wasCancelled
     };
 }

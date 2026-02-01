@@ -15,4 +15,15 @@ internal class DivideAndConquerUpsertStrategy<TEntity, TKey> : IBatchUpsertStrat
         var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
         return strategy.ExecuteUpsert(entities, context, operation);
     }
+
+    public Task<UpsertBatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        UpsertBatchOptions options,
+        CancellationToken cancellationToken)
+    {
+        var operation = new UpsertOperation<TEntity, TKey>(options);
+        var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
+        return strategy.ExecuteUpsertAsync(entities, context, operation, cancellationToken);
+    }
 }
