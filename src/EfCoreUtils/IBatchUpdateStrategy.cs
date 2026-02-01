@@ -5,4 +5,10 @@ internal interface IBatchUpdateStrategy<TEntity, TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     BatchResult<TKey> Execute(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context, BatchOptions options);
+
+    Task<BatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        BatchOptions options,
+        CancellationToken cancellationToken);
 }

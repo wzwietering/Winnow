@@ -8,6 +8,12 @@ internal interface IBatchInsertStrategy<TEntity, TKey>
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
         InsertBatchOptions options);
+
+    Task<InsertBatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        InsertBatchOptions options,
+        CancellationToken cancellationToken);
 }
 
 internal interface IBatchInsertGraphStrategy<TEntity, TKey>
@@ -18,4 +24,10 @@ internal interface IBatchInsertGraphStrategy<TEntity, TKey>
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
         InsertGraphBatchOptions options);
+
+    Task<InsertBatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        InsertGraphBatchOptions options,
+        CancellationToken cancellationToken);
 }

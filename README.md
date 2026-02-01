@@ -298,6 +298,85 @@ When deleting parent entities with children:
 | `Throw` | Exception if parent has loaded children. |
 | `ParentOnly` | Only delete parent, rely on database CASCADE DELETE. |
 
+## Upsert Operations
+
+Upsert operations perform INSERT or UPDATE based on key detection:
+- **Default key** (0, Guid.Empty, null) → INSERT
+- **Non-default key** → UPDATE
+
+> **Warning**: This is NOT a database-level MERGE. There is a potential race condition between key detection and SaveChanges. If another process inserts a row between these operations, you may get conflicts. Use retry logic or database-level upsert for high-concurrency scenarios.
+
+### Basic Upsert
+
+```csharp
+var saver = new BatchSaver<Product, int>(context);
+
+var products = new[]
+{
+    new Product { Id = 0, Name = "New Product", Price = 9.99m },     // INSERT (Id=0)
+    new Product { Id = 42, Name = "Updated Name", Price = 19.99m }, // UPDATE (Id=42)
+    new Product { Id = 0, Name = "Another New", Price = 5.00m }     // INSERT (Id=0)
+};
+
+var result = saver.UpsertBatch(products);
+
+Console.WriteLine($"Inserted: {result.InsertedCount}");  // 2
+Console.WriteLine($"Updated: {result.UpdatedCount}");    // 1
+
+// Access results by operation type
+foreach (var entity in result.InsertedEntities)
+{
+    Console.WriteLine($"Inserted product: {entity.Id}");
+}
+foreach (var entity in result.UpdatedEntities)
+{
+    Console.WriteLine($"Updated product: {entity.Id}");
+}
+```
+
+### Graph Upsert (Parent + Children)
+
+```csharp
+var saver = new BatchSaver<CustomerOrder, int>(context);
+
+var orders = new[]
+{
+    new CustomerOrder
+    {
+        Id = 0,  // New order (insert)
+        CustomerName = "Alice",
+        OrderItems = new List<OrderItem>
+        {
+            new() { Id = 0, ProductName = "Widget", Quantity = 5 },   // INSERT
+            new() { Id = 123, ProductName = "Gadget", Quantity = 3 }  // UPDATE
+        }
+    }
+};
+
+var result = saver.UpsertGraphBatch(orders, new UpsertGraphBatchOptions
+{
+    OrphanedChildBehavior = OrphanBehavior.Delete  // Required for graph updates
+});
+
+Console.WriteLine($"Inserted: {result.InsertedCount}");
+Console.WriteLine($"Updated: {result.UpdatedCount}");
+```
+
+### UpsertBatchResult Properties
+
+```csharp
+result.InsertedEntities   // List<UpsertedEntity<TKey>> with Id, OriginalIndex, Entity, Operation
+result.UpdatedEntities    // List<UpsertedEntity<TKey>> with Id, OriginalIndex, Entity, Operation
+result.InsertedIds        // IReadOnlyList<TKey> - Just the inserted IDs
+result.UpdatedIds         // IReadOnlyList<TKey> - Just the updated IDs
+result.SuccessfulIds      // IReadOnlyList<TKey> - All successful IDs (inserted + updated)
+result.InsertedCount      // Count of inserts
+result.UpdatedCount       // Count of updates
+result.Failures           // List<UpsertBatchFailure<TKey>> with EntityIndex, AttemptedOperation
+result.GraphHierarchy     // For graph upserts: parent ID -> GraphNode
+result.TraversalInfo      // Graph traversal statistics
+```
+
 ## Update Operations
 
 ### Basic Update

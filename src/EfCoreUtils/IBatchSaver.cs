@@ -51,6 +51,82 @@ public interface IBatchSaver<TEntity, TKey>
     BatchResult<TKey> DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options);
     Task<BatchResult<TKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
     Task<BatchResult<TKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default);
+
+    // === UPSERT OPERATIONS ===
+
+    /// <summary>
+    /// Upserts entities individually with failure isolation.
+    /// Entities with default keys are inserted; entities with non-default keys are updated.
+    /// </summary>
+    /// <param name="entities">The entities to upsert.</param>
+    /// <returns>Result containing inserted entities, updated entities, and failures.</returns>
+    /// <remarks>
+    /// <para><strong>NOT a database MERGE:</strong> This is NOT atomic MERGE/INSERT ON CONFLICT.
+    /// It performs conditional INSERT or UPDATE based on key detection.</para>
+    ///
+    /// <para><strong>Race Condition:</strong> There is a potential race condition between
+    /// key detection and SaveChanges. If another process inserts a row with the same key
+    /// between these steps, the INSERT will fail. Set <see cref="UpsertBatchOptions.DuplicateKeyStrategy"/>
+    /// to <see cref="DuplicateKeyStrategy.RetryAsUpdate"/> for automatic retry handling.</para>
+    ///
+    /// <para><strong>Key Detection:</strong></para>
+    /// <list type="bullet">
+    /// <item>int/long: 0 → INSERT, other → UPDATE</item>
+    /// <item>Guid: Empty → INSERT, other → UPDATE</item>
+    /// <item>string: null/empty → INSERT, other → UPDATE</item>
+    /// </list>
+    /// </remarks>
+    UpsertBatchResult<TKey> UpsertBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="UpsertBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entities to upsert.</param>
+    /// <param name="options">Upsert configuration options.</param>
+    UpsertBatchResult<TKey> UpsertBatch(IEnumerable<TEntity> entities, UpsertBatchOptions options);
+
+    /// <inheritdoc cref="UpsertBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entities to upsert.</param>
+    /// <param name="cancellationToken">Token to cancel the operation. Checked before each entity.</param>
+    Task<UpsertBatchResult<TKey>> UpsertBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="UpsertBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entities to upsert.</param>
+    /// <param name="options">Upsert configuration options.</param>
+    /// <param name="cancellationToken">Token to cancel the operation. Checked before each entity.</param>
+    Task<UpsertBatchResult<TKey>> UpsertBatchAsync(IEnumerable<TEntity> entities, UpsertBatchOptions options, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Upserts entity graphs (parent + children) with failure isolation.
+    /// Each entity in the graph is routed to INSERT or UPDATE based on its key.
+    /// </summary>
+    /// <param name="entities">The root entities of the graphs to upsert.</param>
+    /// <returns>Result containing inserted entities, updated entities, graph hierarchy, and failures.</returns>
+    /// <remarks>
+    /// <para><strong>NOT a database MERGE:</strong> This is NOT atomic MERGE/INSERT ON CONFLICT.
+    /// It performs conditional INSERT or UPDATE based on key detection for each entity in the graph.</para>
+    ///
+    /// <para><strong>Race Condition:</strong> Set <see cref="UpsertGraphBatchOptions.DuplicateKeyStrategy"/>
+    /// to <see cref="DuplicateKeyStrategy.RetryAsUpdate"/> for automatic retry handling.</para>
+    ///
+    /// <para><strong>Orphan Handling:</strong> For entities being updated, children removed from
+    /// collections are handled according to <see cref="UpsertGraphBatchOptions.OrphanedChildBehavior"/>.</para>
+    /// </remarks>
+    UpsertBatchResult<TKey> UpsertGraphBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="UpsertGraphBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The root entities of the graphs to upsert.</param>
+    /// <param name="options">Graph upsert configuration options.</param>
+    UpsertBatchResult<TKey> UpsertGraphBatch(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options);
+
+    /// <inheritdoc cref="UpsertGraphBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The root entities of the graphs to upsert.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="UpsertGraphBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The root entities of the graphs to upsert.</param>
+    /// <param name="options">Graph upsert configuration options.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
+    Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options, CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -131,6 +207,46 @@ public interface IBatchSaver<TEntity>
     BatchResult<CompositeKey> DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options);
     Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
     Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default);
+
+    // === UPSERT OPERATIONS ===
+
+    /// <summary>
+    /// Upserts entities individually. Entities with default keys are inserted; others are updated.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>NOT a database MERGE:</strong> Uses conditional INSERT/UPDATE based on key detection.</para>
+    /// <para><strong>Race Condition:</strong> Set <see cref="UpsertBatchOptions.DuplicateKeyStrategy"/>
+    /// to <see cref="DuplicateKeyStrategy.RetryAsUpdate"/> for automatic retry handling.</para>
+    /// </remarks>
+    UpsertBatchResult<CompositeKey> UpsertBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="UpsertBatch(IEnumerable{TEntity})"/>
+    UpsertBatchResult<CompositeKey> UpsertBatch(IEnumerable<TEntity> entities, UpsertBatchOptions options);
+
+    /// <inheritdoc cref="UpsertBatch(IEnumerable{TEntity})"/>
+    Task<UpsertBatchResult<CompositeKey>> UpsertBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="UpsertBatch(IEnumerable{TEntity})"/>
+    Task<UpsertBatchResult<CompositeKey>> UpsertBatchAsync(IEnumerable<TEntity> entities, UpsertBatchOptions options, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Upserts entity graphs (parent + children). Each entity is routed to INSERT or UPDATE based on its key.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>NOT a database MERGE:</strong> Uses conditional INSERT/UPDATE based on key detection.</para>
+    /// <para><strong>Race Condition:</strong> Set <see cref="UpsertGraphBatchOptions.DuplicateKeyStrategy"/>
+    /// to <see cref="DuplicateKeyStrategy.RetryAsUpdate"/> for automatic retry handling.</para>
+    /// </remarks>
+    UpsertBatchResult<CompositeKey> UpsertGraphBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="UpsertGraphBatch(IEnumerable{TEntity})"/>
+    UpsertBatchResult<CompositeKey> UpsertGraphBatch(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options);
+
+    /// <inheritdoc cref="UpsertGraphBatch(IEnumerable{TEntity})"/>
+    Task<UpsertBatchResult<CompositeKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="UpsertGraphBatch(IEnumerable{TEntity})"/>
+    Task<UpsertBatchResult<CompositeKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options, CancellationToken cancellationToken = default);
 }
 
 public class BatchOptions

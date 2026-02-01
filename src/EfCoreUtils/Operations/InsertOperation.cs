@@ -50,9 +50,10 @@ internal class InsertOperation<TEntity, TKey> : IBatchInsertOperation<TEntity, T
 
     public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.Context.Entry(entity).State = EntityState.Detached;
 
-    public InsertBatchResult<TKey> CreateResult() => new()
+    public InsertBatchResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {
         InsertedEntities = _insertedEntities,
-        Failures = _failures
+        Failures = _failures,
+        WasCancelled = wasCancelled
     };
 }

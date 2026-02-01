@@ -1,39 +1,39 @@
 namespace EfCoreUtils;
 
 /// <summary>
-/// Strategy interface for parent-only delete batch operations.
+/// Strategy interface for parent-only upsert batch operations.
 /// </summary>
-internal interface IBatchDeleteStrategy<TEntity, TKey>
+internal interface IBatchUpsertStrategy<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    BatchResult<TKey> Execute(
+    UpsertBatchResult<TKey> Execute(
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
-        DeleteBatchOptions options);
+        UpsertBatchOptions options);
 
-    Task<BatchResult<TKey>> ExecuteAsync(
+    Task<UpsertBatchResult<TKey>> ExecuteAsync(
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
-        DeleteBatchOptions options,
+        UpsertBatchOptions options,
         CancellationToken cancellationToken);
 }
 
 /// <summary>
-/// Strategy interface for graph delete batch operations (parent + children).
+/// Strategy interface for graph upsert batch operations (parent + children).
 /// </summary>
-internal interface IBatchDeleteGraphStrategy<TEntity, TKey>
+internal interface IBatchUpsertGraphStrategy<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    BatchResult<TKey> Execute(
+    UpsertBatchResult<TKey> Execute(
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
-        DeleteGraphBatchOptions options);
+        UpsertGraphBatchOptions options);
 
-    Task<BatchResult<TKey>> ExecuteAsync(
+    Task<UpsertBatchResult<TKey>> ExecuteAsync(
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
-        DeleteGraphBatchOptions options,
+        UpsertGraphBatchOptions options,
         CancellationToken cancellationToken);
 }

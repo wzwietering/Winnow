@@ -15,4 +15,15 @@ internal class OneByOneDeleteGraphStrategy<TEntity, TKey> : IBatchDeleteGraphStr
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
+
+    public Task<BatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        DeleteGraphBatchOptions options,
+        CancellationToken cancellationToken)
+    {
+        var operation = new DeleteGraphOperation<TEntity, TKey>(options);
+        var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
+        return strategy.ExecuteAsync(entities, context, operation, cancellationToken);
+    }
 }

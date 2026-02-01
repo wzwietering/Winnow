@@ -344,4 +344,176 @@ internal class EntityAttachmentService<TEntity, TKey>
         var entityId = GetEntityIdFromEntry(entry);
         refResult.AddReference(typeName, entityId, depth);
     }
+
+    // ========== Upsert Attachment Methods ==========
+
+    private static void SetUpsertStateIfDetached<TValidationEntity, TValidationKey>(
+        EntityEntry entry, ValidationService<TValidationEntity, TValidationKey> validationService)
+        where TValidationEntity : class
+        where TValidationKey : notnull, IEquatable<TValidationKey>
+    {
+        if (entry.State != EntityState.Detached)
+        {
+            return;
+        }
+
+        var isNew = validationService.HasDefaultKeyValueForEntry(entry);
+        entry.State = isNew ? EntityState.Added : EntityState.Modified;
+    }
+
+    internal void AttachEntityGraphAsUpsertRecursive<TValidationEntity, TValidationKey>(
+        TEntity entity, int maxDepth, ValidationService<TValidationEntity, TValidationKey> validationService)
+        where TValidationEntity : class
+        where TValidationKey : notnull, IEquatable<TValidationKey>
+    {
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        AttachAsUpsertRecursive(entity, 0, ClampDepth(maxDepth), visited, validationService);
+    }
+
+    private void AttachAsUpsertRecursive<TValidationEntity, TValidationKey>(
+        object entity, int currentDepth, int maxDepth, HashSet<object> visited,
+        ValidationService<TValidationEntity, TValidationKey> validationService)
+        where TValidationEntity : class
+        where TValidationKey : notnull, IEquatable<TValidationKey>
+    {
+        if (!visited.Add(entity))
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+        var isNew = validationService.HasDefaultKeyValueForEntry(entry);
+        entry.State = isNew ? EntityState.Added : EntityState.Modified;
+
+        if (currentDepth >= maxDepth)
+        {
+            return;
+        }
+
+        AttachUpsertChildren(entry, currentDepth, maxDepth, visited, validationService);
+    }
+
+    private void AttachUpsertChildren<TValidationEntity, TValidationKey>(
+        EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited,
+        ValidationService<TValidationEntity, TValidationKey> validationService)
+        where TValidationEntity : class
+        where TValidationKey : notnull, IEquatable<TValidationKey>
+    {
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
+            {
+                AttachAsUpsertRecursive(item, currentDepth + 1, maxDepth, visited, validationService);
+            }
+        }
+    }
+
+    internal ReferenceTrackingResult AttachEntityGraphAsUpsertWithReferences<TValidationEntity, TValidationKey>(
+        TEntity entity, int maxDepth, CircularReferenceHandling circularHandling,
+        ValidationService<TValidationEntity, TValidationKey> validationService)
+        where TValidationEntity : class
+        where TValidationKey : notnull, IEquatable<TValidationKey>
+    {
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        var referenceResult = new ReferenceTrackingResult();
+        AttachAsUpsertWithReferences(
+            entity, 0, ClampDepth(maxDepth), visited, circularHandling, referenceResult, validationService);
+        return referenceResult;
+    }
+
+    private void AttachAsUpsertWithReferences<TValidationEntity, TValidationKey>(
+        object entity, int currentDepth, int maxDepth, HashSet<object> visited,
+        CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
+        ValidationService<TValidationEntity, TValidationKey> validationService)
+        where TValidationEntity : class
+        where TValidationKey : notnull, IEquatable<TValidationKey>
+    {
+        if (!TryVisitEntity(entity, visited, circularHandling, currentDepth))
+        {
+            return;
+        }
+
+        var entry = _context.Entry(entity);
+        var isNew = validationService.HasDefaultKeyValueForEntry(entry);
+        entry.State = isNew ? EntityState.Added : EntityState.Modified;
+
+        if (currentDepth >= maxDepth)
+        {
+            return;
+        }
+
+        AttachUpsertChildrenWithReferences(
+            entry, currentDepth, maxDepth, visited, circularHandling, refResult, validationService);
+        AttachUpsertReferences(
+            entry, currentDepth, maxDepth, visited, circularHandling, refResult, validationService);
+    }
+
+    private void AttachUpsertChildrenWithReferences<TValidationEntity, TValidationKey>(
+        EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited,
+        CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
+        ValidationService<TValidationEntity, TValidationKey> validationService)
+        where TValidationEntity : class
+        where TValidationKey : notnull, IEquatable<TValidationKey>
+    {
+        foreach (var navigation in entry.Navigations)
+        {
+            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            {
+                continue;
+            }
+
+            foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
+            {
+                AttachAsUpsertWithReferences(
+                    item, currentDepth + 1, maxDepth, visited, circularHandling, refResult, validationService);
+            }
+        }
+    }
+
+    private void AttachUpsertReferences<TValidationEntity, TValidationKey>(
+        EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited,
+        CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
+        ValidationService<TValidationEntity, TValidationKey> validationService)
+        where TValidationEntity : class
+        where TValidationKey : notnull, IEquatable<TValidationKey>
+    {
+        foreach (var navigation in NavigationPropertyHelper.GetReferenceNavigations(entry))
+        {
+            var refEntity = NavigationPropertyHelper.GetReferenceValue(navigation);
+            if (refEntity == null || !TryVisitEntity(refEntity, visited, circularHandling, currentDepth + 1))
+            {
+                continue;
+            }
+
+            ProcessUpsertReferenceEntity(
+                refEntity, currentDepth, maxDepth, visited, circularHandling, refResult, validationService);
+        }
+    }
+
+    private void ProcessUpsertReferenceEntity<TValidationEntity, TValidationKey>(
+        object refEntity, int currentDepth, int maxDepth, HashSet<object> visited,
+        CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
+        ValidationService<TValidationEntity, TValidationKey> validationService)
+        where TValidationEntity : class
+        where TValidationKey : notnull, IEquatable<TValidationKey>
+    {
+        var refEntry = _context.Entry(refEntity);
+        TrackReference(refEntry, refResult, currentDepth + 1);
+        SetUpsertStateIfDetached(refEntry, validationService);
+
+        if (currentDepth + 1 >= maxDepth)
+        {
+            return;
+        }
+
+        AttachUpsertChildrenWithReferences(
+            refEntry, currentDepth + 1, maxDepth, visited, circularHandling, refResult, validationService);
+        AttachUpsertReferences(
+            refEntry, currentDepth + 1, maxDepth, visited, circularHandling, refResult, validationService);
+    }
 }

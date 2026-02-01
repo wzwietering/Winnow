@@ -6,8 +6,12 @@ namespace EfCoreUtils;
 /// </summary>
 public class InsertBatchResult<TKey> where TKey : notnull, IEquatable<TKey>
 {
+    private IReadOnlyList<TKey>? _insertedIds;
+
     public IReadOnlyList<InsertedEntity<TKey>> InsertedEntities { get; init; } = [];
-    public IReadOnlyList<TKey> InsertedIds => InsertedEntities.Select(e => e.Id).ToList();
+
+    public IReadOnlyList<TKey> InsertedIds =>
+        _insertedIds ??= InsertedEntities.Select(e => e.Id).ToList();
     public int SuccessCount => InsertedEntities.Count;
 
     public IReadOnlyList<InsertBatchFailure> Failures { get; init; } = [];
@@ -31,9 +35,15 @@ public class InsertBatchResult<TKey> where TKey : notnull, IEquatable<TKey>
     /// </summary>
     public GraphTraversalResult<TKey>? TraversalInfo { get; init; }
 
-    public bool IsCompleteSuccess => FailureCount == 0 && SuccessCount > 0;
+    public bool IsCompleteSuccess => FailureCount == 0 && SuccessCount > 0 && !WasCancelled;
     public bool IsCompleteFailure => SuccessCount == 0 && FailureCount > 0;
     public bool IsPartialSuccess => SuccessCount > 0 && FailureCount > 0;
+
+    /// <summary>
+    /// Indicates whether the operation was cancelled before completing.
+    /// When true, some entities may not have been processed.
+    /// </summary>
+    public bool WasCancelled { get; init; }
 }
 
 /// <summary>

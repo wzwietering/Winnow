@@ -1,10 +1,16 @@
 namespace EfCoreUtils;
 
 /// <summary>
-/// Options for graph insert batch operations (parent + children).
+/// Options for graph upsert operations (parent + children).
 /// </summary>
-public class InsertGraphBatchOptions : GraphBatchOptionsBase
+public class UpsertGraphBatchOptions : GraphBatchOptionsBase
 {
+    /// <summary>
+    /// How to handle children removed from collections.
+    /// Default: Throw (safest - user must explicitly choose Delete or Detach).
+    /// </summary>
+    public OrphanBehavior OrphanedChildBehavior { get; set; } = OrphanBehavior.Throw;
+
     /// <summary>
     /// How to handle related entities in many-to-many navigations.
     /// Only applies when IncludeManyToMany is true.
@@ -54,4 +60,18 @@ public class InsertGraphBatchOptions : GraphBatchOptionsBase
     /// FK constraint violations at save time.
     /// </remarks>
     public bool ThrowOnUnsupportedValidation { get; set; } = false;
+
+    /// <summary>
+    /// How to handle duplicate key errors during INSERT attempts.
+    /// Default: Fail.
+    /// </summary>
+    /// <remarks>
+    /// <para><strong>Race Condition Mitigation:</strong></para>
+    /// <para>
+    /// Set to <see cref="DuplicateKeyStrategy.RetryAsUpdate"/> to automatically
+    /// retry failed inserts as updates. This handles the case where another process
+    /// inserts the same key between key detection and SaveChanges.
+    /// </para>
+    /// </remarks>
+    public DuplicateKeyStrategy DuplicateKeyStrategy { get; set; } = DuplicateKeyStrategy.Fail;
 }

@@ -87,11 +87,12 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
 
     public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.DetachEntityGraphRecursive(entity, _options.MaxDepth);
 
-    public InsertBatchResult<TKey> CreateResult() => new()
+    public InsertBatchResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {
         InsertedEntities = _insertedEntities,
         Failures = _failures,
         GraphHierarchy = _graphHierarchy,
-        TraversalInfo = _statsTracker.CreateTraversalInfo()
+        TraversalInfo = _statsTracker.CreateTraversalInfo(),
+        WasCancelled = wasCancelled
     };
 }

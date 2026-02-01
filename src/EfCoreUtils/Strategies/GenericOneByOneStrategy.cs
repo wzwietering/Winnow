@@ -1,3 +1,6 @@
+using EfCoreUtils.Internal;
+using Microsoft.EntityFrameworkCore;
+
 namespace EfCoreUtils.Strategies;
 
 /// <summary>
@@ -9,6 +12,219 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
+    // === ASYNC METHODS ===
+
+    internal async Task<BatchResult<TKey>> ExecuteAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchOperation<TEntity, TKey> operation,
+        CancellationToken cancellationToken)
+    {
+        operation.ValidateAll(entities, context);
+        context.DetachAllEntities(entities);
+
+        var wasCancelled = false;
+        foreach (var entity in entities)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                wasCancelled = true;
+                break;
+            }
+
+            await ProcessSingleEntityAsync(entity, context, operation, cancellationToken);
+        }
+
+        return operation.CreateResult(wasCancelled);
+    }
+
+    internal async Task<InsertBatchResult<TKey>> ExecuteInsertAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchInsertOperation<TEntity, TKey> operation,
+        CancellationToken cancellationToken)
+    {
+        operation.ValidateAll(entities, context);
+        context.DetachAllEntities(entities);
+
+        var wasCancelled = false;
+        for (var i = 0; i < entities.Count; i++)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                wasCancelled = true;
+                break;
+            }
+
+            await ProcessSingleInsertAsync(entities[i], i, context, operation, cancellationToken);
+        }
+
+        return operation.CreateResult(wasCancelled);
+    }
+
+    internal async Task<UpsertBatchResult<TKey>> ExecuteUpsertAsync(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation,
+        CancellationToken cancellationToken)
+    {
+        operation.ValidateAll(entities, context, cancellationToken);
+        context.DetachAllEntities(entities);
+
+        var wasCancelled = false;
+        for (var i = 0; i < entities.Count; i++)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                wasCancelled = true;
+                break;
+            }
+
+            await ProcessSingleUpsertAsync(entities[i], i, context, operation, cancellationToken);
+        }
+
+        return operation.CreateResult(wasCancelled);
+    }
+
+    private static async Task ProcessSingleEntityAsync(
+        TEntity entity,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchOperation<TEntity, TKey> operation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            operation.PrepareEntity(entity, context);
+            await context.Context.SaveChangesAsync(cancellationToken);
+            context.IncrementRoundTrip();
+            operation.RecordSuccess(entity, context);
+        }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            context.IncrementRoundTrip();
+            operation.RecordFailure(entity, ex, context);
+        }
+        finally
+        {
+            operation.CleanupEntity(entity, context);
+        }
+    }
+
+    private static async Task ProcessSingleInsertAsync(
+        TEntity entity,
+        int index,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchInsertOperation<TEntity, TKey> operation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            operation.PrepareEntity(entity, index, context);
+            await context.Context.SaveChangesAsync(cancellationToken);
+            context.IncrementRoundTrip();
+            operation.RecordSuccess(entity, index, context);
+        }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            context.IncrementRoundTrip();
+            operation.RecordFailure(entity, index, ex, context);
+        }
+        finally
+        {
+            operation.CleanupEntity(entity, context);
+        }
+    }
+
+    private static async Task ProcessSingleUpsertAsync(
+        TEntity entity,
+        int index,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            operation.PrepareEntity(entity, index, context);
+            await context.Context.SaveChangesAsync(cancellationToken);
+            context.IncrementRoundTrip();
+            operation.RecordSuccess(entity, index, context);
+        }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            context.IncrementRoundTrip();
+
+            if (ShouldHandleDuplicateKey(ex, index, operation, out var strategy))
+            {
+                operation.CleanupEntity(entity, context);
+                if (strategy == DuplicateKeyStrategy.RetryAsUpdate)
+                {
+                    await RetryAsUpdateAsync(entity, index, context, operation, cancellationToken);
+                }
+                return;
+            }
+
+            operation.RecordFailure(entity, index, ex, context);
+        }
+        finally
+        {
+            operation.CleanupEntity(entity, context);
+        }
+    }
+
+    private static bool ShouldHandleDuplicateKey(
+        Exception ex,
+        int index,
+        IBatchUpsertOperation<TEntity, TKey> operation,
+        out DuplicateKeyStrategy strategy)
+    {
+        strategy = operation.DuplicateKeyStrategy;
+        if (strategy == DuplicateKeyStrategy.Fail)
+            return false;
+
+        if (!operation.WasInsertAttempt(index))
+            return false;
+
+        return FailureClassifier.Classify(ex) == FailureReason.DuplicateKey;
+    }
+
+    private static async Task RetryAsUpdateAsync(
+        TEntity entity,
+        int index,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            context.Context.Entry(entity).State = EntityState.Modified;
+            await context.Context.SaveChangesAsync(cancellationToken);
+            context.IncrementRoundTrip();
+            operation.RecordSuccessAsUpdate(entity, index, context);
+        }
+        catch (Exception retryEx)
+        {
+            context.IncrementRoundTrip();
+            operation.RecordFailure(entity, index, retryEx, context);
+        }
+    }
+
+    // === SYNC METHODS ===
+
     internal BatchResult<TKey> Execute(
         List<TEntity> entities,
         BatchStrategyContext<TEntity, TKey> context,
@@ -36,6 +252,22 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         for (var i = 0; i < entities.Count; i++)
         {
             ProcessSingleInsert(entities[i], i, context, operation);
+        }
+
+        return operation.CreateResult();
+    }
+
+    internal UpsertBatchResult<TKey> ExecuteUpsert(
+        List<TEntity> entities,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation)
+    {
+        operation.ValidateAll(entities, context);
+        context.DetachAllEntities(entities);
+
+        for (var i = 0; i < entities.Count; i++)
+        {
+            ProcessSingleUpsert(entities[i], i, context, operation);
         }
 
         return operation.CreateResult();
@@ -85,6 +317,61 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         finally
         {
             operation.CleanupEntity(entity, context);
+        }
+    }
+
+    private static void ProcessSingleUpsert(
+        TEntity entity,
+        int index,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation)
+    {
+        try
+        {
+            operation.PrepareEntity(entity, index, context);
+            context.Context.SaveChanges();
+            context.IncrementRoundTrip();
+            operation.RecordSuccess(entity, index, context);
+        }
+        catch (Exception ex)
+        {
+            context.IncrementRoundTrip();
+
+            if (ShouldHandleDuplicateKey(ex, index, operation, out var strategy))
+            {
+                operation.CleanupEntity(entity, context);
+                if (strategy == DuplicateKeyStrategy.RetryAsUpdate)
+                {
+                    RetryAsUpdate(entity, index, context, operation);
+                }
+                return;
+            }
+
+            operation.RecordFailure(entity, index, ex, context);
+        }
+        finally
+        {
+            operation.CleanupEntity(entity, context);
+        }
+    }
+
+    private static void RetryAsUpdate(
+        TEntity entity,
+        int index,
+        BatchStrategyContext<TEntity, TKey> context,
+        IBatchUpsertOperation<TEntity, TKey> operation)
+    {
+        try
+        {
+            context.Context.Entry(entity).State = EntityState.Modified;
+            context.Context.SaveChanges();
+            context.IncrementRoundTrip();
+            operation.RecordSuccessAsUpdate(entity, index, context);
+        }
+        catch (Exception retryEx)
+        {
+            context.IncrementRoundTrip();
+            operation.RecordFailure(entity, index, retryEx, context);
         }
     }
 }
