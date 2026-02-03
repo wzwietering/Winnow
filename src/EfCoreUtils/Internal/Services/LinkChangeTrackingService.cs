@@ -194,7 +194,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
         var navName = navigation.Metadata.Name;
         var currentIds = CaptureRelatedIds(navigation);
 
-        ManyToManyValidation.ValidateCollectionSize(entityTypeName, navName, currentIds.Count, maxCollectionSize);
+        ManyToManyNavigationHelper.ValidateCollectionSize(entityTypeName, navName, currentIds.Count, maxCollectionSize);
 
         var originalIds = originalByNav.GetValueOrDefault(navName) ?? [];
         var (added, removed) = DetectChanges(originalIds, currentIds);
