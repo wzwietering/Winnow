@@ -96,35 +96,19 @@ internal static class BatchResultFactory
         };
 
     internal static BatchFailure<TKey> CreateBatchFailure<TKey>(TKey entityId, Exception exception)
-        where TKey : notnull, IEquatable<TKey>
-    {
-        var reason = DetermineFailureReason(exception);
-        return new BatchFailure<TKey>
+        where TKey : notnull, IEquatable<TKey> => new()
         {
             EntityId = entityId,
             ErrorMessage = exception.Message,
-            Reason = reason,
+            Reason = FailureClassifier.Classify(exception),
             Exception = exception
         };
-    }
 
-    internal static InsertBatchFailure CreateInsertBatchFailure(int entityIndex, Exception exception)
-    {
-        var reason = DetermineFailureReason(exception);
-        return new InsertBatchFailure
+    internal static InsertBatchFailure CreateInsertBatchFailure(int entityIndex, Exception exception) => new()
         {
             EntityIndex = entityIndex,
             ErrorMessage = exception.Message,
-            Reason = reason,
+            Reason = FailureClassifier.Classify(exception),
             Exception = exception
         };
-    }
-
-    private static FailureReason DetermineFailureReason(Exception exception) => exception switch
-    {
-        InvalidOperationException => FailureReason.ValidationError,
-        DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
-        DbUpdateException => FailureReason.DatabaseConstraint,
-        _ => FailureReason.UnknownError
-    };
 }
