@@ -46,6 +46,7 @@ var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
 |------|----------|
 | `Throw` (default) | Exception on circular reference - prevents infinite loops |
 | `Ignore` | Process each entity once, skip revisits |
+| `IgnoreAll` | Allow all patterns including direct self-references |
 
 ## Tracking Processed References
 

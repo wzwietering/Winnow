@@ -35,6 +35,17 @@ failure.ErrorMessage  // string - Error description
 failure.Reason        // FailureReason enum - Categorized failure type
 ```
 
+### FailureReason
+
+| Value | Description |
+|-------|-------------|
+| `ValidationError` | Entity failed validation |
+| `ConcurrencyConflict` | Optimistic concurrency conflict (row was modified) |
+| `DatabaseConstraint` | Database constraint violation (FK, check, etc.) |
+| `DuplicateKey` | Primary key or unique constraint violation |
+| `Cancelled` | Operation was cancelled via CancellationToken |
+| `UnknownError` | Unclassified error |
+
 ## InsertBatchResult&lt;TKey&gt;
 
 Returned by `InsertBatch`, `InsertGraphBatch`.
@@ -168,3 +179,37 @@ This allows you to:
 1. Process successful entities normally
 2. Log or retry failed entities separately
 3. Report partial success to users
+
+## Async Methods
+
+All batch operations have async counterparts that accept a `CancellationToken`:
+
+```csharp
+// Sync
+var result = saver.InsertBatch(entities);
+
+// Async
+var result = await saver.InsertBatchAsync(entities, cancellationToken);
+```
+
+Available async methods:
+- `InsertBatchAsync`, `InsertGraphBatchAsync`
+- `UpdateBatchAsync`, `UpdateGraphBatchAsync`
+- `DeleteBatchAsync`, `DeleteGraphBatchAsync`
+- `UpsertBatchAsync`, `UpsertGraphBatchAsync`
+
+## Graph Result Properties
+
+### ChildIdsByParentId
+
+The `ChildIdsByParentId` property is populated only for graph operations (`InsertGraphBatch`, `UpdateGraphBatch`, etc.). It maps each parent entity's ID to the IDs of its direct children.
+
+```csharp
+// For non-graph operations, this is null
+var result = saver.InsertBatch(entities);
+result.ChildIdsByParentId  // null
+
+// For graph operations, this contains the hierarchy
+var result = saver.InsertGraphBatch(entities);
+result.ChildIdsByParentId  // Dictionary<TKey, IReadOnlyList<TKey>>
+```

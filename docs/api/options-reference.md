@@ -2,6 +2,15 @@
 
 All batch options classes and their properties.
 
+## BatchOptions
+
+Used with `UpdateBatch`.
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
+| `ValidateNavigationProperties` | `bool` | `true` | When true, validates navigation properties are not modified |
+
 ## InsertBatchOptions
 
 Used with `InsertBatch`.
@@ -63,6 +72,7 @@ Used with `UpsertBatch`.
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
+| `DuplicateKeyStrategy` | `DuplicateKeyStrategy` | `Fail` | How to handle duplicate key errors during INSERT |
 
 ## UpsertGraphBatchOptions
 
@@ -78,6 +88,7 @@ Used with `UpsertGraphBatch`.
 | `ManyToManyInsertBehavior` | `ManyToManyInsertBehavior` | `AttachExisting` | How to handle M2M related entities |
 | `ValidateManyToManyEntitiesExist` | `bool` | `true` | Validate M2M entities exist |
 | `CircularReferenceHandling` | `CircularReferenceHandling` | `Throw` | How to handle circular references |
+| `DuplicateKeyStrategy` | `DuplicateKeyStrategy` | `Fail` | How to handle duplicate key errors during INSERT |
 
 ## Enums
 
@@ -118,3 +129,22 @@ Used with `UpsertGraphBatch`.
 |-------|-------------|
 | `AttachExisting` | Assume related entities exist in database. |
 | `InsertIfNew` | Insert related entities if they have default key. |
+
+### DuplicateKeyStrategy
+
+| Value | Description |
+|-------|-------------|
+| `Fail` | Record in Failures collection (default). |
+| `RetryAsUpdate` | Retry failed INSERT as UPDATE. Handles race conditions. |
+| `Skip` | Skip silently without recording as failure. |
+
+### FailureReason
+
+| Value | Description |
+|-------|-------------|
+| `ValidationError` | Entity failed validation. |
+| `ConcurrencyConflict` | Optimistic concurrency conflict (row was modified). |
+| `DatabaseConstraint` | Database constraint violation (FK, check, etc.). |
+| `DuplicateKey` | Primary key or unique constraint violation. |
+| `Cancelled` | Operation was cancelled via CancellationToken. |
+| `UnknownError` | Unclassified error. |

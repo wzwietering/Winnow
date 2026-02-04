@@ -13,10 +13,27 @@ Upsert operations perform INSERT or UPDATE based on key detection:
 
 **Mitigation strategies:**
 
-1. **Retry logic**: Wrap upsert calls in a retry loop with exponential backoff
+1. **DuplicateKeyStrategy.RetryAsUpdate**: Built-in retry that converts failed INSERTs to UPDATEs
 2. **Database-level upsert**: For high-concurrency scenarios, use raw SQL with `MERGE` (SQL Server) or `ON CONFLICT` (PostgreSQL)
 3. **Optimistic concurrency**: Add a `RowVersion` column and handle `DbUpdateConcurrencyException`
 4. **Application-level locking**: Use distributed locks for critical sections
+
+## DuplicateKeyStrategy
+
+Handle race conditions automatically with `DuplicateKeyStrategy`:
+
+```csharp
+var result = saver.UpsertBatch(products, new UpsertBatchOptions
+{
+    DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate
+});
+```
+
+| Strategy | Behavior |
+|----------|----------|
+| `Fail` (default) | Record duplicate key errors in Failures collection |
+| `RetryAsUpdate` | Retry failed INSERT as UPDATE (handles race conditions) |
+| `Skip` | Skip silently without recording as failure |
 
 ## Basic Upsert
 
@@ -61,8 +78,8 @@ var orders = new[]
         CustomerName = "Alice",
         OrderItems = new List<OrderItem>
         {
-            new() { Id = 0, ProductName = "Widget", Quantity = 5 },   // INSERT
-            new() { Id = 123, ProductName = "Gadget", Quantity = 3 }  // UPDATE
+            new() { Id = 0, ProductId = 1, Quantity = 5 },   // INSERT
+            new() { Id = 123, ProductId = 2, Quantity = 3 }  // UPDATE
         }
     }
 };
@@ -93,7 +110,9 @@ result.TraversalInfo      // Graph traversal statistics
 
 ## Handling Race Conditions
 
-Example retry logic:
+**Preferred approach:** Use `DuplicateKeyStrategy.RetryAsUpdate` (see above).
+
+For custom retry logic:
 
 ```csharp
 const int maxRetries = 3;

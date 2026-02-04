@@ -23,6 +23,8 @@ Entity Framework Core's `SaveChanges()` operates atomically: a single invalid en
 dotnet add package EfCoreUtils
 ```
 
+**Requirements:** .NET 10.0+, Entity Framework Core 10.0+
+
 ## Table of Contents
 
 - [Quick Start](#quick-start)
@@ -56,6 +58,9 @@ foreach (var failure in updateResult.Failures)
 {
     Console.WriteLine($"Entity {failure.EntityId} failed: {failure.ErrorMessage}");
 }
+
+// All operations have async versions
+var asyncResult = await saver.InsertBatchAsync(newProducts, cancellationToken);
 ```
 
 ### Supported Key Types
@@ -129,7 +134,10 @@ var products = new[]
     new Product { Id = 42, Name = "Updated" } // UPDATE
 };
 
-var result = saver.UpsertBatch(products);
+var result = saver.UpsertBatch(products, new UpsertBatchOptions
+{
+    DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate  // Handle race conditions
+});
 Console.WriteLine($"Inserted: {result.InsertedCount}, Updated: {result.UpdatedCount}");
 ```
 
