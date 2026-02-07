@@ -1,5 +1,4 @@
 using EfCoreUtils.Internal;
-using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreUtils.Strategies;
 
@@ -168,12 +167,13 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         {
             context.IncrementRoundTrip();
 
-            if (ShouldHandleDuplicateKey(ex, index, operation, out var strategy))
+            if (DuplicateKeyHandler<TEntity, TKey>.ShouldHandle(ex, index, operation, out var strategy))
             {
                 operation.CleanupEntity(entity, context);
                 if (strategy == DuplicateKeyStrategy.RetryAsUpdate)
                 {
-                    await RetryAsUpdateAsync(entity, index, context, operation, cancellationToken);
+                    await DuplicateKeyHandler<TEntity, TKey>.RetryAsUpdateAsync(
+                        entity, index, context, operation, cancellationToken);
                 }
                 return;
             }
@@ -183,43 +183,6 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         finally
         {
             operation.CleanupEntity(entity, context);
-        }
-    }
-
-    private static bool ShouldHandleDuplicateKey(
-        Exception ex,
-        int index,
-        IBatchUpsertOperation<TEntity, TKey> operation,
-        out DuplicateKeyStrategy strategy)
-    {
-        strategy = operation.DuplicateKeyStrategy;
-        if (strategy == DuplicateKeyStrategy.Fail)
-            return false;
-
-        if (!operation.WasInsertAttempt(index))
-            return false;
-
-        return FailureClassifier.Classify(ex) == FailureReason.DuplicateKey;
-    }
-
-    private static async Task RetryAsUpdateAsync(
-        TEntity entity,
-        int index,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            context.Context.Entry(entity).State = EntityState.Modified;
-            await context.Context.SaveChangesAsync(cancellationToken);
-            context.IncrementRoundTrip();
-            operation.RecordSuccessAsUpdate(entity, index, context);
-        }
-        catch (Exception retryEx)
-        {
-            context.IncrementRoundTrip();
-            operation.RecordFailure(entity, index, retryEx, context);
         }
     }
 
@@ -337,12 +300,12 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         {
             context.IncrementRoundTrip();
 
-            if (ShouldHandleDuplicateKey(ex, index, operation, out var strategy))
+            if (DuplicateKeyHandler<TEntity, TKey>.ShouldHandle(ex, index, operation, out var strategy))
             {
                 operation.CleanupEntity(entity, context);
                 if (strategy == DuplicateKeyStrategy.RetryAsUpdate)
                 {
-                    RetryAsUpdate(entity, index, context, operation);
+                    DuplicateKeyHandler<TEntity, TKey>.RetryAsUpdate(entity, index, context, operation);
                 }
                 return;
             }
@@ -352,26 +315,6 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         finally
         {
             operation.CleanupEntity(entity, context);
-        }
-    }
-
-    private static void RetryAsUpdate(
-        TEntity entity,
-        int index,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation)
-    {
-        try
-        {
-            context.Context.Entry(entity).State = EntityState.Modified;
-            context.Context.SaveChanges();
-            context.IncrementRoundTrip();
-            operation.RecordSuccessAsUpdate(entity, index, context);
-        }
-        catch (Exception retryEx)
-        {
-            context.IncrementRoundTrip();
-            operation.RecordFailure(entity, index, retryEx, context);
         }
     }
 }

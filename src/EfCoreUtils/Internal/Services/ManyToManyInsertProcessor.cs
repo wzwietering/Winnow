@@ -96,9 +96,9 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
     {
         var entityTypeName = entry.Metadata.ClrType.Name;
         var navigationName = navigation.Metadata.Name;
-        var itemCount = CountNavigationItems(navigation);
+        var itemCount = NavigationPropertyHelper.GetCollectionItemCount(navigation);
 
-        ManyToManyValidation.ValidateCollectionSize(
+        ManyToManyNavigationHelper.ValidateCollectionSize(
             entityTypeName, navigationName, itemCount, options.MaxManyToManyCollectionSize);
 
         ValidateAgainstCachedMissingIds(entry, navigation);
@@ -242,9 +242,4 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
         var defaultValue = clrType.IsValueType ? Activator.CreateInstance(clrType) : null;
         return value.Equals(defaultValue);
     }
-
-    private static int CountNavigationItems(NavigationEntry navigation) =>
-        navigation.CurrentValue is System.Collections.IEnumerable enumerable
-            ? enumerable.Cast<object>().Count()
-            : 0;
 }

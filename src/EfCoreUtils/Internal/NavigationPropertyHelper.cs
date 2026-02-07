@@ -44,4 +44,12 @@ internal static class NavigationPropertyHelper
     /// </summary>
     internal static object? GetReferenceValue(NavigationEntry navigation) =>
         navigation.Metadata.IsCollection ? null : navigation.CurrentValue;
+
+    /// <summary>
+    /// Counts the number of items in a navigation collection without materializing a list.
+    /// </summary>
+    internal static int GetCollectionItemCount(NavigationEntry navigation) =>
+        navigation.CurrentValue is System.Collections.IEnumerable enumerable
+            ? enumerable.Cast<object>().Count()
+            : 0;
 }

@@ -7,62 +7,6 @@ internal class ValidationService<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-
-    private static readonly Dictionary<Type, Func<object, bool>> DefaultValueCheckers = new()
-    {
-        { typeof(int), v => v is int i && i == 0 },
-        { typeof(int?), v => v is int i && i == 0 },
-        { typeof(long), v => v is long l && l == 0 },
-        { typeof(long?), v => v is long l && l == 0 },
-        { typeof(short), v => v is short s && s == 0 },
-        { typeof(short?), v => v is short s && s == 0 },
-        { typeof(byte), v => v is byte b && b == 0 },
-        { typeof(byte?), v => v is byte b && b == 0 },
-        { typeof(Guid), v => v is Guid g && g == Guid.Empty },
-        { typeof(Guid?), v => v is Guid g && g == Guid.Empty },
-        { typeof(string), v => v is string s && string.IsNullOrEmpty(s) },
-        { typeof(CompositeKey), v => v is CompositeKey ck && IsCompositeKeyDefault(ck) },
-    };
-
-    private static bool IsCompositeKeyDefault(CompositeKey key)
-    {
-        if (key.Count == 0)
-        {
-            return true;
-        }
-
-        foreach (var value in key.Values)
-        {
-            if (!IsComponentDefault(value))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool IsComponentDefault(object? value)
-    {
-        if (value == null)
-        {
-            return true;
-        }
-
-        var type = value.GetType();
-        if (DefaultValueCheckers.TryGetValue(type, out var checker))
-        {
-            return checker(value);
-        }
-
-        if (type.IsValueType)
-        {
-            return value.Equals(Activator.CreateInstance(type));
-        }
-
-        return false;
-    }
-
     private readonly DbContext _context;
     private readonly EntityKeyService<TEntity, TKey> _keyService;
 
@@ -483,12 +427,6 @@ internal class ValidationService<TEntity, TKey>
         return true;
     }
 
-    private static bool IsDefaultValue(object? value, Type type)
-    {
-        if (value == null)
-        {
-            return true;
-        }
-        return DefaultValueCheckers.TryGetValue(type, out var checker) && checker(value);
-    }
+    private static bool IsDefaultValue(object? value, Type type) =>
+        DefaultValueHelper.IsDefault(value, type);
 }

@@ -35,7 +35,7 @@ internal class ManyToManyDeleteProcessor<TEntity, TKey>
         foreach (var navigation in ManyToManyNavigationHelper.GetManyToManyNavigations(entry))
         {
             var navigationName = navigation.Metadata.Name;
-            var itemCount = CountNavigationItems(navigation);
+            var itemCount = NavigationPropertyHelper.GetCollectionItemCount(navigation);
 
             if (ManyToManyNavigationHelper.IsSkipNavigation(navigation))
             {
@@ -72,9 +72,4 @@ internal class ManyToManyDeleteProcessor<TEntity, TKey>
             }
         }
     }
-
-    private static int CountNavigationItems(NavigationEntry navigation) =>
-        navigation.CurrentValue is System.Collections.IEnumerable enumerable
-            ? enumerable.Cast<object>().Count()
-            : 0;
 }

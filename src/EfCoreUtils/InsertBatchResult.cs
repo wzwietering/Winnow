@@ -4,7 +4,7 @@ namespace EfCoreUtils;
 /// Result of a batch insert operation. Tracks inserted entities by their
 /// original index since entities don't have IDs before insertion.
 /// </summary>
-public class InsertBatchResult<TKey> where TKey : notnull, IEquatable<TKey>
+public class InsertBatchResult<TKey> : BatchResultBase<TKey> where TKey : notnull, IEquatable<TKey>
 {
     private IReadOnlyList<TKey>? _insertedIds;
 
@@ -12,38 +12,10 @@ public class InsertBatchResult<TKey> where TKey : notnull, IEquatable<TKey>
 
     public IReadOnlyList<TKey> InsertedIds =>
         _insertedIds ??= InsertedEntities.Select(e => e.Id).ToList();
-    public int SuccessCount => InsertedEntities.Count;
+    public override int SuccessCount => InsertedEntities.Count;
 
     public IReadOnlyList<InsertBatchFailure> Failures { get; init; } = [];
-    public int FailureCount => Failures.Count;
-
-    public int TotalProcessed => SuccessCount + FailureCount;
-    public double SuccessRate => TotalProcessed > 0 ? (double)SuccessCount / TotalProcessed : 0;
-
-    public TimeSpan Duration { get; init; }
-    public int DatabaseRoundTrips { get; init; }
-
-    /// <summary>
-    /// For graph inserts only: Full hierarchy of inserted entities.
-    /// Null for parent-only InsertBatch operations.
-    /// </summary>
-    public IReadOnlyList<GraphNode<TKey>>? GraphHierarchy { get; init; }
-
-    /// <summary>
-    /// For graph inserts only: Statistics about the traversal.
-    /// Null for parent-only InsertBatch operations.
-    /// </summary>
-    public GraphTraversalResult<TKey>? TraversalInfo { get; init; }
-
-    public bool IsCompleteSuccess => FailureCount == 0 && SuccessCount > 0 && !WasCancelled;
-    public bool IsCompleteFailure => SuccessCount == 0 && FailureCount > 0;
-    public bool IsPartialSuccess => SuccessCount > 0 && FailureCount > 0;
-
-    /// <summary>
-    /// Indicates whether the operation was cancelled before completing.
-    /// When true, some entities may not have been processed.
-    /// </summary>
-    public bool WasCancelled { get; init; }
+    public override int FailureCount => Failures.Count;
 }
 
 /// <summary>

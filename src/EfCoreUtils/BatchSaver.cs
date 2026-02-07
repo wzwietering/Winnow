@@ -107,7 +107,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
         stopwatch.Stop();
 
-        return EnrichGraphResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
     }
 
     public Task<BatchResult<TKey>> UpdateGraphBatchAsync(
@@ -136,7 +136,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
         stopwatch.Stop();
 
-        return EnrichGraphResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
     }
 
     // === INSERT OPERATIONS ===
@@ -218,7 +218,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyInsertGraphResult(stopwatch);
+            return CreateEmptyInsertResult(stopwatch, includeGraph: true);
         }
 
         var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
@@ -227,7 +227,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
         stopwatch.Stop();
 
-        return EnrichInsertGraphResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichInsertResultWithMetrics(result, stopwatch, strategyContext);
     }
 
     public Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(
@@ -247,7 +247,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyInsertGraphResult(stopwatch);
+            return CreateEmptyInsertResult(stopwatch, includeGraph: true);
         }
 
         var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
@@ -256,7 +256,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
         stopwatch.Stop();
 
-        return EnrichInsertGraphResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichInsertResultWithMetrics(result, stopwatch, strategyContext);
     }
 
     // === DELETE OPERATIONS ===
@@ -347,7 +347,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
         stopwatch.Stop();
 
-        return EnrichGraphResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
     }
 
     public Task<BatchResult<TKey>> DeleteGraphBatchAsync(
@@ -376,7 +376,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
         stopwatch.Stop();
 
-        return EnrichGraphResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
     }
 
     // === UPSERT OPERATIONS ===
@@ -454,7 +454,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
         var entityList = entities.ToList();
 
         if (entityList.Count == 0)
-            return CreateEmptyUpsertGraphResult(stopwatch);
+            return CreateEmptyUpsertResult(stopwatch, includeGraph: true);
 
         var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
         var strategy = BatchStrategyFactory.CreateUpsertGraphStrategy<TEntity, TKey>(options.Strategy);
@@ -481,7 +481,7 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyUpsertGraphResult(stopwatch);
+            return CreateEmptyUpsertResult(stopwatch, includeGraph: true);
         }
 
         var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
@@ -504,7 +504,8 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
     private static BatchResult<TKey> EnrichResultWithMetrics(
         BatchResult<TKey> result,
         Stopwatch stopwatch,
-        BatchStrategyContext<TEntity, TKey> context) => BatchResultFactory.Enrich(result, stopwatch.Elapsed, context.RoundTripCounter);
+        BatchStrategyContext<TEntity, TKey> context) =>
+        BatchResultFactory.Enrich(result, stopwatch.Elapsed, context.RoundTripCounter);
 
     private BatchResult<TKey> CreateEmptyGraphResult(Stopwatch stopwatch)
     {
@@ -512,43 +513,22 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
         return BatchResultFactory.CreateEmpty<TKey>(stopwatch.Elapsed, includeGraph: true);
     }
 
-    private static BatchResult<TKey> EnrichGraphResultWithMetrics(
-        BatchResult<TKey> result,
-        Stopwatch stopwatch,
-        BatchStrategyContext<TEntity, TKey> context) => BatchResultFactory.Enrich(result, stopwatch.Elapsed, context.RoundTripCounter);
-
-    private InsertBatchResult<TKey> CreateEmptyInsertResult(Stopwatch stopwatch)
+    private InsertBatchResult<TKey> CreateEmptyInsertResult(Stopwatch stopwatch, bool includeGraph = false)
     {
         stopwatch.Stop();
-        return BatchResultFactory.CreateEmptyInsert<TKey>(stopwatch.Elapsed);
+        return BatchResultFactory.CreateEmptyInsert<TKey>(stopwatch.Elapsed, includeGraph);
     }
 
     private static InsertBatchResult<TKey> EnrichInsertResultWithMetrics(
         InsertBatchResult<TKey> result,
         Stopwatch stopwatch,
-        BatchStrategyContext<TEntity, TKey> context) => BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
+        BatchStrategyContext<TEntity, TKey> context) =>
+        BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
 
-    private InsertBatchResult<TKey> CreateEmptyInsertGraphResult(Stopwatch stopwatch)
+    private UpsertBatchResult<TKey> CreateEmptyUpsertResult(Stopwatch stopwatch, bool includeGraph = false)
     {
         stopwatch.Stop();
-        return BatchResultFactory.CreateEmptyInsert<TKey>(stopwatch.Elapsed, includeGraph: true);
-    }
-
-    private static InsertBatchResult<TKey> EnrichInsertGraphResultWithMetrics(
-        InsertBatchResult<TKey> result,
-        Stopwatch stopwatch,
-        BatchStrategyContext<TEntity, TKey> context) => BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
-
-    private UpsertBatchResult<TKey> CreateEmptyUpsertResult(Stopwatch stopwatch)
-    {
-        stopwatch.Stop();
-        return BatchResultFactory.CreateEmptyUpsert<TKey>(stopwatch.Elapsed);
-    }
-
-    private UpsertBatchResult<TKey> CreateEmptyUpsertGraphResult(Stopwatch stopwatch)
-    {
-        stopwatch.Stop();
-        return BatchResultFactory.CreateEmptyUpsert<TKey>(stopwatch.Elapsed, includeGraph: true);
+        return BatchResultFactory.CreateEmptyUpsert<TKey>(stopwatch.Elapsed, includeGraph);
     }
 
     private static UpsertBatchResult<TKey> EnrichUpsertResultWithMetrics(
