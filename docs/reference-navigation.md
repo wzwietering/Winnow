@@ -30,6 +30,8 @@ var result = saver.UpdateGraphBatch(items, new GraphBatchOptions
 | `CircularReferenceHandling` | `Throw` | `Throw` or `Ignore` circular references |
 | `MaxDepth` | `10` | Maximum traversal depth (applies to both collections and references) |
 
+**Note:** If using a `NavigationFilter` that includes a reference navigation (e.g., `OrderItem.Product`), you must also set `IncludeReferences = true`. Otherwise, an `InvalidOperationException` is thrown at operation start. See [Navigation Filtering](graph-operations.md#navigation-filtering) for details.
+
 ## Circular Reference Handling
 
 When entities reference each other (e.g., `Order` → `Customer` → `Orders`), you need to handle circular references:

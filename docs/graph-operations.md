@@ -144,12 +144,87 @@ foreach (var child in graphNode.Children)
 }
 ```
 
+## Navigation Filtering
+
+Control which navigation properties are traversed during graph operations. This is useful when you want to operate on part of an entity graph without affecting the rest.
+
+### Include Mode (Allowlist)
+
+Only explicitly listed navigations are traversed. Entity types without rules have NO navigations traversed.
+
+```csharp
+// Only traverse OrderItems, skip Reservations (and any other navigations)
+var filter = NavigationFilter.Include()
+    .Navigation<CustomerOrder>(o => o.OrderItems);
+
+var result = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
+{
+    NavigationFilter = filter
+});
+// Inserts orders and their items, but NOT item reservations
+```
+
+### Exclude Mode (Blocklist)
+
+Listed navigations are skipped, all others are traversed normally.
+
+```csharp
+// Traverse everything EXCEPT Reservations
+var filter = NavigationFilter.Exclude()
+    .Navigation<OrderItem>(i => i.Reservations);
+
+var result = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
+{
+    NavigationFilter = filter
+});
+// Inserts orders and items, but NOT reservations
+```
+
+### Filter with Orphan Detection
+
+Navigation filtering is consistent across all phases of a graph operation. When a navigation is filtered out, orphan detection ignores it too:
+
+```csharp
+var filter = NavigationFilter.Include()
+    .Navigation<CustomerOrder>(o => o.OrderItems);
+
+// Removing reservations won't trigger orphan detection since they're filtered out
+orders[0].OrderItems.First().Reservations.Clear();
+
+var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+{
+    OrphanedChildBehavior = OrphanBehavior.Throw,
+    NavigationFilter = filter
+});
+```
+
+### Combining Filter with MaxDepth
+
+`NavigationFilter` and `MaxDepth` work together. Both constraints are applied:
+
+```csharp
+var filter = NavigationFilter.Include()
+    .Navigation<CustomerOrder>(o => o.OrderItems)
+    .Navigation<OrderItem>(i => i.Reservations);
+
+var result = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
+{
+    NavigationFilter = filter,
+    MaxDepth = 1  // Limits to depth 1, so reservations at depth 2 are not reached
+});
+```
+
+### Flag Conflict Validation
+
+If a filter includes a reference navigation but `IncludeReferences = false`, or a many-to-many navigation but `IncludeManyToMany = false`, an `InvalidOperationException` is thrown at operation start.
+
 ## Common Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `Strategy` | `OneByOne` | Batch strategy for the operation |
 | `MaxDepth` | `10` | Maximum traversal depth |
+| `NavigationFilter` | `null` | Filter which navigations are traversed (see above) |
 | `IncludeReferences` | `false` | Include many-to-one references |
 | `IncludeManyToMany` | `false` | Include many-to-many navigations |
 | `CircularReferenceHandling` | `Throw` | How to handle circular references |

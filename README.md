@@ -166,6 +166,15 @@ var updateResult = saver.UpdateGraphBatch(orders, new GraphBatchOptions
 {
     OrphanedChildBehavior = OrphanBehavior.Delete
 });
+
+// Filter which navigations are traversed
+var filter = NavigationFilter.Include()
+    .Navigation<CustomerOrder>(o => o.OrderItems);
+
+var filteredResult = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
+{
+    NavigationFilter = filter  // Only traverses OrderItems, skips deeper levels
+});
 ```
 
 See [Graph Operations](docs/graph-operations.md) for full documentation.
@@ -231,6 +240,7 @@ For full result type documentation, see [Results Reference](docs/results-referen
 | Delete parent + children | `DeleteGraphBatch` | Set CascadeBehavior explicitly |
 | Include many-to-one refs | `*GraphBatch` | Set `IncludeReferences = true` |
 | Include many-to-many | `*GraphBatch` | Set `IncludeManyToMany = true` |
+| Partial graph traversal | `*GraphBatch` | Set `NavigationFilter` to include/exclude navigations |
 | High failure rate (>25%) | Any | OneByOne |
 
 ## When NOT to Use This
