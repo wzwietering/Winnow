@@ -10,22 +10,15 @@ internal static class TraversalHelper
     /// <summary>
     /// Traverses collection children of an entity entry, invoking action for each.
     /// </summary>
-    /// <param name="entry">The entity entry to traverse.</param>
-    /// <param name="childAction">Action to invoke for each child.</param>
-    /// <param name="skipManyToMany">When true, skips many-to-many navigations.</param>
     internal static void TraverseCollectionChildren(
         EntityEntry entry,
         Action<object> childAction,
-        bool skipManyToMany = true)
+        bool skipManyToMany = true,
+        NavigationFilter? filter = null)
     {
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
-            {
-                continue;
-            }
-
-            if (skipManyToMany && ManyToManyNavigationHelper.IsManyToManyNavigation(navigation))
+            if (!ShouldTraverseCollection(navigation, filter, skipManyToMany))
             {
                 continue;
             }
@@ -40,19 +33,63 @@ internal static class TraversalHelper
     /// <summary>
     /// Traverses reference navigations of an entity entry, invoking action for each.
     /// </summary>
-    /// <param name="entry">The entity entry to traverse.</param>
-    /// <param name="referenceAction">Action to invoke for each reference entity.</param>
     internal static void TraverseReferenceNavigations(
         EntityEntry entry,
-        Action<object> referenceAction)
+        Action<object> referenceAction,
+        NavigationFilter? filter = null)
     {
         foreach (var navigation in NavigationPropertyHelper.GetReferenceNavigations(entry))
         {
+            if (!ShouldTraverseReference(navigation, filter))
+            {
+                continue;
+            }
+
             var refEntity = NavigationPropertyHelper.GetReferenceValue(navigation);
             if (refEntity != null)
             {
                 referenceAction(refEntity);
             }
         }
+    }
+
+    /// <summary>
+    /// Centralized check for whether a collection navigation should be traversed.
+    /// Combines IsTraversableCollection + M2M check + filter check.
+    /// </summary>
+    internal static bool ShouldTraverseCollection(
+        NavigationEntry navigation, NavigationFilter? filter, bool skipManyToMany = true)
+    {
+        if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+        {
+            return false;
+        }
+
+        if (skipManyToMany && ManyToManyNavigationHelper.IsManyToManyNavigation(navigation))
+        {
+            return false;
+        }
+
+        return IsAllowedByFilter(navigation, filter);
+    }
+
+    /// <summary>
+    /// Centralized check for whether a reference navigation should be traversed.
+    /// </summary>
+    internal static bool ShouldTraverseReference(
+        NavigationEntry navigation, NavigationFilter? filter)
+    {
+        return IsAllowedByFilter(navigation, filter);
+    }
+
+    private static bool IsAllowedByFilter(NavigationEntry navigation, NavigationFilter? filter)
+    {
+        if (filter == null)
+        {
+            return true;
+        }
+
+        var entityType = navigation.EntityEntry.Metadata.ClrType;
+        return filter.ShouldTraverse(entityType, navigation.Metadata.Name);
     }
 }

@@ -35,4 +35,11 @@ public abstract class GraphBatchOptionsBase
     /// Default: false.
     /// </summary>
     public bool IncludeManyToMany { get; set; } = false;
+
+    /// <summary>
+    /// Optional filter to control which navigation properties are traversed.
+    /// Use NavigationFilter.Include() or NavigationFilter.Exclude() to create.
+    /// When null (default), all navigations are traversed.
+    /// </summary>
+    public NavigationFilter? NavigationFilter { get; set; }
 }

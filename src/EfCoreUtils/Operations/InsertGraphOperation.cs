@@ -2,30 +2,33 @@ using EfCoreUtils.Internal;
 
 namespace EfCoreUtils.Operations;
 
-/// <summary>
-/// Insert operation behavior for entity graphs (parent + children).
-/// EF Core handles FK propagation automatically when graph is attached as Added.
-/// </summary>
 internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly InsertGraphBatchOptions _options;
+    private readonly TraversalContext _tc;
     private readonly List<InsertedEntity<TKey>> _insertedEntities = [];
     private readonly List<InsertBatchFailure> _failures = [];
     private readonly List<GraphNode<TKey>> _graphHierarchy = [];
     private readonly GraphStatisticsTracker<TKey> _statsTracker = new();
 
-    internal InsertGraphOperation(InsertGraphBatchOptions options) => _options = options;
+    internal InsertGraphOperation(InsertGraphBatchOptions options)
+    {
+        _options = options;
+        _tc = TraversalContext.FromOptions(options);
+    }
 
     public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
+        NavigationFilterValidator.Validate(
+            _tc.NavigationFilter, context.Context.Model, _options.IncludeReferences, _options.IncludeManyToMany);
+
         if (_options.IncludeReferences)
         {
             foreach (var entity in entities)
             {
-                context.ValidateCircularReferences(
-                    entity, _options.MaxDepth, _options.CircularReferenceHandling);
+                context.ValidateCircularReferences(entity, _tc);
             }
         }
 
@@ -39,13 +42,12 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
     {
         if (_options.IncludeReferences)
         {
-            var refResult = context.AttachEntityGraphAsAddedWithReferences(
-                entity, _options.MaxDepth, _options.CircularReferenceHandling);
+            var refResult = context.AttachEntityGraphAsAddedWithReferences(entity, _tc);
             _statsTracker.AggregateReferenceStats(refResult);
         }
         else
         {
-            context.AttachEntityGraphAsAddedRecursive(entity, _options.MaxDepth);
+            context.AttachEntityGraphAsAddedRecursive(entity, _tc);
         }
 
         if (_options.IncludeManyToMany)
@@ -67,8 +69,8 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
         });
 
         var (node, stats) = _options.IncludeReferences
-            ? context.BuildGraphHierarchyWithReferences(entity, _options.MaxDepth)
-            : context.BuildGraphHierarchy(entity, _options.MaxDepth);
+            ? context.BuildGraphHierarchyWithReferences(entity, _tc)
+            : context.BuildGraphHierarchy(entity, _tc);
         _graphHierarchy.Add(node);
         _statsTracker.AggregateStats(stats);
     }
@@ -85,7 +87,8 @@ internal class InsertGraphOperation<TEntity, TKey> : IBatchInsertOperation<TEnti
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.DetachEntityGraphRecursive(entity, _options.MaxDepth);
+    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) =>
+        context.DetachEntityGraphRecursive(entity, _tc);
 
     public InsertBatchResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {
