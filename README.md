@@ -34,6 +34,7 @@ dotnet add package EfCoreUtils
 - [Handling Results](#handling-results)
 - [When to Use What](#when-to-use-what)
 - [When NOT to Use This](#when-not-to-use-this)
+- [Parallel Batch Processing](#parallel-batch-processing)
 - [Advanced Topics](#advanced-topics)
 - [Common Mistakes](#common-mistakes)
 
@@ -241,6 +242,46 @@ EfCoreUtils is not the right choice for every scenario:
 - **True database MERGE**: For high-concurrency upserts, use raw SQL with `MERGE` (SQL Server) or `ON CONFLICT` (PostgreSQL)
 - **Bulk operations without failure tracking**: Libraries like EFCore.BulkExtensions offer higher throughput when you do not need per-entity failure isolation
 - **Read-heavy workloads**: This library focuses on write operations
+
+## Parallel Batch Processing
+
+For large batches where database I/O is the bottleneck, `ParallelBatchSaver` distributes work across multiple `DbContext` instances:
+
+```csharp
+// Requires a factory that creates a new DbContext on each call
+var saver = new ParallelBatchSaver<Product, int>(
+    () => new AppDbContext(options),
+    maxDegreeOfParallelism: 4);
+
+var result = await saver.InsertBatchAsync(products, cancellationToken);
+```
+
+Or use `IDbContextFactory<TContext>`:
+
+```csharp
+var saver = factory.CreateParallelBatchSaver<Product, int, AppDbContext>(maxDegreeOfParallelism: 4);
+```
+
+**Key differences from BatchSaver:**
+
+| | BatchSaver | ParallelBatchSaver |
+|---|---|---|
+| **Context** | Single shared context | New context per partition |
+| **Atomicity** | All-or-nothing per batch | Per-partition (non-atomic) |
+| **Async** | Sequential I/O | Parallel I/O |
+| **Sync methods** | Normal execution | Falls back to single context |
+
+**When to use ParallelBatchSaver:**
+- Large batches (100+ entities) with high-latency database connections
+- Sufficient connection pool capacity for concurrent operations
+- Failure isolation per partition is acceptable
+
+**When NOT to use ParallelBatchSaver:**
+- Operations requiring atomicity (all-or-nothing)
+- Operations requiring same-context change tracking (orphan detection)
+- Small batches where parallelism overhead outweighs benefits
+
+**Non-atomicity warning:** Each partition commits independently. If one partition fails, others that already committed will NOT be rolled back.
 
 ## Advanced Topics
 

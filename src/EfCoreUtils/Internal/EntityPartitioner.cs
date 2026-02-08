@@ -10,7 +10,7 @@ internal static class EntityPartitioner
         if (items is null or { Count: 0 })
             return [];
 
-        var chunkSize = (int)Math.Ceiling((double)items.Count / maxPartitions);
+        var chunkSize = (items.Count + maxPartitions - 1) / maxPartitions;
         var partitions = new List<List<T>>();
 
         for (var i = 0; i < items.Count; i += chunkSize)

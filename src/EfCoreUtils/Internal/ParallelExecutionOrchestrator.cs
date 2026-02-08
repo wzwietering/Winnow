@@ -188,25 +188,37 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
 
         try
         {
-            var keyService = _keyService.Value.Service;
-            return entities.Select(e => new BatchFailure<TKey>
-            {
-                EntityId = keyService.GetEntityId(e),
-                ErrorMessage = ex.Message,
-                Reason = reason,
-                Exception = ex
-            }).ToList();
+            return CreateFailuresWithKeys(entities, ex, reason);
         }
         catch
         {
             // Key extraction failed (e.g. factory is broken) - report failures without entity IDs
-            return entities.Select(_ => new BatchFailure<TKey>
-            {
-                ErrorMessage = ex.Message,
-                Reason = reason,
-                Exception = ex
-            }).ToList();
+            return CreateFailuresWithoutKeys(entities, ex, reason);
         }
+    }
+
+    private List<BatchFailure<TKey>> CreateFailuresWithKeys(
+        List<TEntity> entities, Exception ex, FailureReason reason)
+    {
+        var keyService = _keyService.Value.Service;
+        return entities.Select(e => new BatchFailure<TKey>
+        {
+            EntityId = keyService.GetEntityId(e),
+            ErrorMessage = ex.Message,
+            Reason = reason,
+            Exception = ex
+        }).ToList();
+    }
+
+    private static List<BatchFailure<TKey>> CreateFailuresWithoutKeys(
+        List<TEntity> entities, Exception ex, FailureReason reason)
+    {
+        return entities.Select(_ => new BatchFailure<TKey>
+        {
+            ErrorMessage = ex.Message,
+            Reason = reason,
+            Exception = ex
+        }).ToList();
     }
 
     private static InsertBatchResult<TKey> CreateInsertFailureResult(List<TEntity> entities, Exception ex)
