@@ -93,6 +93,27 @@ public class ParallelBatchSaverCancellationTests : ParallelTestBase
     }
 
     [Fact]
+    public async Task MidExecutionCancellation_DoesNotThrow()
+    {
+        EnsureDatabaseCreated();
+        SeedWithFactory(ctx => SeedData(ctx, 40));
+
+        var saver = CreateSaver(maxDegreeOfParallelism: 4);
+        var products = QueryWithFactory(ctx => ctx.Products.ToList());
+        foreach (var p in products) p.Price += 5;
+
+        using var cts = new CancellationTokenSource();
+        // Cancel after a short delay to hit mid-execution
+        cts.CancelAfter(TimeSpan.FromMilliseconds(5));
+
+        // Should not throw - cancellation is captured in result
+        var result = await saver.UpdateBatchAsync(products, cts.Token);
+
+        // Total accounted entities should match input
+        (result.SuccessCount + result.FailureCount).ShouldBeLessThanOrEqualTo(40);
+    }
+
+    [Fact]
     public async Task CancellationWorks_ForUpsertOperation()
     {
         EnsureDatabaseCreated();

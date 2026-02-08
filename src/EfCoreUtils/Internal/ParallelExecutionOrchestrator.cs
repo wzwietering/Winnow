@@ -159,14 +159,14 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
             var result = await execute(partition, strategyContext, cancellationToken);
             return new PartitionResult<TResult>(result, strategyContext.RoundTripCounter);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             return new PartitionResult<TResult>(createFailure(partition, ex), 0);
         }
         finally
         {
             if (context is not null)
-                await context.DisposeAsync();
+                await context.DisposeAsync().ConfigureAwait(false);
         }
     }
 
@@ -190,10 +190,10 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         {
             return CreateFailuresWithKeys(entities, ex, reason);
         }
-        catch
+        catch (Exception keyEx)
         {
-            // Key extraction failed (e.g. factory is broken) - report failures without entity IDs
-            return CreateFailuresWithoutKeys(entities, ex, reason);
+            return CreateFailuresWithoutKeys(entities, ex, reason,
+                $" (Key extraction also failed: {keyEx.Message})");
         }
     }
 
@@ -211,11 +211,11 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     }
 
     private static List<BatchFailure<TKey>> CreateFailuresWithoutKeys(
-        List<TEntity> entities, Exception ex, FailureReason reason)
+        List<TEntity> entities, Exception ex, FailureReason reason, string suffix = "")
     {
         return entities.Select(_ => new BatchFailure<TKey>
         {
-            ErrorMessage = ex.Message,
+            ErrorMessage = ex.Message + suffix,
             Reason = reason,
             Exception = ex
         }).ToList();

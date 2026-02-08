@@ -149,6 +149,39 @@ public class ParallelBatchSaverLifecycleTests : ParallelTestBase
     }
 
     [Fact]
+    public void Constructor_FactoryReturnsSameInstance_WithParallelismOne_DoesNotThrow()
+    {
+        EnsureDatabaseCreated();
+        var context = (DbContext)CreateContextFactory()();
+
+        // maxDegreeOfParallelism: 1 skips factory validation since it never creates parallel contexts
+        var saver = new ParallelBatchSaver<Product, int>(() => context, 1);
+
+        saver.MaxDegreeOfParallelism.ShouldBe(1);
+        context.Dispose();
+    }
+
+    [Fact]
+    public async Task NullEntities_ThrowsArgumentNullException()
+    {
+        EnsureDatabaseCreated();
+        var saver = CreateSaver(maxDegreeOfParallelism: 2);
+
+        await Should.ThrowAsync<ArgumentNullException>(
+            () => saver.UpdateBatchAsync(null!));
+    }
+
+    [Fact]
+    public async Task NullEntities_Insert_ThrowsArgumentNullException()
+    {
+        EnsureDatabaseCreated();
+        var saver = CreateSaver(maxDegreeOfParallelism: 2);
+
+        await Should.ThrowAsync<ArgumentNullException>(
+            () => saver.InsertBatchAsync(null!));
+    }
+
+    [Fact]
     public void Constructor_FactoryThrows_PropagatesException()
     {
         Func<DbContext> factory = () => throw new InvalidOperationException("Connection failed");

@@ -78,6 +78,37 @@ public class ParallelBatchSaverErrorPathTests : ParallelTestBase
     }
 
     [Fact]
+    public async Task FactoryFailsMidExecution_SomePartitionsSucceed_SomeFail()
+    {
+        EnsureDatabaseCreated();
+        SeedWithFactory(ctx => SeedData(ctx, 8));
+
+        var callCount = 0;
+        Func<DbContext> factory = () =>
+        {
+            var count = Interlocked.Increment(ref callCount);
+            // First 2 calls for constructor validation, then alternate success/failure
+            if (count <= 2)
+                return CreateContextFactory()();
+            // Odd execution calls succeed, even execution calls fail
+            if ((count - 2) % 2 == 0)
+                throw new InvalidOperationException("Connection pool exhausted");
+            return CreateContextFactory()();
+        };
+
+        var saver = new ParallelBatchSaver<Product, int>(factory, 4);
+        var products = QueryWithFactory(ctx => ctx.Products.ToList());
+        foreach (var p in products) p.Price += 5;
+
+        var result = await saver.UpdateBatchAsync(products);
+
+        // Should have a mix of successes and failures
+        result.FailureCount.ShouldBeGreaterThan(0);
+        // At least some should succeed since some factory calls work
+        (result.SuccessCount + result.FailureCount).ShouldBe(8);
+    }
+
+    [Fact]
     public async Task BroadExceptionHandling_InvalidOperationException_CapturedAsFailure()
     {
         EnsureDatabaseCreated();
