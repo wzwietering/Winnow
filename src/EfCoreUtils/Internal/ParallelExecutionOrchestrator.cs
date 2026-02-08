@@ -4,12 +4,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreUtils.Internal;
 
-internal class ParallelExecutionOrchestrator<TEntity, TKey>
+internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly Func<DbContext> _contextFactory;
     private readonly int _maxDegreeOfParallelism;
+    private readonly Lazy<(DbContext Context, EntityKeyService<TEntity, TKey> Service)> _keyService;
 
     private record PartitionResult<TResult>(TResult Result, int RoundTrips);
 
@@ -17,32 +18,45 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey>
     {
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
         _maxDegreeOfParallelism = maxDegreeOfParallelism;
+        _keyService = new Lazy<(DbContext, EntityKeyService<TEntity, TKey>)>(() =>
+        {
+            var ctx = _contextFactory();
+            return (ctx, new EntityKeyService<TEntity, TKey>(ctx));
+        });
+    }
+
+    public void Dispose()
+    {
+        if (_keyService.IsValueCreated)
+            _keyService.Value.Context?.Dispose();
     }
 
     internal async Task<BatchResult<TKey>> ExecuteBatchAsync(
         List<TEntity> entities,
         Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<BatchResult<TKey>>> execute,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         var partitions = EntityPartitioner.Partition(entities, _maxDegreeOfParallelism);
         var stopwatch = Stopwatch.StartNew();
 
-        var results = await RunPartitionsAsync(partitions, execute, CreateBatchFailureResult, ct);
+        var results = await RunPartitionsAsync(partitions, execute, CreateBatchFailureResult, cancellationToken);
 
         stopwatch.Stop();
         var totalRoundTrips = results.Sum(r => r.RoundTrips);
-        return BatchResultMerger.MergeBatchResults(results.Select(r => r.Result).ToList(), stopwatch.Elapsed, totalRoundTrips);
+        return BatchResultMerger.MergeBatchResults(
+            results.Select(r => r.Result).ToList(), stopwatch.Elapsed, totalRoundTrips);
     }
 
     internal async Task<InsertBatchResult<TKey>> ExecuteInsertAsync(
         List<TEntity> entities,
         Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<InsertBatchResult<TKey>>> execute,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         var partitions = EntityPartitioner.PartitionWithOffsets(entities, _maxDegreeOfParallelism);
         var stopwatch = Stopwatch.StartNew();
 
-        var results = await RunPartitionsWithOffsetsAsync(partitions, execute, CreateInsertFailureResult, ct);
+        var results = await RunPartitionsWithOffsetsAsync(
+            partitions, execute, CreateInsertFailureResult, cancellationToken);
 
         stopwatch.Stop();
         var totalRoundTrips = results.Sum(r => r.Result.RoundTrips);
@@ -53,12 +67,13 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey>
     internal async Task<UpsertBatchResult<TKey>> ExecuteUpsertAsync(
         List<TEntity> entities,
         Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<UpsertBatchResult<TKey>>> execute,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         var partitions = EntityPartitioner.PartitionWithOffsets(entities, _maxDegreeOfParallelism);
         var stopwatch = Stopwatch.StartNew();
 
-        var results = await RunPartitionsWithOffsetsAsync(partitions, execute, CreateUpsertFailureResult, ct);
+        var results = await RunPartitionsWithOffsetsAsync(
+            partitions, execute, CreateUpsertFailureResult, cancellationToken);
 
         stopwatch.Stop();
         var totalRoundTrips = results.Sum(r => r.Result.RoundTrips);
@@ -70,10 +85,11 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey>
         List<List<TEntity>> partitions,
         Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         using var semaphore = new SemaphoreSlim(_maxDegreeOfParallelism);
-        var tasks = partitions.Select(p => RunWithSemaphoreAsync(semaphore, p, execute, createFailure, ct));
+        var tasks = partitions.Select(
+            p => RunWithSemaphoreAsync(semaphore, p, execute, createFailure, cancellationToken));
         var results = await Task.WhenAll(tasks);
         return results.ToList();
     }
@@ -82,11 +98,11 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey>
         List<(List<TEntity> Items, int Offset)> partitions,
         Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         using var semaphore = new SemaphoreSlim(_maxDegreeOfParallelism);
         var tasks = partitions.Select((p, i) =>
-            RunWithSemaphoreIndexedAsync(semaphore, p.Items, i, execute, createFailure, ct));
+            RunWithSemaphoreIndexedAsync(semaphore, p.Items, i, execute, createFailure, cancellationToken));
         var results = await Task.WhenAll(tasks);
         return results.ToList();
     }
@@ -96,11 +112,11 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey>
         List<TEntity> partition,
         Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         try
         {
-            await semaphore.WaitAsync(ct);
+            await semaphore.WaitAsync(cancellationToken);
         }
         catch (OperationCanceledException ex)
         {
@@ -109,7 +125,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey>
 
         try
         {
-            return await ExecutePartitionAsync(partition, execute, createFailure, ct);
+            return await ExecutePartitionAsync(partition, execute, createFailure, cancellationToken);
         }
         finally
         {
@@ -123,9 +139,9 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey>
         int index,
         Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
-        var result = await RunWithSemaphoreAsync(semaphore, partition, execute, createFailure, ct);
+        var result = await RunWithSemaphoreAsync(semaphore, partition, execute, createFailure, cancellationToken);
         return (result, index);
     }
 
@@ -133,22 +149,24 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey>
         List<TEntity> partition,
         Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
-        var context = _contextFactory();
+        DbContext? context = null;
         try
         {
+            context = _contextFactory();
             var strategyContext = new BatchStrategyContext<TEntity, TKey>(context);
-            var result = await execute(partition, strategyContext, ct);
+            var result = await execute(partition, strategyContext, cancellationToken);
             return new PartitionResult<TResult>(result, strategyContext.RoundTripCounter);
         }
-        catch (Exception ex) when (ex is OperationCanceledException or DbUpdateException)
+        catch (Exception ex)
         {
             return new PartitionResult<TResult>(createFailure(partition, ex), 0);
         }
         finally
         {
-            await context.DisposeAsync();
+            if (context is not null)
+                await context.DisposeAsync();
         }
     }
 
@@ -166,17 +184,29 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey>
 
     private List<BatchFailure<TKey>> ExtractBatchFailures(List<TEntity> entities, Exception ex)
     {
-        using var context = _contextFactory();
-        var keyService = new EntityKeyService<TEntity, TKey>(context);
         var reason = FailureClassifier.Classify(ex);
 
-        return entities.Select(e => new BatchFailure<TKey>
+        try
         {
-            EntityId = keyService.GetEntityId(e),
-            ErrorMessage = ex.Message,
-            Reason = reason,
-            Exception = ex
-        }).ToList();
+            var keyService = _keyService.Value.Service;
+            return entities.Select(e => new BatchFailure<TKey>
+            {
+                EntityId = keyService.GetEntityId(e),
+                ErrorMessage = ex.Message,
+                Reason = reason,
+                Exception = ex
+            }).ToList();
+        }
+        catch
+        {
+            // Key extraction failed (e.g. factory is broken) - report failures without entity IDs
+            return entities.Select(_ => new BatchFailure<TKey>
+            {
+                ErrorMessage = ex.Message,
+                Reason = reason,
+                Exception = ex
+            }).ToList();
+        }
     }
 
     private static InsertBatchResult<TKey> CreateInsertFailureResult(List<TEntity> entities, Exception ex)

@@ -91,24 +91,6 @@ public class ParallelBatchSaverLifecycleTests : ParallelTestBase
     }
 
     [Fact]
-    public void Dispose_DoesNotThrow()
-    {
-        EnsureDatabaseCreated();
-        var saver = CreateSaver();
-
-        Should.NotThrow(() => saver.Dispose());
-    }
-
-    [Fact]
-    public async Task DisposeAsync_DoesNotThrow()
-    {
-        EnsureDatabaseCreated();
-        var saver = CreateSaver();
-
-        await Should.NotThrowAsync(async () => await saver.DisposeAsync());
-    }
-
-    [Fact]
     public void SyncMethods_UseSingleContext_NoParallelism()
     {
         EnsureDatabaseCreated();
@@ -144,14 +126,35 @@ public class ParallelBatchSaverLifecycleTests : ParallelTestBase
     }
 
     [Fact]
-    public void FactoryExtension_CreateBatchSaver_Works()
+    public void FactoryExtension_CreateParallelBatchSaver_Works()
     {
         EnsureDatabaseCreated();
         var factory = new TestDbContextFactory(DbPath);
 
-        var saver = factory.CreateBatchSaver<Product, int, TestDbContext>(2);
+        var saver = factory.CreateParallelBatchSaver<Product, int, TestDbContext>(2);
 
         saver.MaxDegreeOfParallelism.ShouldBe(2);
+    }
+
+    [Fact]
+    public void FactoryExtension_AutoDetectVariant_Works()
+    {
+        EnsureDatabaseCreated();
+        var factory = new TestDbContextFactory(DbPath);
+
+        var saver = factory.CreateParallelBatchSaver<Product, TestDbContext>(2);
+
+        saver.MaxDegreeOfParallelism.ShouldBe(2);
+        saver.IsCompositeKey.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Constructor_FactoryThrows_PropagatesException()
+    {
+        Func<DbContext> factory = () => throw new InvalidOperationException("Connection failed");
+
+        Should.Throw<InvalidOperationException>(() =>
+            new ParallelBatchSaver<Product, int>(factory, 2));
     }
 
     private class TestDbContextFactory(string path) : IDbContextFactory<TestDbContext>

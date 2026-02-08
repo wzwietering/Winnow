@@ -8,21 +8,43 @@ namespace EfCoreUtils;
 /// Each partition gets its own DbContext from the factory, enabling true parallel database operations.
 /// </summary>
 /// <remarks>
-/// <para><strong>When to use:</strong> Use when processing large batches where database I/O is the bottleneck.
-/// Each partition runs on its own DbContext, so operations are fully isolated.</para>
+/// <para><strong>When to use ParallelBatchSaver:</strong></para>
+/// <list type="bullet">
+/// <item>Processing large batches (100+ entities) where database I/O is the bottleneck</item>
+/// <item>High-latency database connections where parallel I/O provides significant speedup</item>
+/// <item>Sufficient database connection pool capacity for concurrent operations</item>
+/// </list>
+/// <para><strong>When to use BatchSaver instead:</strong></para>
+/// <list type="bullet">
+/// <item>Small batches (under 100 entities) where parallelism overhead outweighs benefits</item>
+/// <item>Operations requiring same-context change tracking (e.g. orphan detection)</item>
+/// <item>Limited connection pool capacity</item>
+/// <item>Operations that must be fully atomic (all-or-nothing)</item>
+/// </list>
+/// <para><strong>NOT atomic across partitions:</strong> Each partition commits independently.
+/// If one partition fails, others that already committed will NOT be rolled back.
+/// For atomic operations, use <see cref="BatchSaver{TEntity, TKey}"/> instead.</para>
 /// <para><strong>Context factory requirement:</strong> The factory must return a new DbContext instance
 /// on each call. Reusing instances across partitions causes concurrency issues.</para>
 /// <para><strong>Sync methods:</strong> Run sequentially on a single context (no parallelism).
 /// Only async methods benefit from parallel execution.</para>
 /// </remarks>
 public class ParallelBatchSaver<TEntity, TKey>
-    : IBatchSaver<TEntity, TKey>, IDisposable, IAsyncDisposable
+    : IBatchSaver<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly Func<DbContext> _contextFactory;
 
-    public int MaxDegreeOfParallelism { get; set; }
+    /// <summary>
+    /// Maximum number of parallel partitions for async operations.
+    /// Sync operations always use a single partition regardless of this value.
+    /// </summary>
+    /// <remarks>
+    /// <para>Set to 1 to disable parallel execution while still using the factory-based context lifecycle.</para>
+    /// <para>Default: 4. Tune based on database connection capacity and batch size.</para>
+    /// </remarks>
+    public int MaxDegreeOfParallelism { get; }
 
     public ParallelBatchSaver(Func<DbContext> contextFactory, int maxDegreeOfParallelism = 4)
     {
@@ -36,10 +58,6 @@ public class ParallelBatchSaver<TEntity, TKey>
 
         ValidateFactoryCreatesUniqueInstances(contextFactory);
     }
-
-    public void Dispose() { }
-
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
     // === UPDATE OPERATIONS ===
 
@@ -55,11 +73,12 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     public Task<BatchResult<TKey>> UpdateBatchAsync(
         IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default) =>
-        RunBatchAsync(entities, (partition, ctx, ct) =>
+        RunAsync(entities, (partition, ctx, ct) =>
         {
             var strategy = BatchStrategyFactory.CreateStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, false, cancellationToken);
+        }, () => BatchResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, false),
+        (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), cancellationToken);
 
     // === UPDATE GRAPH OPERATIONS ===
 
@@ -75,11 +94,12 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     public Task<BatchResult<TKey>> UpdateGraphBatchAsync(
         IEnumerable<TEntity> entities, GraphBatchOptions options, CancellationToken cancellationToken = default) =>
-        RunBatchAsync(entities, (partition, ctx, ct) =>
+        RunAsync(entities, (partition, ctx, ct) =>
         {
             var strategy = BatchStrategyFactory.CreateGraphStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, true, cancellationToken);
+        }, () => BatchResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, true),
+        (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), cancellationToken);
 
     // === INSERT OPERATIONS ===
 
@@ -95,11 +115,12 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     public Task<InsertBatchResult<TKey>> InsertBatchAsync(
         IEnumerable<TEntity> entities, InsertBatchOptions options, CancellationToken cancellationToken = default) =>
-        RunInsertAsync(entities, (partition, ctx, ct) =>
+        RunAsync(entities, (partition, ctx, ct) =>
         {
             var strategy = BatchStrategyFactory.CreateInsertStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, false, cancellationToken);
+        }, () => BatchResultFactory.CreateEmptyInsert<TKey>(TimeSpan.Zero, false),
+        (o, list, exec, ct) => o.ExecuteInsertAsync(list, exec, ct), cancellationToken);
 
     // === INSERT GRAPH OPERATIONS ===
 
@@ -115,11 +136,12 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     public Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(
         IEnumerable<TEntity> entities, InsertGraphBatchOptions options, CancellationToken cancellationToken = default) =>
-        RunInsertAsync(entities, (partition, ctx, ct) =>
+        RunAsync(entities, (partition, ctx, ct) =>
         {
             var strategy = BatchStrategyFactory.CreateInsertGraphStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, true, cancellationToken);
+        }, () => BatchResultFactory.CreateEmptyInsert<TKey>(TimeSpan.Zero, true),
+        (o, list, exec, ct) => o.ExecuteInsertAsync(list, exec, ct), cancellationToken);
 
     // === DELETE OPERATIONS ===
 
@@ -135,11 +157,12 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     public Task<BatchResult<TKey>> DeleteBatchAsync(
         IEnumerable<TEntity> entities, DeleteBatchOptions options, CancellationToken cancellationToken = default) =>
-        RunBatchAsync(entities, (partition, ctx, ct) =>
+        RunAsync(entities, (partition, ctx, ct) =>
         {
             var strategy = BatchStrategyFactory.CreateDeleteStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, false, cancellationToken);
+        }, () => BatchResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, false),
+        (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), cancellationToken);
 
     // === DELETE GRAPH OPERATIONS ===
 
@@ -155,11 +178,12 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     public Task<BatchResult<TKey>> DeleteGraphBatchAsync(
         IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default) =>
-        RunBatchAsync(entities, (partition, ctx, ct) =>
+        RunAsync(entities, (partition, ctx, ct) =>
         {
             var strategy = BatchStrategyFactory.CreateDeleteGraphStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, true, cancellationToken);
+        }, () => BatchResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, true),
+        (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), cancellationToken);
 
     // === UPSERT OPERATIONS ===
 
@@ -175,11 +199,12 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     public Task<UpsertBatchResult<TKey>> UpsertBatchAsync(
         IEnumerable<TEntity> entities, UpsertBatchOptions options, CancellationToken cancellationToken = default) =>
-        RunUpsertAsync(entities, (partition, ctx, ct) =>
+        RunAsync(entities, (partition, ctx, ct) =>
         {
             var strategy = BatchStrategyFactory.CreateUpsertStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, false, cancellationToken);
+        }, () => BatchResultFactory.CreateEmptyUpsert<TKey>(TimeSpan.Zero, false),
+        (o, list, exec, ct) => o.ExecuteUpsertAsync(list, exec, ct), cancellationToken);
 
     // === UPSERT GRAPH OPERATIONS ===
 
@@ -195,11 +220,12 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     public Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(
         IEnumerable<TEntity> entities, UpsertGraphBatchOptions options, CancellationToken cancellationToken = default) =>
-        RunUpsertAsync(entities, (partition, ctx, ct) =>
+        RunAsync(entities, (partition, ctx, ct) =>
         {
             var strategy = BatchStrategyFactory.CreateUpsertGraphStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, true, cancellationToken);
+        }, () => BatchResultFactory.CreateEmptyUpsert<TKey>(TimeSpan.Zero, true),
+        (o, list, exec, ct) => o.ExecuteUpsertAsync(list, exec, ct), cancellationToken);
 
     // === PRIVATE HELPERS ===
 
@@ -213,13 +239,13 @@ public class ParallelBatchSaver<TEntity, TKey>
     private async Task<TResult> ExecuteSequentialAsync<TResult>(
         List<TEntity> entityList,
         Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
-        CancellationToken ct)
+        CancellationToken cancellationToken)
     {
         var context = _contextFactory();
         try
         {
             var strategyContext = new BatchStrategyContext<TEntity, TKey>(context);
-            return await execute(entityList, strategyContext, ct);
+            return await execute(entityList, strategyContext, cancellationToken);
         }
         finally
         {
@@ -227,61 +253,27 @@ public class ParallelBatchSaver<TEntity, TKey>
         }
     }
 
-    private Task<BatchResult<TKey>> RunBatchAsync(
+    private async Task<TResult> RunAsync<TResult>(
         IEnumerable<TEntity> entities,
-        Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<BatchResult<TKey>>> execute,
-        bool includeGraph,
-        CancellationToken ct)
+        Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
+        Func<TResult> createEmpty,
+        Func<ParallelExecutionOrchestrator<TEntity, TKey>, List<TEntity>,
+            Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>>,
+            CancellationToken, Task<TResult>> orchestrate,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(entities);
         var entityList = entities.ToList();
 
         if (entityList.Count == 0)
-            return Task.FromResult(BatchResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, includeGraph));
+            return createEmpty();
 
         if (MaxDegreeOfParallelism <= 1)
-            return ExecuteSequentialAsync(entityList, execute, ct);
+            return await ExecuteSequentialAsync(entityList, execute, cancellationToken);
 
-        var orchestrator = new ParallelExecutionOrchestrator<TEntity, TKey>(_contextFactory, MaxDegreeOfParallelism);
-        return orchestrator.ExecuteBatchAsync(entityList, execute, ct);
-    }
-
-    private Task<InsertBatchResult<TKey>> RunInsertAsync(
-        IEnumerable<TEntity> entities,
-        Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<InsertBatchResult<TKey>>> execute,
-        bool includeGraph,
-        CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(entities);
-        var entityList = entities.ToList();
-
-        if (entityList.Count == 0)
-            return Task.FromResult(BatchResultFactory.CreateEmptyInsert<TKey>(TimeSpan.Zero, includeGraph));
-
-        if (MaxDegreeOfParallelism <= 1)
-            return ExecuteSequentialAsync(entityList, execute, ct);
-
-        var orchestrator = new ParallelExecutionOrchestrator<TEntity, TKey>(_contextFactory, MaxDegreeOfParallelism);
-        return orchestrator.ExecuteInsertAsync(entityList, execute, ct);
-    }
-
-    private Task<UpsertBatchResult<TKey>> RunUpsertAsync(
-        IEnumerable<TEntity> entities,
-        Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<UpsertBatchResult<TKey>>> execute,
-        bool includeGraph,
-        CancellationToken ct)
-    {
-        ArgumentNullException.ThrowIfNull(entities);
-        var entityList = entities.ToList();
-
-        if (entityList.Count == 0)
-            return Task.FromResult(BatchResultFactory.CreateEmptyUpsert<TKey>(TimeSpan.Zero, includeGraph));
-
-        if (MaxDegreeOfParallelism <= 1)
-            return ExecuteSequentialAsync(entityList, execute, ct);
-
-        var orchestrator = new ParallelExecutionOrchestrator<TEntity, TKey>(_contextFactory, MaxDegreeOfParallelism);
-        return orchestrator.ExecuteUpsertAsync(entityList, execute, ct);
+        using var orchestrator = new ParallelExecutionOrchestrator<TEntity, TKey>(
+            _contextFactory, MaxDegreeOfParallelism);
+        return await orchestrate(orchestrator, entityList, execute, cancellationToken);
     }
 
     private static void ValidateFactoryCreatesUniqueInstances(Func<DbContext> factory)
@@ -305,177 +297,4 @@ public class ParallelBatchSaver<TEntity, TKey>
             second?.Dispose();
         }
     }
-}
-
-/// <summary>
-/// Parallel batch saver that automatically detects entity key type at runtime.
-/// </summary>
-/// <remarks>
-/// <para>
-/// This overload inspects the DbContext model to determine if the entity has a simple
-/// or composite primary key. All results return <see cref="CompositeKey"/> to maintain
-/// a consistent API surface.
-/// </para>
-/// </remarks>
-public class ParallelBatchSaver<TEntity>
-    : IBatchSaver<TEntity>, IDisposable, IAsyncDisposable
-    where TEntity : class
-{
-    private readonly ParallelBatchSaver<TEntity, CompositeKey> _innerSaver;
-    private readonly bool _isCompositeKey;
-
-    public ParallelBatchSaver(Func<DbContext> contextFactory, int maxDegreeOfParallelism = 4)
-    {
-        ArgumentNullException.ThrowIfNull(contextFactory);
-
-        using var inspectionContext = contextFactory();
-
-        var entityType = inspectionContext.Model.FindEntityType(typeof(TEntity))
-            ?? throw new InvalidOperationException(
-                $"Entity type {typeof(TEntity).Name} is not part of the model for this DbContext.");
-
-        var keyProperties = entityType.FindPrimaryKey()?.Properties
-            ?? throw new InvalidOperationException(
-                $"Entity type {typeof(TEntity).Name} does not have a primary key defined.");
-
-        _isCompositeKey = keyProperties.Count > 1;
-        _innerSaver = new ParallelBatchSaver<TEntity, CompositeKey>(contextFactory, maxDegreeOfParallelism);
-    }
-
-    /// <inheritdoc />
-    public bool IsCompositeKey => _isCompositeKey;
-
-    /// <summary>
-    /// Maximum number of parallel partitions for async operations.
-    /// </summary>
-    public int MaxDegreeOfParallelism
-    {
-        get => _innerSaver.MaxDegreeOfParallelism;
-        set => _innerSaver.MaxDegreeOfParallelism = value;
-    }
-
-    public void Dispose() => _innerSaver.Dispose();
-
-    public ValueTask DisposeAsync() => _innerSaver.DisposeAsync();
-
-    // === UPDATE OPERATIONS ===
-
-    public BatchResult<CompositeKey> UpdateBatch(IEnumerable<TEntity> entities) =>
-        _innerSaver.UpdateBatch(entities);
-
-    public BatchResult<CompositeKey> UpdateBatch(IEnumerable<TEntity> entities, BatchOptions options) =>
-        _innerSaver.UpdateBatch(entities, options);
-
-    public Task<BatchResult<CompositeKey>> UpdateBatchAsync(
-        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
-        _innerSaver.UpdateBatchAsync(entities, cancellationToken);
-
-    public Task<BatchResult<CompositeKey>> UpdateBatchAsync(
-        IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default) =>
-        _innerSaver.UpdateBatchAsync(entities, options, cancellationToken);
-
-    public BatchResult<CompositeKey> UpdateGraphBatch(IEnumerable<TEntity> entities) =>
-        _innerSaver.UpdateGraphBatch(entities);
-
-    public BatchResult<CompositeKey> UpdateGraphBatch(IEnumerable<TEntity> entities, GraphBatchOptions options) =>
-        _innerSaver.UpdateGraphBatch(entities, options);
-
-    public Task<BatchResult<CompositeKey>> UpdateGraphBatchAsync(
-        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
-        _innerSaver.UpdateGraphBatchAsync(entities, cancellationToken);
-
-    public Task<BatchResult<CompositeKey>> UpdateGraphBatchAsync(
-        IEnumerable<TEntity> entities, GraphBatchOptions options, CancellationToken cancellationToken = default) =>
-        _innerSaver.UpdateGraphBatchAsync(entities, options, cancellationToken);
-
-    // === INSERT OPERATIONS ===
-
-    public InsertBatchResult<CompositeKey> InsertBatch(IEnumerable<TEntity> entities) =>
-        _innerSaver.InsertBatch(entities);
-
-    public InsertBatchResult<CompositeKey> InsertBatch(IEnumerable<TEntity> entities, InsertBatchOptions options) =>
-        _innerSaver.InsertBatch(entities, options);
-
-    public Task<InsertBatchResult<CompositeKey>> InsertBatchAsync(
-        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
-        _innerSaver.InsertBatchAsync(entities, cancellationToken);
-
-    public Task<InsertBatchResult<CompositeKey>> InsertBatchAsync(
-        IEnumerable<TEntity> entities, InsertBatchOptions options, CancellationToken cancellationToken = default) =>
-        _innerSaver.InsertBatchAsync(entities, options, cancellationToken);
-
-    public InsertBatchResult<CompositeKey> InsertGraphBatch(IEnumerable<TEntity> entities) =>
-        _innerSaver.InsertGraphBatch(entities);
-
-    public InsertBatchResult<CompositeKey> InsertGraphBatch(IEnumerable<TEntity> entities, InsertGraphBatchOptions options) =>
-        _innerSaver.InsertGraphBatch(entities, options);
-
-    public Task<InsertBatchResult<CompositeKey>> InsertGraphBatchAsync(
-        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
-        _innerSaver.InsertGraphBatchAsync(entities, cancellationToken);
-
-    public Task<InsertBatchResult<CompositeKey>> InsertGraphBatchAsync(
-        IEnumerable<TEntity> entities, InsertGraphBatchOptions options, CancellationToken cancellationToken = default) =>
-        _innerSaver.InsertGraphBatchAsync(entities, options, cancellationToken);
-
-    // === DELETE OPERATIONS ===
-
-    public BatchResult<CompositeKey> DeleteBatch(IEnumerable<TEntity> entities) =>
-        _innerSaver.DeleteBatch(entities);
-
-    public BatchResult<CompositeKey> DeleteBatch(IEnumerable<TEntity> entities, DeleteBatchOptions options) =>
-        _innerSaver.DeleteBatch(entities, options);
-
-    public Task<BatchResult<CompositeKey>> DeleteBatchAsync(
-        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
-        _innerSaver.DeleteBatchAsync(entities, cancellationToken);
-
-    public Task<BatchResult<CompositeKey>> DeleteBatchAsync(
-        IEnumerable<TEntity> entities, DeleteBatchOptions options, CancellationToken cancellationToken = default) =>
-        _innerSaver.DeleteBatchAsync(entities, options, cancellationToken);
-
-    public BatchResult<CompositeKey> DeleteGraphBatch(IEnumerable<TEntity> entities) =>
-        _innerSaver.DeleteGraphBatch(entities);
-
-    public BatchResult<CompositeKey> DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options) =>
-        _innerSaver.DeleteGraphBatch(entities, options);
-
-    public Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(
-        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
-        _innerSaver.DeleteGraphBatchAsync(entities, cancellationToken);
-
-    public Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(
-        IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default) =>
-        _innerSaver.DeleteGraphBatchAsync(entities, options, cancellationToken);
-
-    // === UPSERT OPERATIONS ===
-
-    public UpsertBatchResult<CompositeKey> UpsertBatch(IEnumerable<TEntity> entities) =>
-        _innerSaver.UpsertBatch(entities);
-
-    public UpsertBatchResult<CompositeKey> UpsertBatch(IEnumerable<TEntity> entities, UpsertBatchOptions options) =>
-        _innerSaver.UpsertBatch(entities, options);
-
-    public Task<UpsertBatchResult<CompositeKey>> UpsertBatchAsync(
-        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
-        _innerSaver.UpsertBatchAsync(entities, cancellationToken);
-
-    public Task<UpsertBatchResult<CompositeKey>> UpsertBatchAsync(
-        IEnumerable<TEntity> entities, UpsertBatchOptions options, CancellationToken cancellationToken = default) =>
-        _innerSaver.UpsertBatchAsync(entities, options, cancellationToken);
-
-    public UpsertBatchResult<CompositeKey> UpsertGraphBatch(IEnumerable<TEntity> entities) =>
-        _innerSaver.UpsertGraphBatch(entities);
-
-    public UpsertBatchResult<CompositeKey> UpsertGraphBatch(
-        IEnumerable<TEntity> entities, UpsertGraphBatchOptions options) =>
-        _innerSaver.UpsertGraphBatch(entities, options);
-
-    public Task<UpsertBatchResult<CompositeKey>> UpsertGraphBatchAsync(
-        IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
-        _innerSaver.UpsertGraphBatchAsync(entities, cancellationToken);
-
-    public Task<UpsertBatchResult<CompositeKey>> UpsertGraphBatchAsync(
-        IEnumerable<TEntity> entities, UpsertGraphBatchOptions options, CancellationToken cancellationToken = default) =>
-        _innerSaver.UpsertGraphBatchAsync(entities, options, cancellationToken);
 }
