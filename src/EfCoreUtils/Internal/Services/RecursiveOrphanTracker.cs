@@ -33,57 +33,63 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
     internal Dictionary<(string Type, TKey Id), List<object>> DeletedChildrenByParentRecursive =>
         _deletedChildrenByParentRecursive;
 
-    internal void CaptureAllOriginalChildIdsRecursive(List<TEntity> entities, int maxDepth)
+    internal void CaptureAllOriginalChildIdsRecursive(List<TEntity> entities, TraversalContext tc)
     {
         _context.ChangeTracker.DetectChanges();
         _invalidateDeletedIndex();
-        var clampedDepth = DepthConstants.ClampDepth(maxDepth);
+        var clampedDepth = DepthConstants.ClampDepth(tc.MaxDepth);
 
         foreach (var entity in entities)
         {
             var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-            CaptureChildIdsRecursive(entity, 0, clampedDepth, visited);
+            CaptureChildIdsRecursive(entity, 0, clampedDepth, visited, tc.NavigationFilter);
         }
     }
 
     private void CaptureChildIdsRecursive(
-        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+        object entity, int currentDepth, int maxDepth,
+        HashSet<object> visited, NavigationFilter? filter)
     {
         if (!visited.Add(entity)) return;
 
         var entry = _context.Entry(entity);
         var parentKey = _keyService.CreateEntityKey(entry);
 
-        CaptureDirectChildIds(entry, parentKey);
-        CaptureDeletedChildrenFromTracker(entry, parentKey);
+        CaptureDirectChildIds(entry, parentKey, filter);
+        CaptureDeletedChildrenFromTracker(entry, parentKey, filter);
 
         if (currentDepth < maxDepth)
         {
-            TraverseChildNavigations(entry, currentDepth, maxDepth, visited);
+            TraverseChildNavigations(entry, currentDepth, maxDepth, visited, filter);
         }
     }
 
     private void TraverseChildNavigations(
-        EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited)
+        EntityEntry entry, int currentDepth, int maxDepth,
+        HashSet<object> visited, NavigationFilter? filter)
     {
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation)) continue;
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, filter, skipManyToMany: false))
+            {
+                continue;
+            }
 
             foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
-                CaptureChildIdsRecursive(item, currentDepth + 1, maxDepth, visited);
+                CaptureChildIdsRecursive(item, currentDepth + 1, maxDepth, visited, filter);
             }
         }
     }
 
-    private void CaptureDirectChildIds(EntityEntry entry, (string Type, TKey Id) parentKey)
+    private void CaptureDirectChildIds(
+        EntityEntry entry, (string Type, TKey Id) parentKey, NavigationFilter? filter)
     {
         var childIds = new HashSet<(string Type, TKey Id)>();
 
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, filter, skipManyToMany: false))
             {
                 continue;
             }
@@ -109,13 +115,23 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
         }
     }
 
-    private void CaptureDeletedChildrenFromTracker(EntityEntry entry, (string Type, TKey Id) parentKey)
+    private void CaptureDeletedChildrenFromTracker(
+        EntityEntry entry, (string Type, TKey Id) parentKey, NavigationFilter? filter)
     {
         foreach (var navigation in entry.Navigations)
         {
             if (!navigation.Metadata.IsCollection)
             {
                 continue;
+            }
+
+            if (filter != null)
+            {
+                var entityType = navigation.EntityEntry.Metadata.ClrType;
+                if (!filter.ShouldTraverse(entityType, navigation.Metadata.Name))
+                {
+                    continue;
+                }
             }
 
             CaptureDeletedChildrenForNavigation(navigation, parentKey);
@@ -199,17 +215,18 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
     }
 
     internal List<(string EntityType, TKey EntityId, int Depth)> GetOrphanedChildIdsRecursive(
-        TEntity entity, int maxDepth)
+        TEntity entity, TraversalContext tc)
     {
         var orphans = new List<(string EntityType, TKey EntityId, int Depth)>();
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        CollectOrphansRecursive(entity, 0, DepthConstants.ClampDepth(maxDepth), visited, orphans);
+        CollectOrphansRecursive(entity, 0, DepthConstants.ClampDepth(tc.MaxDepth), visited, orphans, tc.NavigationFilter);
         return orphans;
     }
 
     private void CollectOrphansRecursive(
         object entity, int currentDepth, int maxDepth,
-        HashSet<object> visited, List<(string, TKey, int)> orphans)
+        HashSet<object> visited, List<(string, TKey, int)> orphans,
+        NavigationFilter? filter)
     {
         if (!visited.Add(entity))
         {
@@ -219,7 +236,7 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
         var entry = _context.Entry(entity);
         var parentKey = _keyService.CreateEntityKey(entry);
 
-        CollectOrphansForEntity(entry, parentKey, currentDepth, orphans);
+        CollectOrphansForEntity(entry, parentKey, currentDepth, orphans, filter);
 
         if (currentDepth >= maxDepth)
         {
@@ -228,28 +245,28 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
 
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, filter, skipManyToMany: false))
             {
                 continue;
             }
 
             foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
-                CollectOrphansRecursive(item, currentDepth + 1, maxDepth, visited, orphans);
+                CollectOrphansRecursive(item, currentDepth + 1, maxDepth, visited, orphans, filter);
             }
         }
     }
 
     private void CollectOrphansForEntity(
         EntityEntry entry, (string Type, TKey Id) parentKey, int depth,
-        List<(string, TKey, int)> orphans)
+        List<(string, TKey, int)> orphans, NavigationFilter? filter)
     {
         if (!_originalChildIdsByParentRecursive.TryGetValue(parentKey, out var originalIds))
         {
             return;
         }
 
-        var currentIds = GetCurrentChildKeysForEntity(entry);
+        var currentIds = GetCurrentChildKeysForEntity(entry, filter);
 
         foreach (var originalId in originalIds)
         {
@@ -260,13 +277,14 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
         }
     }
 
-    private HashSet<(string Type, TKey Id)> GetCurrentChildKeysForEntity(EntityEntry entry)
+    private HashSet<(string Type, TKey Id)> GetCurrentChildKeysForEntity(
+        EntityEntry entry, NavigationFilter? filter)
     {
         var currentIds = new HashSet<(string Type, TKey Id)>();
 
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, filter, skipManyToMany: false))
             {
                 continue;
             }
@@ -282,14 +300,14 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
     }
 
     internal void ValidateNoOrphanedChildrenRecursive(
-        TEntity entity, int maxDepth, GraphBatchOptions options)
+        TEntity entity, TraversalContext tc, GraphBatchOptions options)
     {
         if (options.OrphanedChildBehavior != OrphanBehavior.Throw)
         {
             return;
         }
 
-        var orphanedIds = GetOrphanedChildIdsRecursive(entity, maxDepth);
+        var orphanedIds = GetOrphanedChildIdsRecursive(entity, tc);
         if (orphanedIds.Count == 0)
         {
             return;
@@ -304,24 +322,25 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
     }
 
     internal void HandleOrphanedChildrenRecursive(
-        TEntity entity, int maxDepth, OrphanBehavior behavior)
+        TEntity entity, TraversalContext tc, OrphanBehavior behavior)
     {
         if (behavior == OrphanBehavior.Detach)
         {
             var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-            DetachOrphansAtAllLevels(entity, 0, DepthConstants.ClampDepth(maxDepth), visited);
+            DetachOrphansAtAllLevels(entity, 0, DepthConstants.ClampDepth(tc.MaxDepth), visited, tc.NavigationFilter);
             return;
         }
 
         if (behavior == OrphanBehavior.Delete)
         {
             var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-            DeleteOrphansAtAllLevels(entity, 0, DepthConstants.ClampDepth(maxDepth), visited);
+            DeleteOrphansAtAllLevels(entity, 0, DepthConstants.ClampDepth(tc.MaxDepth), visited, tc.NavigationFilter);
         }
     }
 
     private void DetachOrphansAtAllLevels(
-        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+        object entity, int currentDepth, int maxDepth,
+        HashSet<object> visited, NavigationFilter? filter)
     {
         if (!visited.Add(entity))
         {
@@ -340,14 +359,14 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
 
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, filter, skipManyToMany: false))
             {
                 continue;
             }
 
             foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
-                DetachOrphansAtAllLevels(item, currentDepth + 1, maxDepth, visited);
+                DetachOrphansAtAllLevels(item, currentDepth + 1, maxDepth, visited, filter);
             }
         }
     }
@@ -370,7 +389,8 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
     }
 
     private void DeleteOrphansAtAllLevels(
-        object entity, int currentDepth, int maxDepth, HashSet<object> visited)
+        object entity, int currentDepth, int maxDepth,
+        HashSet<object> visited, NavigationFilter? filter)
     {
         if (!visited.Add(entity))
         {
@@ -389,14 +409,14 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
 
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, filter, skipManyToMany: false))
             {
                 continue;
             }
 
             foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
-                DeleteOrphansAtAllLevels(item, currentDepth + 1, maxDepth, visited);
+                DeleteOrphansAtAllLevels(item, currentDepth + 1, maxDepth, visited, filter);
             }
         }
     }
@@ -419,10 +439,11 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
     }
 
     internal void DetachEntityWithOrphansRecursive(
-        TEntity entity, int maxDepth, EntityDetachmentService<TEntity, TKey> detachmentService)
+        TEntity entity, TraversalContext tc,
+        EntityDetachmentService<TEntity, TKey> detachmentService)
     {
         DetachAllDeletedChildrenRecursive();
-        detachmentService.DetachEntityGraphRecursive(entity, maxDepth);
+        detachmentService.DetachEntityGraphRecursive(entity, tc);
     }
 
     private void DetachAllDeletedChildrenRecursive()

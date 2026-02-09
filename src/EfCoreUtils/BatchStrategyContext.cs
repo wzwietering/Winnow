@@ -82,17 +82,14 @@ internal class BatchStrategyContext<TEntity, TKey>
         _validationService.ValidateCascadeBehavior(entity, options);
 
     internal void ValidateCascadeBehaviorRecursive(
-        TEntity entity, int maxDepth, DeleteGraphBatchOptions options) =>
-        _validationService.ValidateCascadeBehaviorRecursive(entity, maxDepth, options);
+        TEntity entity, TraversalContext tc, DeleteGraphBatchOptions options) =>
+        _validationService.ValidateCascadeBehaviorRecursive(entity, tc, options);
 
-    internal void ValidateCircularReferences(
-        TEntity entity,
-        int maxDepth,
-        CircularReferenceHandling handling = CircularReferenceHandling.Throw) =>
-        _validationService.ValidateCircularReferences(entity, maxDepth, handling);
+    internal void ValidateCircularReferences(TEntity entity, TraversalContext tc) =>
+        _validationService.ValidateCircularReferences(entity, tc);
 
-    internal void ValidateReferencedEntitiesExist(TEntity entity, int maxDepth) =>
-        _validationService.ValidateReferencedEntitiesExist(entity, maxDepth);
+    internal void ValidateReferencedEntitiesExist(TEntity entity, TraversalContext tc) =>
+        _validationService.ValidateReferencedEntitiesExist(entity, tc);
 
     internal bool HasDefaultKeyValue(TEntity entity) =>
         _validationService.HasDefaultKeyValue(entity);
@@ -111,30 +108,30 @@ internal class BatchStrategyContext<TEntity, TKey>
     internal void AttachEntityGraphAsDeleted(TEntity entity) =>
         _attachmentService.AttachEntityGraphAsDeleted(entity);
 
-    internal void AttachEntityGraphAsAddedRecursive(TEntity entity, int maxDepth) =>
-        _attachmentService.AttachEntityGraphAsAddedRecursive(entity, maxDepth);
+    internal void AttachEntityGraphAsAddedRecursive(TEntity entity, TraversalContext tc) =>
+        _attachmentService.AttachEntityGraphAsAddedRecursive(entity, tc);
 
-    internal void AttachEntityGraphAsModifiedRecursive(TEntity entity, int maxDepth) =>
-        _attachmentService.AttachEntityGraphAsModifiedRecursive(entity, maxDepth);
+    internal void AttachEntityGraphAsModifiedRecursive(TEntity entity, TraversalContext tc) =>
+        _attachmentService.AttachEntityGraphAsModifiedRecursive(entity, tc);
 
-    internal void AttachEntityGraphAsDeletedRecursive(TEntity entity, int maxDepth) =>
-        _attachmentService.AttachEntityGraphAsDeletedRecursive(entity, maxDepth);
+    internal void AttachEntityGraphAsDeletedRecursive(TEntity entity, TraversalContext tc) =>
+        _attachmentService.AttachEntityGraphAsDeletedRecursive(entity, tc);
 
     internal ReferenceTrackingResult AttachEntityGraphAsAddedWithReferences(
-        TEntity entity, int maxDepth, CircularReferenceHandling circularHandling) =>
-        _attachmentService.AttachEntityGraphAsAddedWithReferences(entity, maxDepth, circularHandling);
+        TEntity entity, TraversalContext tc) =>
+        _attachmentService.AttachEntityGraphAsAddedWithReferences(entity, tc);
 
     internal ReferenceTrackingResult AttachEntityGraphAsModifiedWithReferences(
-        TEntity entity, int maxDepth, CircularReferenceHandling circularHandling) =>
-        _attachmentService.AttachEntityGraphAsModifiedWithReferences(entity, maxDepth, circularHandling);
+        TEntity entity, TraversalContext tc) =>
+        _attachmentService.AttachEntityGraphAsModifiedWithReferences(entity, tc);
 
-    internal void AttachEntityGraphAsUpsertRecursive(TEntity entity, int maxDepth) =>
-        _attachmentService.AttachEntityGraphAsUpsertRecursive(entity, maxDepth, _validationService);
+    internal void AttachEntityGraphAsUpsertRecursive(TEntity entity, TraversalContext tc) =>
+        _attachmentService.AttachEntityGraphAsUpsertRecursive(entity, tc, _validationService);
 
     internal ReferenceTrackingResult AttachEntityGraphAsUpsertWithReferences(
-        TEntity entity, int maxDepth, CircularReferenceHandling circularHandling) =>
+        TEntity entity, TraversalContext tc) =>
         _attachmentService.AttachEntityGraphAsUpsertWithReferences(
-            entity, maxDepth, circularHandling, _validationService);
+            entity, tc, _validationService);
 
     // ========== Detachment Service Delegation ==========
 
@@ -150,8 +147,8 @@ internal class BatchStrategyContext<TEntity, TKey>
             _orphanService.DeletedChildrenByParent,
             _orphanService.DeletedChildrenByParentRecursive);
 
-    internal void DetachEntityGraphRecursive(TEntity entity, int maxDepth) =>
-        _detachmentService.DetachEntityGraphRecursive(entity, maxDepth);
+    internal void DetachEntityGraphRecursive(TEntity entity, TraversalContext tc) =>
+        _detachmentService.DetachEntityGraphRecursive(entity, tc);
 
     // ========== Orphan Service Delegation ==========
 
@@ -173,31 +170,27 @@ internal class BatchStrategyContext<TEntity, TKey>
     internal void DetachEntityWithOrphans(TEntity entity) =>
         _orphanService.DetachEntityWithOrphans(entity, _detachmentService);
 
-    internal void CaptureAllOriginalChildIdsRecursive(List<TEntity> entities, int maxDepth) =>
-        _orphanService.CaptureAllOriginalChildIdsRecursive(entities, maxDepth);
-
-    internal List<(string EntityType, TKey EntityId, int Depth)> GetOrphanedChildIdsRecursive(
-        TEntity entity, int maxDepth) =>
-        _orphanService.GetOrphanedChildIdsRecursive(entity, maxDepth);
+    internal void CaptureAllOriginalChildIdsRecursive(List<TEntity> entities, TraversalContext tc) =>
+        _orphanService.CaptureAllOriginalChildIdsRecursive(entities, tc);
 
     internal void ValidateNoOrphanedChildrenRecursive(
-        TEntity entity, int maxDepth, GraphBatchOptions options) =>
-        _orphanService.ValidateNoOrphanedChildrenRecursive(entity, maxDepth, options);
+        TEntity entity, TraversalContext tc, GraphBatchOptions options) =>
+        _orphanService.ValidateNoOrphanedChildrenRecursive(entity, tc, options);
 
     internal void HandleOrphanedChildrenRecursive(
-        TEntity entity, int maxDepth, OrphanBehavior behavior) =>
-        _orphanService.HandleOrphanedChildrenRecursive(entity, maxDepth, behavior);
+        TEntity entity, TraversalContext tc, OrphanBehavior behavior) =>
+        _orphanService.HandleOrphanedChildrenRecursive(entity, tc, behavior);
 
-    internal void DetachEntityWithOrphansRecursive(TEntity entity, int maxDepth) =>
-        _orphanService.DetachEntityWithOrphansRecursive(entity, maxDepth, _detachmentService);
+    internal void DetachEntityWithOrphansRecursive(TEntity entity, TraversalContext tc) =>
+        _orphanService.DetachEntityWithOrphansRecursive(entity, tc, _detachmentService);
 
     // ========== Graph Hierarchy ==========
 
     internal (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) BuildGraphHierarchy(
-        TEntity entity, int maxDepth) => GraphBuilder.Build(entity, maxDepth);
+        TEntity entity, TraversalContext tc) => GraphBuilder.Build(entity, tc);
 
     internal (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) BuildGraphHierarchyWithReferences(
-        TEntity entity, int maxDepth) => GraphBuilder.BuildWithReferences(entity, maxDepth);
+        TEntity entity, TraversalContext tc) => GraphBuilder.BuildWithReferences(entity, tc);
 
     // ========== Many-to-Many Service Delegation ==========
 
@@ -214,8 +207,8 @@ internal class BatchStrategyContext<TEntity, TKey>
 
     // ========== Link Change Tracking Service Delegation ==========
 
-    internal void CaptureOriginalManyToManyLinks(List<TEntity> entities, int maxDepth) =>
-        _linkChangeService.CaptureOriginalLinks(entities, maxDepth);
+    internal void CaptureOriginalManyToManyLinks(List<TEntity> entities, TraversalContext tc) =>
+        _linkChangeService.CaptureOriginalLinks(entities, tc);
 
     internal Internal.ManyToManyStatisticsTracker ApplyManyToManyChanges(TEntity entity, GraphBatchOptions options) =>
         _linkChangeService.ApplyLinkChanges(entity, options);

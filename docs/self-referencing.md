@@ -67,6 +67,23 @@ var result = saver.InsertGraphBatch(categories, new InsertGraphBatchOptions
 });
 ```
 
+## Navigation Filtering
+
+You can use `NavigationFilter` to control which navigations are traversed for self-referencing entities:
+
+```csharp
+var filter = NavigationFilter.Include()
+    .Navigation<Category>(c => c.SubCategories);
+
+var result = saver.InsertGraphBatch([parent], new InsertGraphBatchOptions
+{
+    NavigationFilter = filter,
+    CircularReferenceHandling = CircularReferenceHandling.Ignore
+});
+```
+
+See [Navigation Filtering](graph-operations.md#navigation-filtering) for details.
+
 ## Updating Hierarchies
 
 When updating self-referencing hierarchies, be mindful of orphan behavior:

@@ -93,6 +93,8 @@ Console.WriteLine($"Inserted: {result.InsertedCount}");
 Console.WriteLine($"Updated: {result.UpdatedCount}");
 ```
 
+Graph upserts also support `NavigationFilter` to control which child collections are traversed. See [Navigation Filtering](graph-operations.md#navigation-filtering) for details.
+
 ## UpsertBatchResult Properties
 
 ```csharp

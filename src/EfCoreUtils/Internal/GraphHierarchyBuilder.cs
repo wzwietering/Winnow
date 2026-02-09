@@ -18,20 +18,22 @@ internal class GraphHierarchyBuilder<TKey>
         _getEntityId = getEntityId;
     }
 
-    internal (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) Build(object entity, int maxDepth)
+    internal (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) Build(
+        object entity, TraversalContext tc)
     {
-        var context = new TraversalContext { IncludeReferences = false };
-        return BuildInternal(entity, maxDepth, context);
+        var context = new BuildContext { IncludeReferences = false, Filter = tc.NavigationFilter };
+        return BuildInternal(entity, tc.MaxDepth, context);
     }
 
-    internal (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) BuildWithReferences(object entity, int maxDepth)
+    internal (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) BuildWithReferences(
+        object entity, TraversalContext tc)
     {
-        var context = new TraversalContext { IncludeReferences = true };
-        return BuildInternal(entity, maxDepth, context);
+        var context = new BuildContext { IncludeReferences = true, Filter = tc.NavigationFilter };
+        return BuildInternal(entity, tc.MaxDepth, context);
     }
 
     private (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats) BuildInternal(
-        object entity, int maxDepth, TraversalContext context)
+        object entity, int maxDepth, BuildContext context)
     {
         var rootNode = BuildNodeRecursive(entity, 0, maxDepth, context);
         var stats = CreateTraversalStats(context);
@@ -39,7 +41,7 @@ internal class GraphHierarchyBuilder<TKey>
     }
 
     private GraphNode<TKey> BuildNodeRecursive(
-        object entity, int currentDepth, int maxDepth, TraversalContext context)
+        object entity, int currentDepth, int maxDepth, BuildContext context)
     {
         if (!context.Visited.Add(entity))
         {
@@ -79,7 +81,7 @@ internal class GraphHierarchyBuilder<TKey>
     };
 
     private List<GraphNode<TKey>> BuildChildNodes(
-        EntityEntry entry, int currentDepth, int maxDepth, TraversalContext context)
+        EntityEntry entry, int currentDepth, int maxDepth, BuildContext context)
     {
         if (currentDepth >= maxDepth)
         {
@@ -89,7 +91,7 @@ internal class GraphHierarchyBuilder<TKey>
         var children = new List<GraphNode<TKey>>();
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, context.Filter, skipManyToMany: false))
             {
                 continue;
             }
@@ -101,7 +103,7 @@ internal class GraphHierarchyBuilder<TKey>
 
     private void AddChildNodesFromNavigation(
         NavigationEntry navigation, int currentDepth, int maxDepth,
-        TraversalContext context, List<GraphNode<TKey>> children)
+        BuildContext context, List<GraphNode<TKey>> children)
     {
         foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
         {
@@ -112,7 +114,7 @@ internal class GraphHierarchyBuilder<TKey>
 
     // ========== Reference Tracking Methods ==========
 
-    private void TrackReferences(EntityEntry entry, int currentDepth, int maxDepth, TraversalContext context)
+    private void TrackReferences(EntityEntry entry, int currentDepth, int maxDepth, BuildContext context)
     {
         if (currentDepth >= maxDepth)
         {
@@ -121,12 +123,17 @@ internal class GraphHierarchyBuilder<TKey>
 
         foreach (var navigation in NavigationPropertyHelper.GetReferenceNavigations(entry))
         {
+            if (!TraversalHelper.ShouldTraverseReference(navigation, context.Filter))
+            {
+                continue;
+            }
+
             TrackSingleReference(navigation, currentDepth, maxDepth, context);
         }
     }
 
     private void TrackSingleReference(
-        NavigationEntry navigation, int currentDepth, int maxDepth, TraversalContext context)
+        NavigationEntry navigation, int currentDepth, int maxDepth, BuildContext context)
     {
         var refEntity = NavigationPropertyHelper.GetReferenceValue(navigation);
         if (refEntity == null || !context.Visited.Add(refEntity))
@@ -142,7 +149,7 @@ internal class GraphHierarchyBuilder<TKey>
 
     // ========== Stats Creation ==========
 
-    private GraphTraversalResult<TKey> CreateTraversalStats(TraversalContext context)
+    private GraphTraversalResult<TKey> CreateTraversalStats(BuildContext context)
     {
         if (!context.IncludeReferences)
         {
@@ -151,14 +158,14 @@ internal class GraphHierarchyBuilder<TKey>
         return CreateStatsWithReferences(context);
     }
 
-    private static GraphTraversalResult<TKey> CreateBasicStats(TraversalContext context) => new()
+    private static GraphTraversalResult<TKey> CreateBasicStats(BuildContext context) => new()
     {
         MaxDepthReached = context.DepthCounts.Count > 0 ? context.DepthCounts.Keys.Max() : 0,
         TotalEntitiesTraversed = context.DepthCounts.Values.Sum(),
         EntitiesByDepth = context.DepthCounts
     };
 
-    private static GraphTraversalResult<TKey> CreateStatsWithReferences(TraversalContext context)
+    private static GraphTraversalResult<TKey> CreateStatsWithReferences(BuildContext context)
     {
         var processedRefs = context.ReferencesByType.ToDictionary(
             kvp => kvp.Key,
@@ -177,13 +184,14 @@ internal class GraphHierarchyBuilder<TKey>
 
     // ========== Traversal Context ==========
 
-    private sealed class TraversalContext
+    private sealed class BuildContext
     {
         public HashSet<object> Visited { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<int, int> DepthCounts { get; } = new();
         public Dictionary<string, List<TKey>> ReferencesByType { get; } = new();
         public int MaxRefDepth { get; set; }
         public bool IncludeReferences { get; init; }
+        public NavigationFilter? Filter { get; init; }
 
         public void IncrementDepthCount(int depth)
         {
