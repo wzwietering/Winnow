@@ -751,3 +751,243 @@ public class SelectiveFilteringSelfReferencingExtendedTests : TestBase
         verify.Description.ShouldBe("Updated Root");
     }
 }
+
+// ========== Edge Case Coverage ==========
+
+public class SelectiveFilteringEdgeCaseTests : TestBase
+{
+    [Fact]
+    public void InsertGraph_EmptyCollectionWithFilter_Succeeds()
+    {
+        using var context = CreateContext();
+
+        var order = new CustomerOrder
+        {
+            OrderNumber = "ORD-EC-001",
+            CustomerName = "Test", CustomerId = 1,
+            Status = CustomerOrderStatus.Pending,
+            TotalAmount = 0, OrderDate = DateTimeOffset.UtcNow,
+            OrderItems = []
+        };
+
+        var filter = NavigationFilter.Include()
+            .Navigation<CustomerOrder>(o => o.OrderItems);
+
+        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        {
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        order.Id.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public void InsertGraph_NullReferenceNavWithFilter_Succeeds()
+    {
+        using var context = CreateContext();
+
+        var order = new CustomerOrder
+        {
+            OrderNumber = "ORD-EC-002",
+            CustomerName = "Test", CustomerId = 1,
+            Status = CustomerOrderStatus.Pending,
+            TotalAmount = 11m, OrderDate = DateTimeOffset.UtcNow,
+            OrderItems =
+            [
+                new OrderItem
+                {
+                    ProductId = 1000, ProductName = "P",
+                    Quantity = 1, UnitPrice = 11m, Subtotal = 11m,
+                    Product = null
+                }
+            ]
+        };
+
+        var filter = NavigationFilter.Include()
+            .Navigation<CustomerOrder>(o => o.OrderItems)
+            .Navigation<OrderItem>(i => i.Product);
+
+        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        {
+            IncludeReferences = true,
+            CircularReferenceHandling = CircularReferenceHandling.Ignore,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        order.OrderItems.First().Id.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public void UpdateGraph_OrphanBehaviorDelete_WithExcludeFilter_Works()
+    {
+        using var context = CreateContext();
+        SeedThreeLevelOrder(context);
+
+        var orders = context.CustomerOrders
+            .Include(o => o.OrderItems)
+            .ThenInclude(i => i.Reservations)
+            .ToList();
+
+        var reservation = orders[0].OrderItems.First().Reservations.First();
+        var reservationId = reservation.Id;
+        orders[0].OrderItems.First().Reservations.Remove(reservation);
+
+        // Exclude filter skips OrderItems nav, but Reservations are still tracked
+        var filter = NavigationFilter.Exclude()
+            .Navigation<CustomerOrder>(o => o.OrderItems);
+
+        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        {
+            OrphanedChildBehavior = OrphanBehavior.Delete,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void FilterReuse_AcrossMultipleOperations_Succeeds()
+    {
+        var filter = NavigationFilter.Include()
+            .Navigation<CustomerOrder>(o => o.OrderItems)
+            .Build();
+
+        // First operation: InsertGraph
+        using var context1 = CreateContext();
+        var order1 = CreateOrder("ORD-EC-004");
+        var saver1 = new BatchSaver<CustomerOrder, int>(context1);
+        var result1 = saver1.InsertGraphBatch([order1], new InsertGraphBatchOptions
+        {
+            NavigationFilter = filter
+        });
+        result1.IsCompleteSuccess.ShouldBeTrue();
+
+        // Second operation: InsertGraph on separate context with same filter
+        using var context2 = CreateContext();
+        var order2 = CreateOrder("ORD-EC-005");
+        var saver2 = new BatchSaver<CustomerOrder, int>(context2);
+        var result2 = saver2.InsertGraphBatch([order2], new InsertGraphBatchOptions
+        {
+            NavigationFilter = filter
+        });
+        result2.IsCompleteSuccess.ShouldBeTrue();
+
+        // Filter state is unchanged (still works for include mode)
+        filter.IsIncludeMode.ShouldBeTrue();
+        filter.ShouldTraverse(typeof(CustomerOrder), "OrderItems").ShouldBeTrue();
+    }
+
+    [Fact]
+    public void InsertGraph_CircularRef_ExcludeFilterBlocksCircularPath_NoThrow()
+    {
+        using var context = CreateContext();
+
+        var parent = new Category { Name = "Parent" };
+        var child = new Category { Name = "Child", ParentCategory = parent };
+        parent.SubCategories = [child];
+
+        var filter = NavigationFilter.Exclude()
+            .Navigation<Category>(c => c.SubCategories);
+
+        var saver = new BatchSaver<Category, int>(context);
+
+        // CircularReferenceHandling.Throw should NOT throw because the filter
+        // blocks the SubCategories path that would create the cycle
+        var result = saver.InsertGraphBatch([parent], new InsertGraphBatchOptions
+        {
+            CircularReferenceHandling = CircularReferenceHandling.Throw,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        parent.Id.ShouldBeGreaterThan(0);
+
+        context.ChangeTracker.Clear();
+        context.Categories.Count().ShouldBe(1);
+    }
+
+    [Fact]
+    public void InsertGraph_DeepIncludeFilter_AllLevels_FullGraphInserted()
+    {
+        using var context = CreateContext();
+
+        var order = new CustomerOrder
+        {
+            OrderNumber = "ORD-EC-006",
+            CustomerName = "Test", CustomerId = 1,
+            Status = CustomerOrderStatus.Pending,
+            TotalAmount = 22m, OrderDate = DateTimeOffset.UtcNow,
+            OrderItems = Enumerable.Range(1, 2).Select(i => new OrderItem
+            {
+                ProductId = 1000 + i, ProductName = $"Product {i}",
+                Quantity = 2, UnitPrice = 11m, Subtotal = 22m,
+                Reservations =
+                [
+                    new ItemReservation
+                    {
+                        WarehouseLocation = $"WH-{i}",
+                        ReservedQuantity = 10,
+                        ReservedAt = DateTimeOffset.UtcNow
+                    }
+                ]
+            }).ToList()
+        };
+
+        var filter = NavigationFilter.Include()
+            .Navigation<CustomerOrder>(o => o.OrderItems)
+            .Navigation<OrderItem>(i => i.Reservations);
+
+        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        {
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        order.Id.ShouldBeGreaterThan(0);
+        order.OrderItems.ShouldAllBe(i => i.Id > 0);
+        order.OrderItems.SelectMany(i => i.Reservations).ShouldAllBe(r => r.Id > 0);
+    }
+
+    #region Helpers
+
+    private static CustomerOrder CreateOrder(string orderNumber) => new()
+    {
+        OrderNumber = orderNumber,
+        CustomerName = "Test", CustomerId = 1,
+        Status = CustomerOrderStatus.Pending,
+        TotalAmount = 22m, OrderDate = DateTimeOffset.UtcNow,
+        OrderItems =
+        [
+            new OrderItem
+            {
+                ProductId = 1000, ProductName = "Product",
+                Quantity = 2, UnitPrice = 11m, Subtotal = 22m,
+                Reservations =
+                [
+                    new ItemReservation
+                    {
+                        WarehouseLocation = "WH-1",
+                        ReservedQuantity = 10,
+                        ReservedAt = DateTimeOffset.UtcNow
+                    }
+                ]
+            }
+        ]
+    };
+
+    private void SeedThreeLevelOrder(TestDbContext context)
+    {
+        var order = CreateOrder("ORD-SEED-001");
+        context.CustomerOrders.Add(order);
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+    }
+
+    #endregion
+}

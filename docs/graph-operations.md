@@ -198,6 +198,23 @@ var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
 });
 ```
 
+### Common Pitfall: Forgetting Intermediate Levels
+
+When using Include mode, you must specify rules for **every** entity type in the traversal path. Entity types without rules have NO navigations traversed:
+
+```csharp
+// Wrong - traversal stops after OrderItems (OrderItem has no rules)
+var filter = NavigationFilter.Include()
+    .Navigation<CustomerOrder>(o => o.OrderItems);
+
+// Correct - full path specified
+var filter = NavigationFilter.Include()
+    .Navigation<CustomerOrder>(o => o.OrderItems)
+    .Navigation<OrderItem>(i => i.Reservations);
+```
+
+In the first example, `OrderItem` has no rules in the Include filter, so none of its navigations (including `Reservations`) are traversed. The second example explicitly includes `Reservations` at the `OrderItem` level, allowing full 3-level traversal.
+
 ### Combining Filter with MaxDepth
 
 `NavigationFilter` and `MaxDepth` work together. Both constraints are applied:

@@ -72,6 +72,11 @@ public sealed class NavigationFilterBuilder
         return new NavigationFilter(immutableRules, _isIncludeMode);
     }
 
+    /// <summary>
+    /// Implicitly converts a builder to a <see cref="NavigationFilter"/> by calling <see cref="Build"/>.
+    /// <para><strong>Warning:</strong> Throws <see cref="InvalidOperationException"/> if no rules
+    /// have been configured via <see cref="Navigation{TEntity}"/>.</para>
+    /// </summary>
     public static implicit operator NavigationFilter(NavigationFilterBuilder builder) =>
         builder.Build();
 

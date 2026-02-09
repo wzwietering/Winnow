@@ -704,7 +704,7 @@ public class SelectiveNavigationFilteringTests : TestBase
     // ========== Validation Tests ==========
 
     [Fact]
-    public void InsertGraph_FilterReferencesNonExistentNav_Throws()
+    public void InsertGraph_IncludeFilterWithReferenceNavigation_Succeeds()
     {
         using var context = CreateContext();
 
@@ -716,7 +716,7 @@ public class SelectiveNavigationFilteringTests : TestBase
 
         var saver = new BatchSaver<CustomerOrder, int>(context);
 
-        // Product is a valid nav but let's test with exclude mode too
+        // Include filter with a reference navigation works when IncludeReferences is true
         var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
         {
             IncludeReferences = true,
