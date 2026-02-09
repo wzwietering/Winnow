@@ -158,6 +158,39 @@ public class NavigationFilterTests
             builder.Navigation<CustomerOrder>(o => o.ToString()));
     }
 
+    // ========== Navigations Plural Overload Tests ==========
+
+    [Fact]
+    public void Navigations_MultipleExpressions_AllRegistered()
+    {
+        NavigationFilter filter = NavigationFilter.Include()
+            .Navigations<OrderItem>(i => i.Reservations, i => i.CustomerOrder);
+
+        filter.ShouldTraverse(typeof(OrderItem), "Reservations").ShouldBeTrue();
+        filter.ShouldTraverse(typeof(OrderItem), "CustomerOrder").ShouldBeTrue();
+        filter.ShouldTraverse(typeof(OrderItem), "Product").ShouldBeFalse();
+    }
+
+    [Fact]
+    public void Navigations_SingleExpression_Works()
+    {
+        NavigationFilter filter = NavigationFilter.Include()
+            .Navigations<CustomerOrder>(o => o.OrderItems);
+
+        filter.ShouldTraverse(typeof(CustomerOrder), "OrderItems").ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Navigations_CombinedWithNavigation_Works()
+    {
+        NavigationFilter filter = NavigationFilter.Include()
+            .Navigations<CustomerOrder>(o => o.OrderItems)
+            .Navigation<OrderItem>(i => i.Reservations);
+
+        filter.ShouldTraverse(typeof(CustomerOrder), "OrderItems").ShouldBeTrue();
+        filter.ShouldTraverse(typeof(OrderItem), "Reservations").ShouldBeTrue();
+    }
+
     // ========== ToString Tests ==========
 
     [Fact]

@@ -10,7 +10,7 @@ internal static class NavigationFilterValidator
     internal static void Validate(
         NavigationFilter? filter, IModel model, bool includeReferences, bool includeManyToMany)
     {
-        if (filter == null || !filter.IsIncludeMode)
+        if (filter == null)
         {
             return;
         }
@@ -25,12 +25,30 @@ internal static class NavigationFilterValidator
 
             foreach (var navName in navigationNames)
             {
-                ValidateNavigation(efType, navName, includeReferences, includeManyToMany);
+                ValidateNavigationExists(efType, navName);
+
+                if (filter.IsIncludeMode)
+                {
+                    ValidateFlagConflicts(efType, navName, includeReferences, includeManyToMany);
+                }
             }
         }
     }
 
-    private static void ValidateNavigation(
+    private static void ValidateNavigationExists(IEntityType efType, string navName)
+    {
+        var navigation = efType.FindNavigation(navName);
+        var skipNavigation = efType.FindSkipNavigation(navName);
+
+        if (navigation == null && skipNavigation == null)
+        {
+            throw new InvalidOperationException(
+                $"NavigationFilter references '{navName}' on '{efType.ClrType.Name}', " +
+                $"but no such navigation property exists in the EF model.");
+        }
+    }
+
+    private static void ValidateFlagConflicts(
         IEntityType efType, string navName, bool includeReferences, bool includeManyToMany)
     {
         var navigation = efType.FindNavigation(navName);

@@ -82,7 +82,7 @@ internal static class TraversalHelper
         return IsAllowedByFilter(navigation, filter);
     }
 
-    private static bool IsAllowedByFilter(NavigationEntry navigation, NavigationFilter? filter)
+    internal static bool IsAllowedByFilter(NavigationEntry navigation, NavigationFilter? filter)
     {
         if (filter == null)
         {

@@ -49,6 +49,11 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
     {
         foreach (var navigation in ManyToManyNavigationHelper.GetManyToManyNavigations(entry))
         {
+            if (!TraversalHelper.IsAllowedByFilter(navigation, filter))
+            {
+                continue;
+            }
+
             ProcessManyToManyNavigation(entry, navigation, options, tracker);
         }
 

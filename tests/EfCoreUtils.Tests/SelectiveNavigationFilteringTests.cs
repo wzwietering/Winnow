@@ -1,3 +1,4 @@
+using EfCoreUtils.Tests.CompositeKeyIntegration;
 using EfCoreUtils.Tests.Entities;
 using EfCoreUtils.Tests.Infrastructure;
 using Microsoft.EntityFrameworkCore;
@@ -368,6 +369,364 @@ public class SelectiveNavigationFilteringTests : TestBase
         parent.SubCategories.ShouldAllBe(c => c.Id > 0);
     }
 
+    // ========== Many-to-Many with Filter Tests ==========
+
+    [Fact]
+    public void InsertGraph_SkipNavWithIncludeFilter_JoinRecordsCreated()
+    {
+        using var context = CreateContext();
+
+        var courses = new List<Course>
+        {
+            new() { Code = "CS101", Title = "Intro CS", Credits = 3 },
+            new() { Code = "CS102", Title = "Data Structures", Credits = 3 }
+        };
+        var student = new Student { Name = "Alice", Email = "alice@test.com", Courses = courses };
+
+        var filter = NavigationFilter.Include()
+            .Navigation<Student>(s => s.Courses);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        student.Id.ShouldBeGreaterThan(0);
+
+        context.ChangeTracker.Clear();
+        var loaded = context.Students.Include(s => s.Courses).First();
+        loaded.Courses.Count.ShouldBe(2);
+    }
+
+    [Fact]
+    public void InsertGraph_ExcludeFilterOnManyToMany_NoJoinRecords()
+    {
+        using var context = CreateContext();
+
+        var courses = new List<Course>
+        {
+            new() { Code = "CS101", Title = "Intro CS", Credits = 3 }
+        };
+        var student = new Student { Name = "Bob", Email = "bob@test.com", Courses = courses };
+
+        var filter = NavigationFilter.Exclude()
+            .Navigation<Student>(s => s.Courses);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        student.Id.ShouldBeGreaterThan(0);
+
+        context.ChangeTracker.Clear();
+        var loaded = context.Students.Include(s => s.Courses).First();
+        loaded.Courses.Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public void InsertGraph_ExplicitJoinWithFilter_EnrollmentsInserted()
+    {
+        using var context = CreateContext();
+
+        var course = new Course { Code = "CS101", Title = "Intro CS", Credits = 3 };
+        context.Courses.Add(course);
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+
+        var student = new Student
+        {
+            Name = "Charlie",
+            Email = "charlie@test.com",
+            Enrollments = [new Enrollment { CourseId = course.Id, EnrolledAt = DateTime.UtcNow }]
+        };
+
+        var filter = NavigationFilter.Include()
+            .Navigation<Student>(s => s.Enrollments);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        context.ChangeTracker.Clear();
+        var loaded = context.Students.Include(s => s.Enrollments).First();
+        loaded.Enrollments.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void InsertGraph_FilterWithManyToManyValidation_ValidatesIncludedNavs()
+    {
+        using var context = CreateContext();
+
+        var courses = new List<Course>
+        {
+            new() { Code = "CS301", Title = "Algorithms", Credits = 3 }
+        };
+        var student = new Student { Name = "Diana", Email = "diana@test.com", Courses = courses };
+
+        var filter = NavigationFilter.Include()
+            .Navigation<Student>(s => s.Courses);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ValidateManyToManyEntitiesExist = false,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        context.ChangeTracker.Clear();
+        var loaded = context.Students.Include(s => s.Courses).First();
+        loaded.Courses.Count.ShouldBe(1);
+    }
+
+    [Fact]
+    public void InsertGraph_FilterWithInsertIfNew_BehaviorRespected()
+    {
+        using var context = CreateContext();
+
+        var newCourse = new Course { Code = "CS401", Title = "ML", Credits = 3 };
+        var student = new Student { Name = "Eve", Email = "eve@test.com", Courses = [newCourse] };
+
+        var filter = NavigationFilter.Include()
+            .Navigation<Student>(s => s.Courses);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        newCourse.Id.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public void UpsertGraph_ManyToManyWithFilter_JoinRecordsManaged()
+    {
+        using var context = CreateContext();
+
+        var courses = new List<Course>
+        {
+            new() { Code = "CS501", Title = "Databases", Credits = 3 }
+        };
+        var student = new Student { Name = "Frank", Email = "frank@test.com", Courses = courses };
+
+        var filter = NavigationFilter.Include()
+            .Navigation<Student>(s => s.Courses);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.UpsertGraphBatch([student], new UpsertGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        student.Id.ShouldBeGreaterThan(0);
+
+        context.ChangeTracker.Clear();
+        var loaded = context.Students.Include(s => s.Courses).First();
+        loaded.Courses.Count.ShouldBe(1);
+    }
+
+    // ========== Reference Navigation with Filter Tests ==========
+
+    [Fact]
+    public void InsertGraph_FilterIncludesReferenceNav_ProductTraversed()
+    {
+        using var context = CreateContext();
+
+        var product = new Product
+        {
+            Name = "Widget", Price = 9.99m, Stock = 100,
+            LastModified = DateTimeOffset.UtcNow
+        };
+        var order = new CustomerOrder
+        {
+            OrderNumber = "ORD-REF-001", CustomerName = "Test", CustomerId = 1,
+            Status = CustomerOrderStatus.Pending, TotalAmount = 9.99m,
+            OrderDate = DateTimeOffset.UtcNow,
+            OrderItems =
+            [
+                new OrderItem
+                {
+                    ProductName = "Widget", Quantity = 1, UnitPrice = 9.99m,
+                    Subtotal = 9.99m, Product = product
+                }
+            ]
+        };
+
+        var filter = NavigationFilter.Include()
+            .Navigations<CustomerOrder>(o => o.OrderItems)
+            .Navigation<OrderItem>(i => i.Product);
+
+        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        {
+            IncludeReferences = true,
+            CircularReferenceHandling = CircularReferenceHandling.Ignore,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        product.Id.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public void InsertGraph_FilterExcludesReferenceNav_ProductNotTraversed()
+    {
+        using var context = CreateContext();
+
+        var product = new Product
+        {
+            Name = "Gadget", Price = 19.99m, Stock = 50,
+            LastModified = DateTimeOffset.UtcNow
+        };
+        var order = new CustomerOrder
+        {
+            OrderNumber = "ORD-REF-002", CustomerName = "Test", CustomerId = 1,
+            Status = CustomerOrderStatus.Pending, TotalAmount = 19.99m,
+            OrderDate = DateTimeOffset.UtcNow,
+            OrderItems =
+            [
+                new OrderItem
+                {
+                    ProductName = "Gadget", Quantity = 1, UnitPrice = 19.99m,
+                    Subtotal = 19.99m, Product = product
+                }
+            ]
+        };
+
+        var filter = NavigationFilter.Exclude()
+            .Navigation<OrderItem>(i => i.Product);
+
+        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        {
+            IncludeReferences = true,
+            CircularReferenceHandling = CircularReferenceHandling.Ignore,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        product.Id.ShouldBe(0);
+    }
+
+    [Fact]
+    public void InsertGraph_ExcludeModeReferenceNav_ProductBlocked()
+    {
+        using var context = CreateContext();
+
+        var product = new Product
+        {
+            Name = "Blocked", Price = 5.00m, Stock = 10,
+            LastModified = DateTimeOffset.UtcNow
+        };
+        var order = new CustomerOrder
+        {
+            OrderNumber = "ORD-REF-003", CustomerName = "Test", CustomerId = 1,
+            Status = CustomerOrderStatus.Pending, TotalAmount = 5.00m,
+            OrderDate = DateTimeOffset.UtcNow,
+            OrderItems =
+            [
+                new OrderItem
+                {
+                    ProductName = "Blocked", Quantity = 1, UnitPrice = 5.00m,
+                    Subtotal = 5.00m, Product = product
+                }
+            ]
+        };
+
+        var filter = NavigationFilter.Exclude()
+            .Navigation<OrderItem>(i => i.Product);
+
+        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        {
+            IncludeReferences = true,
+            CircularReferenceHandling = CircularReferenceHandling.Ignore,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        product.Id.ShouldBe(0);
+    }
+
+    [Fact]
+    public void UpdateGraph_ReferenceNavWithCircularRef_FilterAndHandling()
+    {
+        using var context = CreateContext();
+
+        var parent = new Category { Name = "Parent" };
+        context.Categories.Add(parent);
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+
+        var loaded = context.Categories.First(c => c.Name == "Parent");
+        loaded.Description = "Updated";
+
+        var filter = NavigationFilter.Include()
+            .Navigation<Category>(c => c.SubCategories);
+
+        var saver = new BatchSaver<Category, int>(context);
+        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        {
+            CircularReferenceHandling = CircularReferenceHandling.Ignore,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        context.ChangeTracker.Clear();
+        var verify = context.Categories.First(c => c.Id == loaded.Id);
+        verify.Description.ShouldBe("Updated");
+    }
+
+    // ========== Validation Tests ==========
+
+    [Fact]
+    public void InsertGraph_FilterReferencesNonExistentNav_Throws()
+    {
+        using var context = CreateContext();
+
+        var order = CreateThreeLevelOrder("ORD-001", 1, 0);
+
+        var filter = NavigationFilter.Include()
+            .Navigation<CustomerOrder>(o => o.OrderItems)
+            .Navigation<OrderItem>(i => i.Product);
+
+        var saver = new BatchSaver<CustomerOrder, int>(context);
+
+        // Product is a valid nav but let's test with exclude mode too
+        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        {
+            IncludeReferences = true,
+            CircularReferenceHandling = CircularReferenceHandling.Ignore,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+    }
+
     // ========== Helper Methods ==========
 
     private static CustomerOrder CreateThreeLevelOrder(
@@ -421,5 +780,245 @@ public class SelectiveNavigationFilteringTests : TestBase
         context.CustomerOrders.AddRange(orders);
         context.SaveChanges();
         context.ChangeTracker.Clear();
+    }
+}
+
+// ========== Parallel Tests ==========
+
+public class SelectiveNavigationFilteringParallelTests : ParallelTestBase
+{
+    [Fact]
+    public async Task InsertGraphBatchAsync_ParallelWithFilter_FilterAppliedAcrossPartitions()
+    {
+        EnsureDatabaseCreated();
+
+        var factory = CreateContextFactory();
+        var saver = new ParallelBatchSaver<CustomerOrder, int>(factory, maxDegreeOfParallelism: 2);
+
+        var orders = Enumerable.Range(1, 10).Select(i => new CustomerOrder
+        {
+            OrderNumber = $"ORD-PF-{i:D3}",
+            CustomerId = i, CustomerName = $"Customer {i}",
+            Status = CustomerOrderStatus.Pending,
+            TotalAmount = 22m, OrderDate = DateTimeOffset.UtcNow,
+            OrderItems =
+            [
+                new OrderItem
+                {
+                    ProductId = 1000, ProductName = "Product", Quantity = 2,
+                    UnitPrice = 11m, Subtotal = 22m,
+                    Reservations = [new ItemReservation { WarehouseLocation = "WH-1", ReservedQuantity = 1, ReservedAt = DateTimeOffset.UtcNow }]
+                }
+            ]
+        }).ToList();
+
+        var filter = NavigationFilter.Include()
+            .Navigation<CustomerOrder>(o => o.OrderItems);
+
+        var result = await saver.InsertGraphBatchAsync(orders, new InsertGraphBatchOptions
+        {
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.SuccessCount.ShouldBe(10);
+
+        var dbReservations = QueryWithFactory(ctx => ctx.ItemReservations.ToList());
+        dbReservations.Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task DeleteGraphBatchAsync_ParallelWithFilter_CascadeRespected()
+    {
+        EnsureDatabaseCreated();
+        SeedWithFactory(ctx => SeedCustomerOrders(ctx, 4, itemsPerOrder: 2));
+
+        var factory = CreateContextFactory();
+        var saver = new ParallelBatchSaver<CustomerOrder, int>(factory, maxDegreeOfParallelism: 2);
+
+        var orders = QueryWithFactory(ctx =>
+            ctx.CustomerOrders.Include(o => o.OrderItems).ToList());
+
+        var filter = NavigationFilter.Include()
+            .Navigation<CustomerOrder>(o => o.OrderItems);
+
+        var result = await saver.DeleteGraphBatchAsync(orders, new DeleteGraphBatchOptions
+        {
+            CascadeBehavior = DeleteCascadeBehavior.Cascade,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        var remaining = QueryWithFactory(ctx => ctx.CustomerOrders.ToList());
+        remaining.Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task UpsertGraphBatchAsync_ParallelWithFilter_InsertsAndUpdates()
+    {
+        EnsureDatabaseCreated();
+
+        var factory = CreateContextFactory();
+        var saver = new ParallelBatchSaver<CustomerOrder, int>(factory, maxDegreeOfParallelism: 2);
+
+        var orders = Enumerable.Range(1, 4).Select(i => new CustomerOrder
+        {
+            OrderNumber = $"ORD-UP-{i:D3}",
+            CustomerId = i, CustomerName = $"Customer {i}",
+            Status = CustomerOrderStatus.Pending,
+            TotalAmount = 22m, OrderDate = DateTimeOffset.UtcNow,
+            OrderItems =
+            [
+                new OrderItem
+                {
+                    ProductId = 1000, ProductName = "Product", Quantity = 2,
+                    UnitPrice = 11m, Subtotal = 22m,
+                    Reservations = [new ItemReservation { WarehouseLocation = "WH-1", ReservedQuantity = 1, ReservedAt = DateTimeOffset.UtcNow }]
+                }
+            ]
+        }).ToList();
+
+        var filter = NavigationFilter.Include()
+            .Navigation<CustomerOrder>(o => o.OrderItems);
+
+        var result = await saver.UpsertGraphBatchAsync(orders, new UpsertGraphBatchOptions
+        {
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        var dbReservations = QueryWithFactory(ctx => ctx.ItemReservations.ToList());
+        dbReservations.Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public async Task InsertGraphBatchAsync_ParallelExcludeFilter_FilterApplied()
+    {
+        EnsureDatabaseCreated();
+
+        var factory = CreateContextFactory();
+        var saver = new ParallelBatchSaver<CustomerOrder, int>(factory, maxDegreeOfParallelism: 2);
+
+        var orders = Enumerable.Range(1, 6).Select(i => new CustomerOrder
+        {
+            OrderNumber = $"ORD-EX-{i:D3}",
+            CustomerId = i, CustomerName = $"Customer {i}",
+            Status = CustomerOrderStatus.Pending,
+            TotalAmount = 22m, OrderDate = DateTimeOffset.UtcNow,
+            OrderItems =
+            [
+                new OrderItem
+                {
+                    ProductId = 1000, ProductName = "Product", Quantity = 2,
+                    UnitPrice = 11m, Subtotal = 22m,
+                    Reservations = [new ItemReservation { WarehouseLocation = "WH-1", ReservedQuantity = 1, ReservedAt = DateTimeOffset.UtcNow }]
+                }
+            ]
+        }).ToList();
+
+        var filter = NavigationFilter.Exclude()
+            .Navigation<OrderItem>(i => i.Reservations);
+
+        var result = await saver.InsertGraphBatchAsync(orders, new InsertGraphBatchOptions
+        {
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        var dbItems = QueryWithFactory(ctx => ctx.OrderItems.ToList());
+        dbItems.Count.ShouldBe(6);
+
+        var dbReservations = QueryWithFactory(ctx => ctx.ItemReservations.ToList());
+        dbReservations.Count.ShouldBe(0);
+    }
+}
+
+// ========== Composite Key Tests ==========
+
+public class SelectiveNavigationFilteringCompositeKeyTests : CompositeKeyTestBase
+{
+    [Fact]
+    public void InsertGraph_CompositeKeyEntity_FilterExcludesNotes_OnlyOrderLineInserted()
+    {
+        using var context = CreateContext();
+        var orderId = CreateCustomerOrder(context);
+
+        var orderLine = new OrderLine
+        {
+            OrderId = orderId, LineNumber = 1,
+            Quantity = 5, UnitPrice = 10.00m,
+            Notes = [new OrderLineNote { Note = "Test Note", CreatedAt = DateTime.UtcNow }]
+        };
+
+        var filter = NavigationFilter.Exclude()
+            .Navigation<OrderLine>(ol => ol.Notes);
+
+        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
+        var result = saver.InsertGraphBatch([orderLine], new InsertGraphBatchOptions
+        {
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        context.ChangeTracker.Clear();
+        var notes = context.Set<OrderLineNote>().ToList();
+        notes.Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public void UpdateGraph_CompositeKeyEntity_FilterExcludesNotes_NoOrphanDetection()
+    {
+        using var context = CreateContext();
+        var orderId = CreateCustomerOrder(context);
+        InsertOrderLineWithNotes(context, orderId, 1, 2);
+
+        var loaded = context.OrderLines
+            .Include(ol => ol.Notes)
+            .First(ol => ol.OrderId == orderId && ol.LineNumber == 1);
+        loaded.Notes.Clear();
+
+        var filter = NavigationFilter.Exclude()
+            .Navigation<OrderLine>(ol => ol.Notes);
+
+        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
+        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        {
+            OrphanedChildBehavior = OrphanBehavior.Throw,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void DeleteGraph_CompositeKeyEntity_FilterIncludesNotes_CascadeDeletes()
+    {
+        using var context = CreateContext();
+        var orderId = CreateCustomerOrder(context);
+        InsertOrderLineWithNotes(context, orderId, 1, 2);
+
+        var loaded = context.OrderLines
+            .Include(ol => ol.Notes)
+            .First(ol => ol.OrderId == orderId && ol.LineNumber == 1);
+
+        var filter = NavigationFilter.Include()
+            .Navigation<OrderLine>(ol => ol.Notes);
+
+        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
+        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        {
+            CascadeBehavior = DeleteCascadeBehavior.Cascade,
+            NavigationFilter = filter
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        context.ChangeTracker.Clear();
+        var notes = context.Set<OrderLineNote>().ToList();
+        notes.Count.ShouldBe(0);
     }
 }

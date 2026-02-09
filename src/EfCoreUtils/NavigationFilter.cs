@@ -39,13 +39,14 @@ public sealed class NavigationFilter
     {
         if (IsIncludeMode)
         {
-            return _rules.TryGetValue(entityType, out var set)
-                && set.Contains(navigationName);
+            return IsNavigationListed(entityType, navigationName);
         }
 
-        return !_rules.TryGetValue(entityType, out var excludeSet)
-            || !excludeSet.Contains(navigationName);
+        return !IsNavigationListed(entityType, navigationName);
     }
+
+    private bool IsNavigationListed(Type entityType, string navigationName) =>
+        _rules.TryGetValue(entityType, out var set) && set.Contains(navigationName);
 
     internal IReadOnlyDictionary<Type, IReadOnlySet<string>> Rules => _rules;
 

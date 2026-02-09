@@ -214,9 +214,33 @@ var result = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
 });
 ```
 
+### Understanding Filter and Flag Interaction
+
+For a navigation to be traversed, both conditions must be true:
+1. The navigation type must be enabled via flags (`IncludeReferences`, `IncludeManyToMany`)
+2. The navigation must pass the filter rules (if a filter is specified)
+
+Think of flags as "gates" and filters as "allow/block lists":
+
+| Scenario | Flag | Filter | Result |
+|----------|------|--------|--------|
+| Collection navigation | (always on) | Included / no rule | Traversed |
+| Collection navigation | (always on) | Excluded | Blocked by filter |
+| Reference navigation | `IncludeReferences = true` | Included in filter | Traversed |
+| Reference navigation | `IncludeReferences = false` | Included in filter | **Throws** (conflict) |
+| M2M navigation | `IncludeManyToMany = true` | Excluded in filter | Blocked by filter |
+
 ### Flag Conflict Validation
 
 If a filter includes a reference navigation but `IncludeReferences = false`, or a many-to-many navigation but `IncludeManyToMany = false`, an `InvalidOperationException` is thrown at operation start.
+
+> **Note:** This validation only applies to **Include mode** filters. Exclude mode
+> filters do not trigger flag conflict validation because excluding a navigation that wouldn't
+> be traversed anyway is redundant but not incorrect.
+
+### Navigation Name Validation
+
+Both include and exclude mode filters validate that each navigation name actually exists in the EF model. If a filter references a non-existent navigation property, an `InvalidOperationException` is thrown. This catches typos and refactoring errors early.
 
 ## Common Options
 
@@ -228,6 +252,10 @@ If a filter includes a reference navigation but `IncludeReferences = false`, or 
 | `IncludeReferences` | `false` | Include many-to-one references |
 | `IncludeManyToMany` | `false` | Include many-to-many navigations |
 | `CircularReferenceHandling` | `Throw` | How to handle circular references |
+
+### Future Consideration: Filter-Only Mode
+
+In a future major version, `NavigationFilter` could become the single source of truth for navigation traversal control, replacing the boolean `IncludeReferences` and `IncludeManyToMany` flags. This would simplify the API by removing the "flag + filter" interaction and making the filter the only mechanism for specifying traversal rules. No implementation changes are needed now.
 
 See also:
 - [Reference Navigation](reference-navigation.md)

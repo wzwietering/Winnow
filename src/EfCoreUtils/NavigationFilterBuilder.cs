@@ -5,6 +5,9 @@ namespace EfCoreUtils;
 /// <summary>
 /// Mutable fluent builder for creating immutable <see cref="NavigationFilter"/> instances.
 /// Use <see cref="NavigationFilter.Include"/> or <see cref="NavigationFilter.Exclude"/> to start building.
+/// <para><strong>Thread safety:</strong> This builder is NOT thread-safe.
+/// Create and build filters on a single thread. The resulting
+/// <see cref="NavigationFilter"/> is immutable and thread-safe.</para>
 /// </summary>
 public sealed class NavigationFilterBuilder
 {
@@ -33,8 +36,27 @@ public sealed class NavigationFilterBuilder
     }
 
     /// <summary>
+    /// Adds multiple navigation properties for a single entity type.
+    /// </summary>
+    public NavigationFilterBuilder Navigations<TEntity>(
+        params Expression<Func<TEntity, object?>>[] navigationExpressions)
+        where TEntity : class
+    {
+        foreach (var expression in navigationExpressions)
+        {
+            Navigation(expression);
+        }
+        return this;
+    }
+
+    /// <summary>
     /// Builds an immutable <see cref="NavigationFilter"/> from the configured rules.
     /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when no navigation rules have been configured. An empty filter would be
+    /// semantically ambiguous (include-nothing vs exclude-nothing) and likely indicates
+    /// a configuration error.
+    /// </exception>
     public NavigationFilter Build()
     {
         if (_rules.Count == 0)
