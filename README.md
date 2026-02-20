@@ -188,6 +188,20 @@ See [Graph Operations](docs/graph-operations.md) for full documentation.
 
 With network databases (SQL Server, PostgreSQL), DivideAndConquer wins more clearly due to latency savings.
 
+### Benchmarked Timings (SQLite)
+
+DivideAndConquer adds near-zero overhead compared to raw `SaveChanges()`:
+
+| Entities | Raw EF Core | DivideAndConquer | OneByOne |
+|----------|-------------|------------------|----------|
+| 1,000 | 54 ms | 68-71 ms | 2,500+ ms |
+| 5,000 | 117 ms | 107-135 ms | 12,000+ ms |
+| 10,000 | — | 163-179 ms | 25,000+ ms |
+
+Graph operations (parent + children) are 2-3x more expensive per entity in memory. Pre-validate your data when using DivideAndConquer — at 25% failure rate, it degrades to near-OneByOne performance.
+
+For full results including graph, parallel, and failure rate benchmarks, see [SQLite Benchmarks](docs/benchmarks/sqlite.md).
+
 ## Handling Results
 
 All operations return detailed results:
@@ -295,6 +309,7 @@ Detailed documentation for complex scenarios:
 - [Upsert Operations](docs/upsert-operations.md) - Insert-or-update with race condition handling
 - [Results Reference](docs/results-reference.md) - Full result type API
 - [Options Reference](docs/api/options-reference.md) - All configuration options
+- [SQLite Benchmarks](docs/benchmarks/sqlite.md) - Performance data and strategy guidance
 
 ## Common Mistakes
 
