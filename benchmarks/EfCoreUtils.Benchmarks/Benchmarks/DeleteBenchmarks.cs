@@ -7,7 +7,7 @@ namespace EfCoreUtils.Benchmarks.Benchmarks;
 
 [MemoryDiagnoser]
 [SimpleJob(iterationCount: 10, warmupCount: 3)]
-public class InsertBenchmarks
+public class DeleteBenchmarks
 {
     [ParamsSource(nameof(Providers))]
     public DatabaseProvider Provider { get; set; }
@@ -17,10 +17,11 @@ public class InsertBenchmarks
     [ParamsAllValues]
     public BatchStrategy Strategy { get; set; }
 
-    [Params(100, 1000, 5000, 10000)]
+    [Params(100, 1000, 5000)]
     public int BatchSize { get; set; }
 
     private DbContextOptions<BenchmarkDbContext> _options = null!;
+    private BenchmarkDbContext _context = null!;
     private List<BenchmarkProduct> _products = null!;
 
     [GlobalSetup]
@@ -31,26 +32,36 @@ public class InsertBenchmarks
 
         using var context = new BenchmarkDbContext(_options);
         context.Database.EnsureCreated();
-
-        // Warmup query to establish connection
         _ = context.Products.FirstOrDefault();
     }
 
     [IterationSetup]
     public void IterationSetup()
     {
-        using var context = new BenchmarkDbContext(_options);
-        context.Database.ExecuteSqlRaw("DELETE FROM Products");
+        // Seed fresh entities for each iteration
+        using var seedContext = new BenchmarkDbContext(_options);
+        seedContext.Database.ExecuteSqlRaw("DELETE FROM Products");
 
-        _products = EntityGenerator.CreateProducts(BatchSize);
+        var seedProducts = EntityGenerator.CreateProducts(BatchSize);
+        seedContext.Products.AddRange(seedProducts);
+        seedContext.SaveChanges();
+
+        // Load into tracked context for deletion
+        _context = new BenchmarkDbContext(_options);
+        _products = _context.Products.OrderBy(p => p.Id).ToList();
     }
 
     [Benchmark]
-    public InsertBatchResult<int> InsertBatch()
+    public BatchResult<int> DeleteBatch()
     {
-        using var context = new BenchmarkDbContext(_options);
-        var saver = new BatchSaver<BenchmarkProduct, int>(context);
-        return saver.InsertBatch(_products, new InsertBatchOptions { Strategy = Strategy });
+        var saver = new BatchSaver<BenchmarkProduct, int>(_context);
+        return saver.DeleteBatch(_products, new DeleteBatchOptions { Strategy = Strategy });
+    }
+
+    [IterationCleanup]
+    public void IterationCleanup()
+    {
+        _context.Dispose();
     }
 
     [GlobalCleanup]

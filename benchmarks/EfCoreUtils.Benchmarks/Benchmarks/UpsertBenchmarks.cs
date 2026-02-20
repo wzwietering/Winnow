@@ -17,7 +17,7 @@ public class UpsertBenchmarks
     [ParamsAllValues]
     public BatchStrategy Strategy { get; set; }
 
-    [Params(100, 1000, 5000)]
+    [Params(100, 1000, 5000, 10000)]
     public int BatchSize { get; set; }
 
     private DbContextOptions<BenchmarkDbContext> _options = null!;

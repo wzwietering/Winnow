@@ -5,23 +5,23 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreUtils.Benchmarks.Benchmarks;
 
+/// <summary>
+/// Compares raw EF Core SaveChanges against the library's DivideAndConquer strategy
+/// to measure the overhead/benefit of the library itself.
+/// </summary>
 [MemoryDiagnoser]
 [SimpleJob(iterationCount: 10, warmupCount: 3)]
-public class InsertBenchmarks
+public class BaselineInsertBenchmarks
 {
     [ParamsSource(nameof(Providers))]
     public DatabaseProvider Provider { get; set; }
 
     public static IEnumerable<DatabaseProvider> Providers => GlobalState.Containers.StartedProviders;
 
-    [ParamsAllValues]
-    public BatchStrategy Strategy { get; set; }
-
-    [Params(100, 1000, 5000, 10000)]
+    [Params(100, 1000, 5000)]
     public int BatchSize { get; set; }
 
     private DbContextOptions<BenchmarkDbContext> _options = null!;
-    private List<BenchmarkProduct> _products = null!;
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -31,8 +31,6 @@ public class InsertBenchmarks
 
         using var context = new BenchmarkDbContext(_options);
         context.Database.EnsureCreated();
-
-        // Warmup query to establish connection
         _ = context.Products.FirstOrDefault();
     }
 
@@ -41,16 +39,37 @@ public class InsertBenchmarks
     {
         using var context = new BenchmarkDbContext(_options);
         context.Database.ExecuteSqlRaw("DELETE FROM Products");
+    }
 
-        _products = EntityGenerator.CreateProducts(BatchSize);
+    [Benchmark(Baseline = true)]
+    public int RawEfCore()
+    {
+        using var context = new BenchmarkDbContext(_options);
+        var products = EntityGenerator.CreateProducts(BatchSize);
+        context.Products.AddRange(products);
+        return context.SaveChanges();
     }
 
     [Benchmark]
-    public InsertBatchResult<int> InsertBatch()
+    public InsertBatchResult<int> LibraryDivideAndConquer()
     {
         using var context = new BenchmarkDbContext(_options);
+        var products = EntityGenerator.CreateProducts(BatchSize);
         var saver = new BatchSaver<BenchmarkProduct, int>(context);
-        return saver.InsertBatch(_products, new InsertBatchOptions { Strategy = Strategy });
+        return saver.InsertBatch(
+            products,
+            new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
+    }
+
+    [Benchmark]
+    public InsertBatchResult<int> LibraryOneByOne()
+    {
+        using var context = new BenchmarkDbContext(_options);
+        var products = EntityGenerator.CreateProducts(BatchSize);
+        var saver = new BatchSaver<BenchmarkProduct, int>(context);
+        return saver.InsertBatch(
+            products,
+            new InsertBatchOptions { Strategy = BatchStrategy.OneByOne });
     }
 
     [GlobalCleanup]

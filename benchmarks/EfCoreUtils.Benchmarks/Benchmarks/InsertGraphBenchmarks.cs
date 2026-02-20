@@ -5,9 +5,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreUtils.Benchmarks.Benchmarks;
 
+/// <summary>
+/// Measures InsertGraphBatch performance with a 3-level hierarchy:
+/// BenchmarkOrder → BenchmarkOrderItem → BenchmarkOrderReservation.
+/// Each root entity has 2 items, each item has 1 reservation (5 entities per root).
+/// </summary>
 [MemoryDiagnoser]
 [SimpleJob(iterationCount: 10, warmupCount: 3)]
-public class InsertBenchmarks
+public class InsertGraphBenchmarks
 {
     [ParamsSource(nameof(Providers))]
     public DatabaseProvider Provider { get; set; }
@@ -17,11 +22,11 @@ public class InsertBenchmarks
     [ParamsAllValues]
     public BatchStrategy Strategy { get; set; }
 
-    [Params(100, 1000, 5000, 10000)]
+    [Params(100, 1000, 5000)]
     public int BatchSize { get; set; }
 
     private DbContextOptions<BenchmarkDbContext> _options = null!;
-    private List<BenchmarkProduct> _products = null!;
+    private List<BenchmarkOrder> _orders = null!;
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -31,26 +36,28 @@ public class InsertBenchmarks
 
         using var context = new BenchmarkDbContext(_options);
         context.Database.EnsureCreated();
-
-        // Warmup query to establish connection
-        _ = context.Products.FirstOrDefault();
+        _ = context.Orders.FirstOrDefault();
     }
 
     [IterationSetup]
     public void IterationSetup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.ExecuteSqlRaw("DELETE FROM Products");
+        context.Database.ExecuteSqlRaw("DELETE FROM OrderReservations");
+        context.Database.ExecuteSqlRaw("DELETE FROM OrderItems");
+        context.Database.ExecuteSqlRaw("DELETE FROM Orders");
 
-        _products = EntityGenerator.CreateProducts(BatchSize);
+        _orders = EntityGenerator.CreateOrders(BatchSize);
     }
 
     [Benchmark]
-    public InsertBatchResult<int> InsertBatch()
+    public InsertBatchResult<int> InsertGraphBatch()
     {
         using var context = new BenchmarkDbContext(_options);
-        var saver = new BatchSaver<BenchmarkProduct, int>(context);
-        return saver.InsertBatch(_products, new InsertBatchOptions { Strategy = Strategy });
+        var saver = new BatchSaver<BenchmarkOrder, int>(context);
+        return saver.InsertGraphBatch(
+            _orders,
+            new InsertGraphBatchOptions { Strategy = Strategy });
     }
 
     [GlobalCleanup]

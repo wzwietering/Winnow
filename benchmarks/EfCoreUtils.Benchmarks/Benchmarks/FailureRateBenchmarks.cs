@@ -5,9 +5,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreUtils.Benchmarks.Benchmarks;
 
+/// <summary>
+/// Measures how error handling impacts performance.
+/// Products with Price = -1 fail validation, triggering retry/recovery logic.
+/// </summary>
 [MemoryDiagnoser]
 [SimpleJob(iterationCount: 10, warmupCount: 3)]
-public class InsertBenchmarks
+public class FailureRateBenchmarks
 {
     [ParamsSource(nameof(Providers))]
     public DatabaseProvider Provider { get; set; }
@@ -17,11 +21,13 @@ public class InsertBenchmarks
     [ParamsAllValues]
     public BatchStrategy Strategy { get; set; }
 
-    [Params(100, 1000, 5000, 10000)]
-    public int BatchSize { get; set; }
+    [Params(0.0, 0.1, 0.25)]
+    public double FailureRate { get; set; }
 
     private DbContextOptions<BenchmarkDbContext> _options = null!;
     private List<BenchmarkProduct> _products = null!;
+
+    private const int BatchSize = 1000;
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -31,8 +37,6 @@ public class InsertBenchmarks
 
         using var context = new BenchmarkDbContext(_options);
         context.Database.EnsureCreated();
-
-        // Warmup query to establish connection
         _ = context.Products.FirstOrDefault();
     }
 
@@ -42,15 +46,19 @@ public class InsertBenchmarks
         using var context = new BenchmarkDbContext(_options);
         context.Database.ExecuteSqlRaw("DELETE FROM Products");
 
-        _products = EntityGenerator.CreateProducts(BatchSize);
+        _products = FailureRate > 0
+            ? EntityGenerator.CreateProductsWithFailures(BatchSize, FailureRate)
+            : EntityGenerator.CreateProducts(BatchSize);
     }
 
     [Benchmark]
-    public InsertBatchResult<int> InsertBatch()
+    public InsertBatchResult<int> InsertWithFailures()
     {
         using var context = new BenchmarkDbContext(_options);
         var saver = new BatchSaver<BenchmarkProduct, int>(context);
-        return saver.InsertBatch(_products, new InsertBatchOptions { Strategy = Strategy });
+        return saver.InsertBatch(
+            _products,
+            new InsertBatchOptions { Strategy = Strategy });
     }
 
     [GlobalCleanup]

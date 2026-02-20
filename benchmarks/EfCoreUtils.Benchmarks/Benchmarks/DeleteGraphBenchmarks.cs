@@ -5,12 +5,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreUtils.Benchmarks.Benchmarks;
 
+/// <summary>
+/// Measures DeleteGraphBatch performance with a 3-level hierarchy.
+/// Seeds fresh order graphs each iteration, then deletes them.
+/// </summary>
 [MemoryDiagnoser]
 [SimpleJob(iterationCount: 10, warmupCount: 3)]
-public class UpdateBenchmarks
+public class DeleteGraphBenchmarks
 {
-    private const int MaxBatchSize = 10000;
-
     [ParamsSource(nameof(Providers))]
     public DatabaseProvider Provider { get; set; }
 
@@ -19,12 +21,12 @@ public class UpdateBenchmarks
     [ParamsAllValues]
     public BatchStrategy Strategy { get; set; }
 
-    [Params(100, 1000, 5000, 10000)]
+    [Params(100, 1000, 5000)]
     public int BatchSize { get; set; }
 
     private DbContextOptions<BenchmarkDbContext> _options = null!;
     private BenchmarkDbContext _context = null!;
-    private List<BenchmarkProduct> _products = null!;
+    private List<BenchmarkOrder> _orders = null!;
 
     [GlobalSetup]
     public void GlobalSetup()
@@ -34,36 +36,38 @@ public class UpdateBenchmarks
 
         using var context = new BenchmarkDbContext(_options);
         context.Database.EnsureCreated();
-
-        // Seed max batch size worth of products
-        var seedProducts = EntityGenerator.CreateProducts(MaxBatchSize);
-        context.Products.AddRange(seedProducts);
-        context.SaveChanges();
+        _ = context.Orders.FirstOrDefault();
     }
 
     [IterationSetup]
     public void IterationSetup()
     {
-        // Reset all prices back to original values
-        using var resetContext = new BenchmarkDbContext(_options);
-        resetContext.Database.ExecuteSqlRaw("UPDATE Products SET Price = 10 + Id");
+        // Seed fresh order graphs
+        using var seedContext = new BenchmarkDbContext(_options);
+        seedContext.Database.ExecuteSqlRaw("DELETE FROM OrderReservations");
+        seedContext.Database.ExecuteSqlRaw("DELETE FROM OrderItems");
+        seedContext.Database.ExecuteSqlRaw("DELETE FROM Orders");
 
-        // Load and modify products in a fresh tracked context
+        var seedOrders = EntityGenerator.CreateOrders(BatchSize);
+        seedContext.Orders.AddRange(seedOrders);
+        seedContext.SaveChanges();
+
+        // Load into tracked context for deletion
         _context = new BenchmarkDbContext(_options);
-        _products = _context.Products
-            .OrderBy(p => p.Id)
-            .Take(BatchSize)
+        _orders = _context.Orders
+            .Include(o => o.Items)
+            .ThenInclude(i => i.Reservations)
+            .OrderBy(o => o.Id)
             .ToList();
-
-        foreach (var product in _products)
-            product.Price += 1;
     }
 
     [Benchmark]
-    public BatchResult<int> UpdateBatch()
+    public BatchResult<int> DeleteGraphBatch()
     {
-        var saver = new BatchSaver<BenchmarkProduct, int>(_context);
-        return saver.UpdateBatch(_products, new BatchOptions { Strategy = Strategy });
+        var saver = new BatchSaver<BenchmarkOrder, int>(_context);
+        return saver.DeleteGraphBatch(
+            _orders,
+            new DeleteGraphBatchOptions { Strategy = Strategy });
     }
 
     [IterationCleanup]

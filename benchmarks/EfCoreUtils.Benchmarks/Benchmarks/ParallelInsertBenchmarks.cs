@@ -5,19 +5,23 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EfCoreUtils.Benchmarks.Benchmarks;
 
+/// <summary>
+/// Measures ParallelBatchSaver async insert performance at different degrees of parallelism.
+/// Uses DivideAndConquer strategy only (the superior strategy).
+/// </summary>
 [MemoryDiagnoser]
 [SimpleJob(iterationCount: 10, warmupCount: 3)]
-public class InsertBenchmarks
+public class ParallelInsertBenchmarks
 {
     [ParamsSource(nameof(Providers))]
     public DatabaseProvider Provider { get; set; }
 
     public static IEnumerable<DatabaseProvider> Providers => GlobalState.Containers.StartedProviders;
 
-    [ParamsAllValues]
-    public BatchStrategy Strategy { get; set; }
+    [Params(1, 2, 4, 8)]
+    public int DegreeOfParallelism { get; set; }
 
-    [Params(100, 1000, 5000, 10000)]
+    [Params(1000, 5000)]
     public int BatchSize { get; set; }
 
     private DbContextOptions<BenchmarkDbContext> _options = null!;
@@ -31,8 +35,6 @@ public class InsertBenchmarks
 
         using var context = new BenchmarkDbContext(_options);
         context.Database.EnsureCreated();
-
-        // Warmup query to establish connection
         _ = context.Products.FirstOrDefault();
     }
 
@@ -46,11 +48,15 @@ public class InsertBenchmarks
     }
 
     [Benchmark]
-    public InsertBatchResult<int> InsertBatch()
+    public async Task<InsertBatchResult<int>> ParallelInsertBatch()
     {
-        using var context = new BenchmarkDbContext(_options);
-        var saver = new BatchSaver<BenchmarkProduct, int>(context);
-        return saver.InsertBatch(_products, new InsertBatchOptions { Strategy = Strategy });
+        var saver = new ParallelBatchSaver<BenchmarkProduct, int>(
+            () => new BenchmarkDbContext(_options),
+            DegreeOfParallelism);
+
+        return await saver.InsertBatchAsync(
+            _products,
+            new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
     }
 
     [GlobalCleanup]
