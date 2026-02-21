@@ -33,9 +33,23 @@ public class RetryTests : TestBase
     }
 
     [Fact]
-    public void IsTransient_connection_error_returns_true()
+    public void IsTransient_connection_failed_returns_true()
     {
-        var ex = new DbUpdateException("connection refused", new Exception("connection refused"));
+        var ex = new DbUpdateException("connection failed", new Exception("connection failed"));
+        FailureClassifier.IsTransient(ex).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void IsTransient_connection_reset_returns_true()
+    {
+        var ex = new DbUpdateException("connection reset", new Exception("connection reset"));
+        FailureClassifier.IsTransient(ex).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void IsTransient_command_timeout_returns_true()
+    {
+        var ex = new DbUpdateException("command timeout expired", new Exception("command timeout expired"));
         FailureClassifier.IsTransient(ex).ShouldBeTrue();
     }
 
@@ -136,7 +150,7 @@ public class RetryTests : TestBase
         };
         var options = new InsertBatchOptions
         {
-            RetryOptions = new RetryOptions
+            Retry = new RetryOptions
             {
                 MaxRetries = 3,
                 InitialDelay = TimeSpan.FromMilliseconds(1)
@@ -161,7 +175,7 @@ public class RetryTests : TestBase
 
         var options = new BatchOptions
         {
-            RetryOptions = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
+            Retry = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
         };
 
         var result = saver.UpdateBatch(new[] { product }, options);
@@ -180,7 +194,7 @@ public class RetryTests : TestBase
         };
         var options = new UpsertBatchOptions
         {
-            RetryOptions = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
+            Retry = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
         };
 
         var result = saver.UpsertBatch(products, options);
@@ -199,7 +213,7 @@ public class RetryTests : TestBase
         };
         var options = new InsertBatchOptions
         {
-            RetryOptions = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
+            Retry = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
         };
 
         var result = await saver.InsertBatchAsync(products, options);
@@ -251,7 +265,7 @@ public class RetryTests : TestBase
         var customCalled = false;
         var options = new InsertBatchOptions
         {
-            RetryOptions = new RetryOptions
+            Retry = new RetryOptions
             {
                 MaxRetries = 1,
                 InitialDelay = TimeSpan.FromMilliseconds(1),
@@ -281,7 +295,7 @@ public class RetryTests : TestBase
         };
         var options = new InsertBatchOptions
         {
-            RetryOptions = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
+            Retry = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
         };
 
         var result = saver.InsertBatch(products, options);
@@ -304,7 +318,7 @@ public class RetryTests : TestBase
         var options = new InsertBatchOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
-            RetryOptions = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
+            Retry = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
         };
 
         var result = saver.InsertBatch(products, options);
@@ -335,7 +349,7 @@ public class RetryTests : TestBase
         };
         var options = new InsertGraphBatchOptions
         {
-            RetryOptions = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
+            Retry = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
         };
 
         var result = saver.InsertGraphBatch(new[] { order }, options);

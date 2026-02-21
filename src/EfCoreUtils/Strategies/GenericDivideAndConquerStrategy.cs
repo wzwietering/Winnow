@@ -267,7 +267,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
                 operation.PrepareEntity(entity, context);
             }
 
-            await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
+            await context.Context.SaveChangesAsync(cancellationToken);
             context.IncrementRoundTrip();
 
             RecordAllSuccesses(entities, context, operation);
@@ -300,7 +300,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
                 operation.PrepareEntity(entity, index, context);
             }
 
-            await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
+            await context.Context.SaveChangesAsync(cancellationToken);
             context.IncrementRoundTrip();
 
             RecordAllInsertSuccesses(indexedEntities, context, operation);
@@ -334,7 +334,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
                 operation.PrepareEntity(entity, index, context);
             }
 
-            await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
+            await context.Context.SaveChangesAsync(cancellationToken);
             context.IncrementRoundTrip();
 
             RecordAllUpsertSuccesses(indexedEntities, context, operation);
@@ -543,6 +543,11 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, context);
         }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
+        }
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
@@ -567,6 +572,11 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, index, context);
         }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
+        }
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
@@ -590,6 +600,11 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
             SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, index, context);
+        }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
         }
         catch (Exception ex)
         {
@@ -625,7 +640,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
                 operation.PrepareEntity(entity, context);
             }
 
-            SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
+            context.Context.SaveChanges();
             context.IncrementRoundTrip();
 
             RecordAllSuccesses(entities, context, operation);
@@ -651,7 +666,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
                 operation.PrepareEntity(entity, index, context);
             }
 
-            SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
+            context.Context.SaveChanges();
             context.IncrementRoundTrip();
 
             RecordAllInsertSuccesses(indexedEntities, context, operation);
@@ -677,7 +692,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
                 operation.PrepareEntity(entity, index, context);
             }
 
-            SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
+            context.Context.SaveChanges();
             context.IncrementRoundTrip();
 
             RecordAllUpsertSuccesses(indexedEntities, context, operation);

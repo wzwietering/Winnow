@@ -46,5 +46,5 @@ public abstract class GraphBatchOptionsBase
     /// <summary>
     /// When set, enables automatic retry with exponential backoff for transient failures.
     /// </summary>
-    public RetryOptions? RetryOptions { get; set; }
+    public RetryOptions? Retry { get; set; }
 }

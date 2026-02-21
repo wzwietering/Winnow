@@ -129,24 +129,6 @@ public class DependencyInjectionTests
     }
 
     [Fact]
-    public void Works_with_configure_action()
-    {
-        var configured = false;
-        var services = new ServiceCollection();
-        services.AddDbContext<TestDbContext>(options =>
-            options.UseSqlite("DataSource=:memory:"));
-        services.AddEfCoreUtils<TestDbContext>(_ => configured = true);
-
-        configured.ShouldBeTrue();
-
-        using var provider = services.BuildServiceProvider();
-        using var scope = provider.CreateScope();
-
-        var saver = scope.ServiceProvider.GetService<IBatchSaver<Product, int>>();
-        saver.ShouldNotBeNull();
-    }
-
-    [Fact]
     public void Resolves_composite_key_auto_detect()
     {
         using var provider = BuildProvider();

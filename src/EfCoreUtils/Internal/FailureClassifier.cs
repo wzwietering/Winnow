@@ -38,8 +38,10 @@ internal static class FailureClassifier
         return message.Contains("deadlock") ||
                message.Contains("lock timeout") ||
                message.Contains("serialize access") ||
-               message.Contains("connection") ||
-               message.Contains("timeout") ||
+               message.Contains("connection failed") ||
+               message.Contains("connection reset") ||
+               message.Contains("connection timed out") ||
+               message.Contains("command timeout") ||
                message.Contains("database is locked");
     }
 }

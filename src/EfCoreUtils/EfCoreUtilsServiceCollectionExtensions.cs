@@ -10,23 +10,12 @@ namespace Microsoft.Extensions.DependencyInjection;
 public static class EfCoreUtilsServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers EfCoreUtils batch savers with default options.
+    /// Registers EfCoreUtils batch savers for the specified DbContext type.
+    /// Registers <see cref="IBatchSaver{TEntity,TKey}"/> and <see cref="IBatchSaver{TEntity}"/> as scoped services.
     /// </summary>
     public static IServiceCollection AddEfCoreUtils<TContext>(this IServiceCollection services)
-        where TContext : DbContext =>
-        services.AddEfCoreUtils<TContext>(null);
-
-    /// <summary>
-    /// Registers EfCoreUtils batch savers with optional configuration.
-    /// </summary>
-    public static IServiceCollection AddEfCoreUtils<TContext>(
-        this IServiceCollection services,
-        Action<EfCoreUtilsOptions>? configure)
         where TContext : DbContext
     {
-        var options = new EfCoreUtilsOptions();
-        configure?.Invoke(options);
-
         services.TryAddScoped<DbContext>(sp => sp.GetRequiredService<TContext>());
         services.TryAddScoped(typeof(IBatchSaver<,>), typeof(BatchSaver<,>));
         services.TryAddScoped(typeof(IBatchSaver<>), typeof(BatchSaver<>));

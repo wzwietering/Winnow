@@ -14,16 +14,19 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     private readonly ILogger? _logger;
     private readonly Lazy<(DbContext Context, EntityKeyService<TEntity, TKey> Service)> _keyService;
 
+    private readonly RetryOptions? _retryOptions;
     private record PartitionResult<TResult>(TResult Result, int RoundTrips);
 
     internal ParallelExecutionOrchestrator(
         Func<DbContext> contextFactory,
         int maxDegreeOfParallelism,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        RetryOptions? retryOptions = null)
     {
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
         _maxDegreeOfParallelism = maxDegreeOfParallelism;
         _logger = logger;
+        _retryOptions = retryOptions;
         _keyService = new Lazy<(DbContext, EntityKeyService<TEntity, TKey>)>(() =>
         {
             var ctx = _contextFactory();
@@ -161,7 +164,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         try
         {
             context = _contextFactory();
-            var strategyContext = new BatchStrategyContext<TEntity, TKey>(context) { Logger = _logger };
+            var strategyContext = new BatchStrategyContext<TEntity, TKey>(context) { Logger = _logger, RetryOptions = _retryOptions };
             var result = await execute(partition, strategyContext, cancellationToken);
             return new PartitionResult<TResult>(result, strategyContext.RoundTripCounter);
         }

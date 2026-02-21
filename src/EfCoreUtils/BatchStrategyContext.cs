@@ -69,7 +69,7 @@ internal class BatchStrategyContext<TEntity, TKey>
     internal string GetEntityIdString(TEntity entity)
     {
         try { return GetEntityId(entity).ToString()!; }
-        catch { return "unknown"; }
+        catch (Exception) { return "unknown"; }
     }
 
     // ========== Batch Result Factory Delegation ==========

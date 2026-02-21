@@ -262,7 +262,7 @@ public class BatchOptions
     /// <summary>
     /// When set, enables automatic retry with exponential backoff for transient failures.
     /// </summary>
-    public RetryOptions? RetryOptions { get; set; }
+    public RetryOptions? Retry { get; set; }
 }
 
 public enum BatchStrategy

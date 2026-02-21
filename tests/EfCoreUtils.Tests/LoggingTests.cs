@@ -125,7 +125,7 @@ public class LoggingTests : TestBase
 
         saver.InsertBatch(products, new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
 
-        logger.Entries.ShouldContain(e => e.Level == LogLevel.Warning && e.Message.Contains("splitting"));
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Debug && e.Message.Contains("splitting"));
     }
 
     [Fact]

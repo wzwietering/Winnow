@@ -86,7 +86,7 @@ public class ParallelBatchSaver<TEntity, TKey>
             var strategy = BatchStrategyFactory.CreateStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
         }, () => BatchResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, false),
-        (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), cancellationToken);
+        (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), options.Retry, cancellationToken);
 
     // === UPDATE GRAPH OPERATIONS ===
 
@@ -108,7 +108,7 @@ public class ParallelBatchSaver<TEntity, TKey>
             var strategy = BatchStrategyFactory.CreateGraphStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
         }, () => BatchResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, true),
-        (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), cancellationToken);
+        (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), options.Retry, cancellationToken);
 
     // === INSERT OPERATIONS ===
 
@@ -130,7 +130,7 @@ public class ParallelBatchSaver<TEntity, TKey>
             var strategy = BatchStrategyFactory.CreateInsertStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
         }, () => BatchResultFactory.CreateEmptyInsert<TKey>(TimeSpan.Zero, false),
-        (o, list, exec, ct) => o.ExecuteInsertAsync(list, exec, ct), cancellationToken);
+        (o, list, exec, ct) => o.ExecuteInsertAsync(list, exec, ct), options.Retry, cancellationToken);
 
     // === INSERT GRAPH OPERATIONS ===
 
@@ -152,7 +152,7 @@ public class ParallelBatchSaver<TEntity, TKey>
             var strategy = BatchStrategyFactory.CreateInsertGraphStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
         }, () => BatchResultFactory.CreateEmptyInsert<TKey>(TimeSpan.Zero, true),
-        (o, list, exec, ct) => o.ExecuteInsertAsync(list, exec, ct), cancellationToken);
+        (o, list, exec, ct) => o.ExecuteInsertAsync(list, exec, ct), options.Retry, cancellationToken);
 
     // === DELETE OPERATIONS ===
 
@@ -174,7 +174,7 @@ public class ParallelBatchSaver<TEntity, TKey>
             var strategy = BatchStrategyFactory.CreateDeleteStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
         }, () => BatchResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, false),
-        (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), cancellationToken);
+        (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), options.Retry, cancellationToken);
 
     // === DELETE GRAPH OPERATIONS ===
 
@@ -196,7 +196,7 @@ public class ParallelBatchSaver<TEntity, TKey>
             var strategy = BatchStrategyFactory.CreateDeleteGraphStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
         }, () => BatchResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, true),
-        (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), cancellationToken);
+        (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), options.Retry, cancellationToken);
 
     // === UPSERT OPERATIONS ===
 
@@ -218,7 +218,7 @@ public class ParallelBatchSaver<TEntity, TKey>
             var strategy = BatchStrategyFactory.CreateUpsertStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
         }, () => BatchResultFactory.CreateEmptyUpsert<TKey>(TimeSpan.Zero, false),
-        (o, list, exec, ct) => o.ExecuteUpsertAsync(list, exec, ct), cancellationToken);
+        (o, list, exec, ct) => o.ExecuteUpsertAsync(list, exec, ct), options.Retry, cancellationToken);
 
     // === UPSERT GRAPH OPERATIONS ===
 
@@ -240,7 +240,7 @@ public class ParallelBatchSaver<TEntity, TKey>
             var strategy = BatchStrategyFactory.CreateUpsertGraphStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
         }, () => BatchResultFactory.CreateEmptyUpsert<TKey>(TimeSpan.Zero, true),
-        (o, list, exec, ct) => o.ExecuteUpsertAsync(list, exec, ct), cancellationToken);
+        (o, list, exec, ct) => o.ExecuteUpsertAsync(list, exec, ct), options.Retry, cancellationToken);
 
     // === PRIVATE HELPERS ===
 
@@ -254,12 +254,14 @@ public class ParallelBatchSaver<TEntity, TKey>
     private async Task<TResult> ExecuteSequentialAsync<TResult>(
         List<TEntity> entityList,
         Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
+        RetryOptions? retryOptions,
         CancellationToken cancellationToken)
     {
         var context = _contextFactory();
         try
         {
-            var strategyContext = new BatchStrategyContext<TEntity, TKey>(context) { Logger = _logger };
+            var strategyContext = new BatchStrategyContext<TEntity, TKey>(context)
+                { Logger = _logger, RetryOptions = retryOptions };
             return await execute(entityList, strategyContext, cancellationToken);
         }
         finally
@@ -275,6 +277,7 @@ public class ParallelBatchSaver<TEntity, TKey>
         Func<ParallelExecutionOrchestrator<TEntity, TKey>, List<TEntity>,
             Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>>,
             CancellationToken, Task<TResult>> orchestrate,
+        RetryOptions? retryOptions,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(entities);
@@ -284,10 +287,10 @@ public class ParallelBatchSaver<TEntity, TKey>
             return createEmpty();
 
         if (MaxDegreeOfParallelism <= 1)
-            return await ExecuteSequentialAsync(entityList, execute, cancellationToken);
+            return await ExecuteSequentialAsync(entityList, execute, retryOptions, cancellationToken);
 
         using var orchestrator = new ParallelExecutionOrchestrator<TEntity, TKey>(
-            _contextFactory, MaxDegreeOfParallelism, _logger);
+            _contextFactory, MaxDegreeOfParallelism, _logger, retryOptions);
         return await orchestrate(orchestrator, entityList, execute, cancellationToken);
     }
 

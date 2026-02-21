@@ -255,6 +255,11 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, context);
         }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
+        }
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
@@ -281,6 +286,11 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, index, context);
         }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
+        }
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
@@ -306,6 +316,11 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
             SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, index, context);
+        }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
         }
         catch (Exception ex)
         {

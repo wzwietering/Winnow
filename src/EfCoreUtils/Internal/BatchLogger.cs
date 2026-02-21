@@ -60,7 +60,7 @@ internal static partial class BatchLogger
     private static partial void EntityFailed(
         ILogger logger, string entityType, string entityId, string reason);
 
-    [LoggerMessage(Level = LogLevel.Warning,
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "Divide and conquer: splitting {OriginalCount} entities into {LeftCount} + {RightCount}")]
     private static partial void DivideAndConquerSplit(
         ILogger logger, int originalCount, int leftCount, int rightCount);

@@ -79,6 +79,9 @@ internal static class SaveChangesRetryHandler
         }
     }
 
-    private static bool ShouldRetry(Exception ex, RetryOptions options) =>
-        options.IsTransient?.Invoke(ex) ?? FailureClassifier.IsTransient(ex);
+    private static bool ShouldRetry(Exception ex, RetryOptions options)
+    {
+        if (FailureClassifier.IsTransient(ex)) return true;
+        return options.IsTransient?.Invoke(ex) ?? false;
+    }
 }
