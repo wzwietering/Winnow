@@ -181,21 +181,43 @@ See [Graph Operations](docs/graph-operations.md) for full documentation.
 
 ## Strategies
 
-| Strategy | Best For | Round Trips |
-|----------|----------|-------------|
-| **OneByOne** | High failure rates, predictability | N |
-| **DivideAndConquer** | Low failure rates (<5%) | 1 at 0%, ~150 at 1% |
+| Strategy | How it works | Best for |
+|----------|--------------|----------|
+| **DivideAndConquer** | Saves entire batch at once; on failure, binary-splits to isolate bad entities | Low failure rates (<5%) |
+| **OneByOne** | Saves each entity individually | High failure rates, predictable cost |
 
-### Performance (1000 entities, SQLite)
+### Benchmarked Performance
 
-| Failure Rate | OneByOne | DivideAndConquer | Recommendation |
-|--------------|----------|------------------|----------------|
-| 0%           | 1000     | 1                | DivideAndConquer |
-| 1%           | 1000     | 147              | DivideAndConquer |
-| 5%           | 1000     | 523              | OneByOne |
-| 25%+         | 1000     | 1499+            | OneByOne |
+DivideAndConquer adds minimal overhead vs raw `SaveChanges()` (2-9%) while providing error isolation. On SQL Server at 5K+ entities, it's actually **faster** than raw EF Core.
 
-With network databases (SQL Server, PostgreSQL), DivideAndConquer wins more clearly due to latency savings.
+**Flat insert, DivideAndConquer (milliseconds):**
+
+| Entities | SQLite | PostgreSQL | SQL Server |
+|----------|--------|------------|------------|
+| 100 | 17 ms | 12 ms | 20 ms |
+| 1,000 | 78 ms | 76 ms | 95 ms |
+| 5,000 | 119 ms | 242 ms | 253 ms |
+| 10,000 | 197 ms | 429 ms | 401 ms |
+
+OneByOne is **6-659x slower** depending on provider and batch size. The gap widens at scale because DivideAndConquer scales sub-linearly while OneByOne scales linearly.
+
+### Failure Rates Change Everything
+
+DivideAndConquer's advantage erodes sharply when entities fail validation:
+
+| Failure Rate | SQLite D&C | SQL Server D&C | PostgreSQL D&C |
+|--------------|------------|----------------|----------------|
+| 0% | 76 ms (125x faster) | 85 ms (75x) | 71 ms (8x) |
+| 10% | 2,411 ms (3.4x) | 1,869 ms (3.0x) | 357 ms (1.5x) |
+| 25% | 3,388 ms (1.9x) | 2,726 ms (1.8x) | 394 ms (1.1x) |
+
+At 25% failures, the strategies perform nearly the same. **Pre-validate your entities** if you expect failures above ~5% — this preserves DivideAndConquer's speed advantage.
+
+### Graph and Memory
+
+Graph operations (parent + children) use 2-3x more memory per entity (~20-31 KB vs ~9-11 KB for flat). UpsertGraph is the most expensive due to loading existing entities and tracking changes. DivideAndConquer speedups are compressed but still significant (3-77x depending on provider).
+
+For full results, see [SQLite](docs/benchmarks/sqlite.md), [PostgreSQL](docs/benchmarks/postgresql.md), and [SQL Server](docs/benchmarks/sqlserver.md) benchmarks.
 
 ## Handling Results
 
@@ -230,18 +252,18 @@ For full result type documentation, see [Results Reference](docs/results-referen
 
 ## When to Use What
 
-| Scenario | Method | Strategy |
-|----------|--------|----------|
-| Insert new entities | `InsertBatch` | DivideAndConquer (if <5% failures) |
-| Insert parent + children | `InsertGraphBatch` | DivideAndConquer |
-| Update existing entities | `UpdateBatch` | DivideAndConquer (if <5% failures) |
-| Update parent + children | `UpdateGraphBatch` | Set OrphanBehavior explicitly |
-| Delete entities | `DeleteBatch` | DivideAndConquer (if <5% failures) |
-| Delete parent + children | `DeleteGraphBatch` | Set CascadeBehavior explicitly |
-| Include many-to-one refs | `*GraphBatch` | Set `IncludeReferences = true` |
-| Include many-to-many | `*GraphBatch` | Set `IncludeManyToMany = true` |
-| Partial graph traversal | `*GraphBatch` | Set `NavigationFilter` to include/exclude navigations |
-| High failure rate (>25%) | Any | OneByOne |
+| Scenario | Method | Notes |
+|----------|--------|-------|
+| Insert new entities | `InsertBatch` | DivideAndConquer unless >5% failures |
+| Update existing entities | `UpdateBatch` | DivideAndConquer unless >5% failures |
+| Delete entities | `DeleteBatch` | DivideAndConquer unless >5% failures |
+| Insert parent + children | `InsertGraphBatch` | DivideAndConquer; 2-3x more memory |
+| Update parent + children | `UpdateGraphBatch` | Set `OrphanBehavior` explicitly |
+| Delete parent + children | `DeleteGraphBatch` | Set `CascadeBehavior` explicitly |
+| Many-to-one references | `*GraphBatch` | Set `IncludeReferences = true` |
+| Many-to-many relationships | `*GraphBatch` | Set `IncludeManyToMany = true` |
+| High failure rate (>5%) | Any | Pre-validate, then DivideAndConquer |
+| Per-entity error isolation needed | Any | OneByOne |
 
 ## When NOT to Use This
 
@@ -255,7 +277,7 @@ EfCoreUtils is not the right choice for every scenario:
 
 ## Parallel Batch Processing
 
-For large batches where database I/O is the bottleneck, `ParallelBatchSaver` distributes work across multiple `DbContext` instances:
+`ParallelBatchSaver` distributes work across multiple `DbContext` instances:
 
 ```csharp
 // Requires a factory that creates a new DbContext on each call
@@ -272,7 +294,7 @@ Or use `IDbContextFactory<TContext>`:
 var saver = factory.CreateParallelBatchSaver<Product, int, AppDbContext>(maxDegreeOfParallelism: 4);
 ```
 
-**Key differences from BatchSaver:**
+**Benchmark reality check:** In our benchmarks, ParallelBatchSaver showed **no consistent benefit** across any provider. SQLite uses file-level locking so parallel writes contend. PostgreSQL and SQL Server showed marginal improvements (10-23%) at DOP 4 for small batches, but the gains disappeared or reversed at larger sizes due to connection pool contention. **For most workloads, standard `BatchSaver` with DivideAndConquer is faster and simpler.** See the [benchmark docs](docs/benchmarks/postgresql.md) for details.
 
 | | BatchSaver | ParallelBatchSaver |
 |---|---|---|
@@ -281,17 +303,7 @@ var saver = factory.CreateParallelBatchSaver<Product, int, AppDbContext>(maxDegr
 | **Async** | Sequential I/O | Parallel I/O |
 | **Sync methods** | Normal execution | Falls back to single context |
 
-**When to use ParallelBatchSaver:**
-- Large batches (100+ entities) with high-latency database connections
-- Sufficient connection pool capacity for concurrent operations
-- Failure isolation per partition is acceptable
-
-**When NOT to use ParallelBatchSaver:**
-- Operations requiring atomicity (all-or-nothing)
-- Operations requiring same-context change tracking (orphan detection)
-- Small batches where parallelism overhead outweighs benefits
-
-**Non-atomicity warning:** Each partition commits independently. If one partition fails, others that already committed will NOT be rolled back.
+ParallelBatchSaver may still help with high-latency remote databases (cloud SQL with cross-region latency) where the round-trip cost dominates — a scenario our local Docker benchmarks don't capture. If you use it, note that each partition commits independently: if one fails, others that already committed will NOT be rolled back.
 
 ## Advanced Topics
 
@@ -305,6 +317,9 @@ Detailed documentation for complex scenarios:
 - [Upsert Operations](docs/upsert-operations.md) - Insert-or-update with race condition handling
 - [Results Reference](docs/results-reference.md) - Full result type API
 - [Options Reference](docs/api/options-reference.md) - All configuration options
+- [SQLite Benchmarks](docs/benchmarks/sqlite.md) - Performance data and strategy guidance
+- [PostgreSQL Benchmarks](docs/benchmarks/postgresql.md) - Network database performance
+- [SQL Server Benchmarks](docs/benchmarks/sqlserver.md) - Network database performance
 
 ## Common Mistakes
 
