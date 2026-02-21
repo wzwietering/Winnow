@@ -1,5 +1,6 @@
 using EfCoreUtils.Internal;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace EfCoreUtils;
 
@@ -35,6 +36,7 @@ public class ParallelBatchSaver<TEntity, TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly Func<DbContext> _contextFactory;
+    private readonly ILogger? _logger;
 
     /// <summary>
     /// Maximum number of parallel partitions for async operations.
@@ -46,7 +48,10 @@ public class ParallelBatchSaver<TEntity, TKey>
     /// </remarks>
     public int MaxDegreeOfParallelism { get; }
 
-    public ParallelBatchSaver(Func<DbContext> contextFactory, int maxDegreeOfParallelism = 4)
+    public ParallelBatchSaver(
+        Func<DbContext> contextFactory,
+        int maxDegreeOfParallelism = 4,
+        ILogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(contextFactory);
 
@@ -54,6 +59,7 @@ public class ParallelBatchSaver<TEntity, TKey>
             throw new ArgumentOutOfRangeException(nameof(maxDegreeOfParallelism), "Must be at least 1.");
 
         _contextFactory = contextFactory;
+        _logger = logger;
         MaxDegreeOfParallelism = maxDegreeOfParallelism;
 
         if (maxDegreeOfParallelism > 1)
@@ -241,7 +247,7 @@ public class ParallelBatchSaver<TEntity, TKey>
     private TResult ExecuteSync<TResult>(Func<BatchSaver<TEntity, TKey>, TResult> operation)
     {
         using var context = _contextFactory();
-        var saver = new BatchSaver<TEntity, TKey>(context);
+        var saver = new BatchSaver<TEntity, TKey>(context, _logger);
         return operation(saver);
     }
 
@@ -253,7 +259,7 @@ public class ParallelBatchSaver<TEntity, TKey>
         var context = _contextFactory();
         try
         {
-            var strategyContext = new BatchStrategyContext<TEntity, TKey>(context);
+            var strategyContext = new BatchStrategyContext<TEntity, TKey>(context) { Logger = _logger };
             return await execute(entityList, strategyContext, cancellationToken);
         }
         finally
@@ -281,7 +287,7 @@ public class ParallelBatchSaver<TEntity, TKey>
             return await ExecuteSequentialAsync(entityList, execute, cancellationToken);
 
         using var orchestrator = new ParallelExecutionOrchestrator<TEntity, TKey>(
-            _contextFactory, MaxDegreeOfParallelism);
+            _contextFactory, MaxDegreeOfParallelism, _logger);
         return await orchestrate(orchestrator, entityList, execute, cancellationToken);
     }
 

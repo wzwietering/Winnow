@@ -258,6 +258,11 @@ public class BatchOptions
     /// Set to false to allow navigation properties to be loaded but ignored.
     /// </summary>
     public bool ValidateNavigationProperties { get; set; } = true;
+
+    /// <summary>
+    /// When set, enables automatic retry with exponential backoff for transient failures.
+    /// </summary>
+    public RetryOptions? RetryOptions { get; set; }
 }
 
 public enum BatchStrategy

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using EfCoreUtils.Internal.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace EfCoreUtils.Internal;
 
@@ -10,14 +11,19 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
 {
     private readonly Func<DbContext> _contextFactory;
     private readonly int _maxDegreeOfParallelism;
+    private readonly ILogger? _logger;
     private readonly Lazy<(DbContext Context, EntityKeyService<TEntity, TKey> Service)> _keyService;
 
     private record PartitionResult<TResult>(TResult Result, int RoundTrips);
 
-    internal ParallelExecutionOrchestrator(Func<DbContext> contextFactory, int maxDegreeOfParallelism)
+    internal ParallelExecutionOrchestrator(
+        Func<DbContext> contextFactory,
+        int maxDegreeOfParallelism,
+        ILogger? logger = null)
     {
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
         _maxDegreeOfParallelism = maxDegreeOfParallelism;
+        _logger = logger;
         _keyService = new Lazy<(DbContext, EntityKeyService<TEntity, TKey>)>(() =>
         {
             var ctx = _contextFactory();
@@ -155,7 +161,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         try
         {
             context = _contextFactory();
-            var strategyContext = new BatchStrategyContext<TEntity, TKey>(context);
+            var strategyContext = new BatchStrategyContext<TEntity, TKey>(context) { Logger = _logger };
             var result = await execute(partition, strategyContext, cancellationToken);
             return new PartitionResult<TResult>(result, strategyContext.RoundTripCounter);
         }

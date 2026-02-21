@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace EfCoreUtils;
 
@@ -21,7 +22,10 @@ public class ParallelBatchSaver<TEntity>
     private readonly ParallelBatchSaver<TEntity, CompositeKey> _innerSaver;
     private readonly bool _isCompositeKey;
 
-    public ParallelBatchSaver(Func<DbContext> contextFactory, int maxDegreeOfParallelism = 4)
+    public ParallelBatchSaver(
+        Func<DbContext> contextFactory,
+        int maxDegreeOfParallelism = 4,
+        ILogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(contextFactory);
 
@@ -36,7 +40,7 @@ public class ParallelBatchSaver<TEntity>
                 $"Entity type {typeof(TEntity).Name} does not have a primary key defined.");
 
         _isCompositeKey = keyProperties.Count > 1;
-        _innerSaver = new ParallelBatchSaver<TEntity, CompositeKey>(contextFactory, maxDegreeOfParallelism);
+        _innerSaver = new ParallelBatchSaver<TEntity, CompositeKey>(contextFactory, maxDegreeOfParallelism, logger);
     }
 
     /// <inheritdoc />

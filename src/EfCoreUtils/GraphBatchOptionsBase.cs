@@ -42,4 +42,9 @@ public abstract class GraphBatchOptionsBase
     /// When null (default), all navigations are traversed.
     /// </summary>
     public NavigationFilter? NavigationFilter { get; set; }
+
+    /// <summary>
+    /// When set, enables automatic retry with exponential backoff for transient failures.
+    /// </summary>
+    public RetryOptions? RetryOptions { get; set; }
 }

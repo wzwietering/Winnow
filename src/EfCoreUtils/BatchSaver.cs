@@ -1,14 +1,36 @@
 using System.Diagnostics;
 using EfCoreUtils.Internal;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace EfCoreUtils;
 
-public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity, TKey>
+/// <summary>
+/// Batch saver that processes entities with failure isolation.
+/// </summary>
+public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    private readonly DbContext _context = context ?? throw new ArgumentNullException(nameof(context));
+    private readonly DbContext _context;
+    private readonly ILogger? _logger;
+
+    /// <summary>
+    /// Creates a BatchSaver without logging.
+    /// </summary>
+    public BatchSaver(DbContext context) : this(context, (ILogger?)null) { }
+
+    /// <summary>
+    /// Creates a BatchSaver with typed logger support (used by DI).
+    /// </summary>
+    public BatchSaver(DbContext context, ILogger<BatchSaver<TEntity, TKey>>? logger)
+        : this(context, (ILogger?)logger) { }
+
+    internal BatchSaver(DbContext context, ILogger? logger)
+    {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _logger = logger;
+    }
 
     /// <summary>
     /// Updates a batch of entities using the default strategy (OneByOne).
@@ -41,13 +63,14 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "UpdateBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
 
         stopwatch.Stop();
 
-        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext, "UpdateBatch");
     }
 
     public Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
@@ -65,13 +88,14 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "UpdateBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
 
         stopwatch.Stop();
 
-        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext, "UpdateBatch");
     }
 
     /// <summary>
@@ -101,13 +125,14 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyGraphResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateGraphStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "UpdateGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
 
         stopwatch.Stop();
 
-        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext, "UpdateGraphBatch");
     }
 
     public Task<BatchResult<TKey>> UpdateGraphBatchAsync(
@@ -130,13 +155,14 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyGraphResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateGraphStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "UpdateGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
 
         stopwatch.Stop();
 
-        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext, "UpdateGraphBatch");
     }
 
     // === INSERT OPERATIONS ===
@@ -161,8 +187,9 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyInsertResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateInsertStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "InsertBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
 
         stopwatch.Stop();
@@ -190,8 +217,9 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyInsertResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateInsertStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "InsertBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
 
         stopwatch.Stop();
@@ -221,8 +249,9 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyInsertResult(stopwatch, includeGraph: true);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateInsertGraphStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "InsertGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
 
         stopwatch.Stop();
@@ -250,8 +279,9 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyInsertResult(stopwatch, includeGraph: true);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateInsertGraphStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "InsertGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
 
         stopwatch.Stop();
@@ -281,13 +311,14 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateDeleteStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "DeleteBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
 
         stopwatch.Stop();
 
-        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext, "DeleteBatch");
     }
 
     public Task<BatchResult<TKey>> DeleteBatchAsync(
@@ -310,13 +341,14 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateDeleteStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "DeleteBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
 
         stopwatch.Stop();
 
-        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext, "DeleteBatch");
     }
 
     /// <summary>
@@ -341,13 +373,14 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyGraphResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateDeleteGraphStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "DeleteGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
 
         stopwatch.Stop();
 
-        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext, "DeleteGraphBatch");
     }
 
     public Task<BatchResult<TKey>> DeleteGraphBatchAsync(
@@ -370,13 +403,14 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyGraphResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateDeleteGraphStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "DeleteGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
 
         stopwatch.Stop();
 
-        return EnrichResultWithMetrics(result, stopwatch, strategyContext);
+        return EnrichResultWithMetrics(result, stopwatch, strategyContext, "DeleteGraphBatch");
     }
 
     // === UPSERT OPERATIONS ===
@@ -400,8 +434,9 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
         if (entityList.Count == 0)
             return CreateEmptyUpsertResult(stopwatch);
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateUpsertStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "UpsertBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
 
         stopwatch.Stop();
@@ -428,8 +463,9 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyUpsertResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateUpsertStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "UpsertBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
 
         stopwatch.Stop();
@@ -456,8 +492,9 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
         if (entityList.Count == 0)
             return CreateEmptyUpsertResult(stopwatch, includeGraph: true);
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateUpsertGraphStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "UpsertGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
 
         stopwatch.Stop();
@@ -484,8 +521,9 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
             return CreateEmptyUpsertResult(stopwatch, includeGraph: true);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context);
+        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.RetryOptions };
         var strategy = BatchStrategyFactory.CreateUpsertGraphStrategy<TEntity, TKey>(options.Strategy);
+        BatchLogger.LogBatchStarting(_logger, "UpsertGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
 
         stopwatch.Stop();
@@ -501,11 +539,17 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
         return BatchResultFactory.CreateEmpty<TKey>(stopwatch.Elapsed);
     }
 
-    private static BatchResult<TKey> EnrichResultWithMetrics(
+    private BatchResult<TKey> EnrichResultWithMetrics(
         BatchResult<TKey> result,
         Stopwatch stopwatch,
-        BatchStrategyContext<TEntity, TKey> context) =>
-        BatchResultFactory.Enrich(result, stopwatch.Elapsed, context.RoundTripCounter);
+        BatchStrategyContext<TEntity, TKey> context,
+        string operationName)
+    {
+        var enriched = BatchResultFactory.Enrich(result, stopwatch.Elapsed, context.RoundTripCounter, context.RetryCounter);
+        BatchLogger.LogBatchCompleted(_logger, operationName, typeof(TEntity).Name,
+            enriched.SuccessCount, enriched.FailureCount, stopwatch.Elapsed.TotalMilliseconds, enriched.DatabaseRoundTrips);
+        return enriched;
+    }
 
     private BatchResult<TKey> CreateEmptyGraphResult(Stopwatch stopwatch)
     {
@@ -519,11 +563,16 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
         return BatchResultFactory.CreateEmptyInsert<TKey>(stopwatch.Elapsed, includeGraph);
     }
 
-    private static InsertBatchResult<TKey> EnrichInsertResultWithMetrics(
+    private InsertBatchResult<TKey> EnrichInsertResultWithMetrics(
         InsertBatchResult<TKey> result,
         Stopwatch stopwatch,
-        BatchStrategyContext<TEntity, TKey> context) =>
-        BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter);
+        BatchStrategyContext<TEntity, TKey> context)
+    {
+        var enriched = BatchResultFactory.EnrichInsert(result, stopwatch.Elapsed, context.RoundTripCounter, context.RetryCounter);
+        BatchLogger.LogBatchCompleted(_logger, "InsertBatch", typeof(TEntity).Name,
+            enriched.SuccessCount, enriched.FailureCount, stopwatch.Elapsed.TotalMilliseconds, enriched.DatabaseRoundTrips);
+        return enriched;
+    }
 
     private UpsertBatchResult<TKey> CreateEmptyUpsertResult(Stopwatch stopwatch, bool includeGraph = false)
     {
@@ -531,11 +580,16 @@ public class BatchSaver<TEntity, TKey>(DbContext context) : IBatchSaver<TEntity,
         return BatchResultFactory.CreateEmptyUpsert<TKey>(stopwatch.Elapsed, includeGraph);
     }
 
-    private static UpsertBatchResult<TKey> EnrichUpsertResultWithMetrics(
+    private UpsertBatchResult<TKey> EnrichUpsertResultWithMetrics(
         UpsertBatchResult<TKey> result,
         Stopwatch stopwatch,
-        BatchStrategyContext<TEntity, TKey> context) =>
-        BatchResultFactory.EnrichUpsert(result, stopwatch.Elapsed, context.RoundTripCounter);
+        BatchStrategyContext<TEntity, TKey> context)
+    {
+        var enriched = BatchResultFactory.EnrichUpsert(result, stopwatch.Elapsed, context.RoundTripCounter, context.RetryCounter);
+        BatchLogger.LogBatchCompleted(_logger, "UpsertBatch", typeof(TEntity).Name,
+            enriched.SuccessCount, enriched.FailureCount, stopwatch.Elapsed.TotalMilliseconds, enriched.DatabaseRoundTrips);
+        return enriched;
+    }
 }
 
 /// <summary>
@@ -580,7 +634,18 @@ public class BatchSaver<TEntity> : IBatchSaver<TEntity>
     private readonly BatchSaver<TEntity, CompositeKey> _innerSaver;
     private readonly bool _isCompositeKey;
 
-    public BatchSaver(DbContext context)
+    /// <summary>
+    /// Creates a BatchSaver that auto-detects the key type, without logging.
+    /// </summary>
+    public BatchSaver(DbContext context) : this(context, (ILogger?)null) { }
+
+    /// <summary>
+    /// Creates a BatchSaver that auto-detects the key type, with typed logger support (used by DI).
+    /// </summary>
+    public BatchSaver(DbContext context, ILogger<BatchSaver<TEntity>>? logger)
+        : this(context, (ILogger?)logger) { }
+
+    internal BatchSaver(DbContext context, ILogger? logger)
     {
         ArgumentNullException.ThrowIfNull(context);
 
@@ -593,7 +658,7 @@ public class BatchSaver<TEntity> : IBatchSaver<TEntity>
                 $"Entity type {typeof(TEntity).Name} does not have a primary key defined.");
 
         _isCompositeKey = keyProperties.Count > 1;
-        _innerSaver = new BatchSaver<TEntity, CompositeKey>(context);
+        _innerSaver = new BatchSaver<TEntity, CompositeKey>(context, logger);
     }
 
     /// <inheritdoc />

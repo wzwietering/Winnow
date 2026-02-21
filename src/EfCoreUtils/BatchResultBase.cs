@@ -67,4 +67,10 @@ public abstract class BatchResultBase<TKey> where TKey : notnull, IEquatable<TKe
     /// When true, some entities may not have been processed.
     /// </summary>
     public bool WasCancelled { get; init; }
+
+    /// <summary>
+    /// Total number of transient failure retries across the operation.
+    /// Zero when RetryOptions is not configured.
+    /// </summary>
+    public int TotalRetries { get; init; }
 }
