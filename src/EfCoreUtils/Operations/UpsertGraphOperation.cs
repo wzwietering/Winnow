@@ -25,6 +25,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly UpsertGraphBatchOptions _options;
+    private readonly TraversalContext _tc;
     private readonly List<UpsertedEntity<TKey>> _insertedEntities = [];
     private readonly List<UpsertedEntity<TKey>> _updatedEntities = [];
     private readonly List<UpsertBatchFailure<TKey>> _failures = [];
@@ -32,32 +33,36 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
     private readonly Dictionary<int, UpsertOperationType> _operationDecisions = [];
     private readonly GraphStatisticsTracker<TKey> _statsTracker = new();
 
-    internal UpsertGraphOperation(UpsertGraphBatchOptions options) => _options = options;
+    internal UpsertGraphOperation(UpsertGraphBatchOptions options)
+    {
+        _options = options;
+        _tc = TraversalContext.FromOptions(options);
+    }
 
     public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context,
         CancellationToken cancellationToken = default)
     {
-        // Capture original child IDs for orphan detection (applies to update paths)
-        context.CaptureAllOriginalChildIdsRecursive(entities, _options.MaxDepth);
+        NavigationFilterValidator.Validate(
+            _tc.NavigationFilter, context.Context.Model, _options.IncludeReferences, _options.IncludeManyToMany);
+
+        context.CaptureAllOriginalChildIdsRecursive(entities, _tc);
 
         if (_options.IncludeManyToMany)
         {
-            context.CaptureOriginalManyToManyLinks(entities, _options.MaxDepth);
+            context.CaptureOriginalManyToManyLinks(entities, _tc);
             context.ValidateManyToManyEntitiesExistBatched(entities, ToInsertGraphOptions());
         }
 
         foreach (var entity in entities)
         {
-            // Only validate orphans for entities that will be updated
             if (!context.HasDefaultKeyValue(entity))
             {
-                context.ValidateNoOrphanedChildrenRecursive(entity, _options.MaxDepth, ToGraphBatchOptions());
+                context.ValidateNoOrphanedChildrenRecursive(entity, _tc, ToGraphBatchOptions());
             }
 
             if (_options.IncludeReferences)
             {
-                context.ValidateCircularReferences(
-                    entity, _options.MaxDepth, _options.CircularReferenceHandling);
+                context.ValidateCircularReferences(entity, _tc);
             }
         }
     }
@@ -69,19 +74,17 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
 
         if (_options.IncludeReferences)
         {
-            var refResult = context.AttachEntityGraphAsUpsertWithReferences(
-                entity, _options.MaxDepth, _options.CircularReferenceHandling);
+            var refResult = context.AttachEntityGraphAsUpsertWithReferences(entity, _tc);
             _statsTracker.AggregateReferenceStats(refResult);
         }
         else
         {
-            context.AttachEntityGraphAsUpsertRecursive(entity, _options.MaxDepth);
+            context.AttachEntityGraphAsUpsertRecursive(entity, _tc);
         }
 
-        // Handle orphans only for update paths
         if (!isInsert)
         {
-            context.HandleOrphanedChildrenRecursive(entity, _options.MaxDepth, _options.OrphanedChildBehavior);
+            context.HandleOrphanedChildrenRecursive(entity, _tc, _options.OrphanedChildBehavior);
         }
 
         if (_options.IncludeManyToMany)
@@ -127,8 +130,8 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         }
 
         var (node, stats) = _options.IncludeReferences
-            ? context.BuildGraphHierarchyWithReferences(entity, _options.MaxDepth)
-            : context.BuildGraphHierarchy(entity, _options.MaxDepth);
+            ? context.BuildGraphHierarchyWithReferences(entity, _tc)
+            : context.BuildGraphHierarchy(entity, _tc);
         _graphHierarchy.Add(node);
         _statsTracker.AggregateStats(stats);
     }
@@ -157,7 +160,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
     }
 
     public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) =>
-        context.DetachEntityWithOrphansRecursive(entity, _options.MaxDepth);
+        context.DetachEntityWithOrphansRecursive(entity, _tc);
 
     public UpsertBatchResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {
@@ -175,7 +178,8 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         OrphanedChildBehavior = _options.OrphanedChildBehavior,
         IncludeReferences = _options.IncludeReferences,
         CircularReferenceHandling = _options.CircularReferenceHandling,
-        IncludeManyToMany = _options.IncludeManyToMany
+        IncludeManyToMany = _options.IncludeManyToMany,
+        NavigationFilter = _options.NavigationFilter
     };
 
     private InsertGraphBatchOptions ToInsertGraphOptions() => new()
@@ -187,7 +191,8 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         ManyToManyInsertBehavior = _options.ManyToManyInsertBehavior,
         ValidateManyToManyEntitiesExist = _options.ValidateManyToManyEntitiesExist,
         MaxManyToManyCollectionSize = _options.MaxManyToManyCollectionSize,
-        ThrowOnUnsupportedValidation = _options.ThrowOnUnsupportedValidation
+        ThrowOnUnsupportedValidation = _options.ThrowOnUnsupportedValidation,
+        NavigationFilter = _options.NavigationFilter
     };
 
     public bool WasInsertAttempt(int index) =>
@@ -210,8 +215,8 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         _updatedEntities.Add(upsertedEntity);
 
         var (node, stats) = _options.IncludeReferences
-            ? context.BuildGraphHierarchyWithReferences(entity, _options.MaxDepth)
-            : context.BuildGraphHierarchy(entity, _options.MaxDepth);
+            ? context.BuildGraphHierarchyWithReferences(entity, _tc)
+            : context.BuildGraphHierarchy(entity, _tc);
         _graphHierarchy.Add(node);
         _statsTracker.AggregateStats(stats);
     }

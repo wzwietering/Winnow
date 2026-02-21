@@ -90,6 +90,8 @@ var result = saver.UpdateGraphBatch(new[] { student }, new GraphBatchOptions
 | `ManyToManyInsertBehavior` | `AttachExisting` | `AttachExisting` (assume related entities exist) or `InsertIfNew` (insert if default ID) |
 | `ValidateManyToManyEntitiesExist` | `true` | Validate related entities exist before creating join records |
 
+**Note:** If using a `NavigationFilter` that includes a many-to-many navigation (e.g., `Student.Courses`), you must also set `IncludeManyToMany = true`. Otherwise, an `InvalidOperationException` is thrown at operation start. See [Navigation Filtering](graph-operations.md#navigation-filtering) for details.
+
 ## Tracking Join Operations
 
 After a graph operation, you can inspect what happened to join records:

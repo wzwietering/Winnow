@@ -53,14 +53,11 @@ internal static class ManyToManyNavigationHelper
     /// Checks if navigation points to an explicit join entity.
     /// An explicit join entity has exactly 2 foreign keys to different principal types.
     /// </summary>
-    private static bool IsExplicitJoinEntityNavigation(NavigationEntry navigation)
-    {
-        if (!navigation.Metadata.IsCollection)
-        {
-            return false;
-        }
+    private static bool IsExplicitJoinEntityNavigation(NavigationEntry navigation) =>
+        navigation.Metadata.IsCollection && IsExplicitJoinNavigation(navigation.Metadata.TargetEntityType);
 
-        var targetType = navigation.Metadata.TargetEntityType;
+    private static bool IsExplicitJoinNavigation(IEntityType targetType)
+    {
         var foreignKeys = targetType.GetForeignKeys().ToList();
 
         if (foreignKeys.Count != 2)

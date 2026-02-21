@@ -112,12 +112,12 @@ internal class EntityDetachmentService<TEntity, TKey>
 
     // ========== Recursive Detachment Methods ==========
 
-    // Traversal options matching original behavior - bottom-up, traverse all collections
-    private static readonly TraversalOptions DetachOptions = new() { BottomUp = true, SkipManyToMany = false };
+    private static TraversalOptions CreateDetachOptions(NavigationFilter? filter) =>
+        new() { BottomUp = true, SkipManyToMany = false, NavigationFilter = filter };
 
-    internal void DetachEntityGraphRecursive(TEntity entity, int maxDepth)
+    internal void DetachEntityGraphRecursive(TEntity entity, TraversalContext tc)
     {
         var visitor = new EntityStateVisitor();
-        _engine.Traverse(entity, maxDepth, visitor, EntityState.Detached, DetachOptions);
+        _engine.Traverse(entity, tc.MaxDepth, visitor, EntityState.Detached, CreateDetachOptions(tc.NavigationFilter));
     }
 }

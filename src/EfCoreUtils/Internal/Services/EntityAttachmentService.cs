@@ -124,29 +124,31 @@ internal class EntityAttachmentService<TEntity, TKey>
 
     // ========== Recursive Attachment Methods ==========
 
-    // Traversal options that match original behavior - traverse all collections
-    private static readonly TraversalOptions AttachOptions = new() { SkipManyToMany = false };
-    private static readonly TraversalOptions AttachDeleteOptions = new() { BottomUp = true, SkipManyToMany = false };
+    private static TraversalOptions CreateAttachOptions(NavigationFilter? filter) =>
+        new() { SkipManyToMany = false, NavigationFilter = filter };
 
-    internal void AttachEntityGraphAsAddedRecursive(TEntity entity, int maxDepth)
+    private static TraversalOptions CreateAttachDeleteOptions(NavigationFilter? filter) =>
+        new() { BottomUp = true, SkipManyToMany = false, NavigationFilter = filter };
+
+    internal void AttachEntityGraphAsAddedRecursive(TEntity entity, TraversalContext tc)
     {
         var visitor = new ConditionalStateVisitor();
         var ctx = new StateVisitorContext { TargetState = EntityState.Added, OnlyIfDetached = false };
-        _engine.Traverse(entity, maxDepth, visitor, ctx, AttachOptions);
+        _engine.Traverse(entity, tc.MaxDepth, visitor, ctx, CreateAttachOptions(tc.NavigationFilter));
     }
 
-    internal void AttachEntityGraphAsModifiedRecursive(TEntity entity, int maxDepth)
+    internal void AttachEntityGraphAsModifiedRecursive(TEntity entity, TraversalContext tc)
     {
         var visitor = new ConditionalStateVisitor();
         var ctx = new StateVisitorContext { TargetState = EntityState.Modified, OnlyIfDetached = true };
-        _engine.Traverse(entity, maxDepth, visitor, ctx, AttachOptions);
+        _engine.Traverse(entity, tc.MaxDepth, visitor, ctx, CreateAttachOptions(tc.NavigationFilter));
     }
 
     // CRITICAL: Delete uses bottom-up order - children before parent for FK constraints
-    internal void AttachEntityGraphAsDeletedRecursive(TEntity entity, int maxDepth)
+    internal void AttachEntityGraphAsDeletedRecursive(TEntity entity, TraversalContext tc)
     {
         var visitor = new EntityStateVisitor();
-        _engine.Traverse(entity, maxDepth, visitor, EntityState.Deleted, AttachDeleteOptions);
+        _engine.Traverse(entity, tc.MaxDepth, visitor, EntityState.Deleted, CreateAttachDeleteOptions(tc.NavigationFilter));
     }
 
     private static int ClampDepth(int maxDepth) => DepthConstants.ClampDepth(maxDepth);
@@ -154,49 +156,31 @@ internal class EntityAttachmentService<TEntity, TKey>
     // ========== Reference-Aware Attachment Methods ==========
 
     internal ReferenceTrackingResult AttachEntityGraphAsAddedWithReferences(
-        TEntity entity, int maxDepth, CircularReferenceHandling circularHandling)
+        TEntity entity, TraversalContext tc)
     {
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
         var referenceResult = new ReferenceTrackingResult();
-        AttachAsAddedWithReferences(entity, 0, ClampDepth(maxDepth), visited, circularHandling, referenceResult);
+        AttachWithStateAndReferences(
+            entity, 0, ClampDepth(tc.MaxDepth), visited, tc.CircularReferenceHandling,
+            referenceResult, EntityState.Added, tc.NavigationFilter);
         return referenceResult;
-    }
-
-    private void AttachAsAddedWithReferences(
-        object entity, int currentDepth, int maxDepth, HashSet<object> visited,
-        CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult)
-    {
-        if (!TryVisitEntity(entity, visited, circularHandling, currentDepth))
-        {
-            return;
-        }
-
-        var entry = _context.Entry(entity);
-        entry.State = EntityState.Added;
-
-        if (currentDepth >= maxDepth)
-        {
-            return;
-        }
-
-        AttachChildrenWithReferences(entry, currentDepth, maxDepth, visited,
-            circularHandling, refResult, EntityState.Added);
-        AttachReferences(entry, currentDepth, maxDepth, visited,
-            circularHandling, refResult, EntityState.Added);
     }
 
     internal ReferenceTrackingResult AttachEntityGraphAsModifiedWithReferences(
-        TEntity entity, int maxDepth, CircularReferenceHandling circularHandling)
+        TEntity entity, TraversalContext tc)
     {
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
         var referenceResult = new ReferenceTrackingResult();
-        AttachAsModifiedWithReferences(entity, 0, ClampDepth(maxDepth), visited, circularHandling, referenceResult);
+        AttachWithStateAndReferences(
+            entity, 0, ClampDepth(tc.MaxDepth), visited, tc.CircularReferenceHandling,
+            referenceResult, EntityState.Modified, tc.NavigationFilter);
         return referenceResult;
     }
 
-    private void AttachAsModifiedWithReferences(
+    private void AttachWithStateAndReferences(
         object entity, int currentDepth, int maxDepth, HashSet<object> visited,
-        CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult)
+        CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
+        EntityState targetState, NavigationFilter? filter)
     {
         if (!TryVisitEntity(entity, visited, circularHandling, currentDepth))
         {
@@ -204,20 +188,38 @@ internal class EntityAttachmentService<TEntity, TKey>
         }
 
         var entry = _context.Entry(entity);
-        if (entry.State == EntityState.Detached)
-        {
-            entry.State = EntityState.Modified;
-        }
+        SetEntityStateForAttach(entry, targetState);
 
         if (currentDepth >= maxDepth)
         {
             return;
         }
 
-        AttachChildrenWithReferences(entry, currentDepth, maxDepth, visited,
-            circularHandling, refResult, EntityState.Modified);
-        AttachReferences(entry, currentDepth, maxDepth, visited,
-            circularHandling, refResult, EntityState.Modified);
+        TraverseChildrenAndReferences(
+            entry, currentDepth, maxDepth, visited,
+            circularHandling, refResult, targetState, filter);
+    }
+
+    private static void SetEntityStateForAttach(EntityEntry entry, EntityState targetState)
+    {
+        if (targetState == EntityState.Added)
+        {
+            entry.State = EntityState.Added;
+            return;
+        }
+
+        if (entry.State == EntityState.Detached)
+        {
+            entry.State = targetState;
+        }
+    }
+
+    private static void SetEntityStateIfDetached(EntityEntry entry, EntityState targetState)
+    {
+        if (entry.State == EntityState.Detached)
+        {
+            entry.State = targetState;
+        }
     }
 
     private bool TryVisitEntity(
@@ -244,98 +246,98 @@ internal class EntityAttachmentService<TEntity, TKey>
 
     private static object GetEntityIdFromEntry(EntityEntry entry)
     {
-        var keyProperties = entry.Metadata.FindPrimaryKey()?.Properties;
-        if (keyProperties == null || keyProperties.Count == 0)
+        try
+        {
+            var keyProperties = entry.Metadata.FindPrimaryKey()?.Properties;
+            if (keyProperties == null || keyProperties.Count == 0)
+            {
+                return "unknown";
+            }
+
+            if (keyProperties.Count == 1)
+            {
+                return entry.Property(keyProperties[0].Name).CurrentValue ?? "unknown";
+            }
+
+            var values = keyProperties
+                .Select(p => entry.Property(p.Name).CurrentValue ?? "null")
+                .ToArray();
+            return $"({string.Join(", ", values)})";
+        }
+        catch
         {
             return "unknown";
         }
-
-        if (keyProperties.Count == 1)
-        {
-            return entry.Property(keyProperties[0].Name).CurrentValue ?? "unknown";
-        }
-
-        var values = keyProperties
-            .Select(p => entry.Property(p.Name).CurrentValue ?? "null")
-            .ToArray();
-        return $"({string.Join(", ", values)})";
     }
 
-    private void AttachChildrenWithReferences(
+    private void TraverseChildrenAndReferences(
         EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited,
         CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
-        EntityState targetState)
+        EntityState targetState, NavigationFilter? filter)
+    {
+        TraverseCollections(entry, currentDepth, maxDepth, visited,
+            circularHandling, refResult, targetState, filter);
+        TraverseReferences(entry, currentDepth, maxDepth, visited,
+            circularHandling, refResult, targetState, filter);
+    }
+
+    private void TraverseCollections(
+        EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited,
+        CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
+        EntityState targetState, NavigationFilter? filter)
     {
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, filter, skipManyToMany: false))
             {
                 continue;
             }
 
             foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
-                AttachChildItemWithReferences(
-                    item, currentDepth + 1, maxDepth, visited, circularHandling, refResult, targetState);
+                AttachWithStateAndReferences(
+                    item, currentDepth + 1, maxDepth, visited, circularHandling, refResult, targetState, filter);
             }
         }
     }
 
-    private void AttachChildItemWithReferences(
-        object item, int newDepth, int maxDepth, HashSet<object> visited,
-        CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
-        EntityState targetState)
-    {
-        if (targetState == EntityState.Added)
-        {
-            AttachAsAddedWithReferences(item, newDepth, maxDepth, visited, circularHandling, refResult);
-        }
-        else
-        {
-            AttachAsModifiedWithReferences(item, newDepth, maxDepth, visited, circularHandling, refResult);
-        }
-    }
-
-    private void AttachReferences(
+    private void TraverseReferences(
         EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited,
         CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
-        EntityState targetState)
+        EntityState targetState, NavigationFilter? filter)
     {
         foreach (var navigation in NavigationPropertyHelper.GetReferenceNavigations(entry))
         {
+            if (!TraversalHelper.ShouldTraverseReference(navigation, filter))
+            {
+                continue;
+            }
+
             var refEntity = NavigationPropertyHelper.GetReferenceValue(navigation);
             if (refEntity == null || !TryVisitEntity(refEntity, visited, circularHandling, currentDepth + 1))
             {
                 continue;
             }
 
-            ProcessReferenceEntity(
-                refEntity, currentDepth, maxDepth, visited, circularHandling, refResult, targetState);
+            ProcessReference(refEntity, currentDepth, maxDepth, visited,
+                circularHandling, refResult, targetState, filter);
         }
     }
 
-    private void ProcessReferenceEntity(
+    private void ProcessReference(
         object refEntity, int currentDepth, int maxDepth, HashSet<object> visited,
         CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
-        EntityState targetState)
+        EntityState targetState, NavigationFilter? filter)
     {
         var refEntry = _context.Entry(refEntity);
         TrackReference(refEntry, refResult, currentDepth + 1);
+        SetEntityStateIfDetached(refEntry, targetState);
 
-        if (refEntry.State == EntityState.Detached)
+        if (currentDepth + 1 < maxDepth)
         {
-            refEntry.State = targetState;
+            TraverseChildrenAndReferences(refEntry, currentDepth + 1, maxDepth, visited,
+                circularHandling, refResult, targetState, filter);
         }
-
-        if (currentDepth + 1 >= maxDepth)
-        {
-            return;
-        }
-
-        AttachChildrenWithReferences(
-            refEntry, currentDepth + 1, maxDepth, visited, circularHandling, refResult, targetState);
-        AttachReferences(
-            refEntry, currentDepth + 1, maxDepth, visited, circularHandling, refResult, targetState);
     }
 
     private void TrackReference(EntityEntry entry, ReferenceTrackingResult refResult, int depth)
@@ -362,17 +364,19 @@ internal class EntityAttachmentService<TEntity, TKey>
     }
 
     internal void AttachEntityGraphAsUpsertRecursive<TValidationEntity, TValidationKey>(
-        TEntity entity, int maxDepth, ValidationService<TValidationEntity, TValidationKey> validationService)
+        TEntity entity, TraversalContext tc,
+        ValidationService<TValidationEntity, TValidationKey> validationService)
         where TValidationEntity : class
         where TValidationKey : notnull, IEquatable<TValidationKey>
     {
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        AttachAsUpsertRecursive(entity, 0, ClampDepth(maxDepth), visited, validationService);
+        AttachAsUpsertRecursive(entity, 0, ClampDepth(tc.MaxDepth), visited, validationService, tc.NavigationFilter);
     }
 
     private void AttachAsUpsertRecursive<TValidationEntity, TValidationKey>(
         object entity, int currentDepth, int maxDepth, HashSet<object> visited,
-        ValidationService<TValidationEntity, TValidationKey> validationService)
+        ValidationService<TValidationEntity, TValidationKey> validationService,
+        NavigationFilter? filter)
         where TValidationEntity : class
         where TValidationKey : notnull, IEquatable<TValidationKey>
     {
@@ -390,31 +394,32 @@ internal class EntityAttachmentService<TEntity, TKey>
             return;
         }
 
-        AttachUpsertChildren(entry, currentDepth, maxDepth, visited, validationService);
+        AttachUpsertChildren(entry, currentDepth, maxDepth, visited, validationService, filter);
     }
 
     private void AttachUpsertChildren<TValidationEntity, TValidationKey>(
         EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited,
-        ValidationService<TValidationEntity, TValidationKey> validationService)
+        ValidationService<TValidationEntity, TValidationKey> validationService,
+        NavigationFilter? filter)
         where TValidationEntity : class
         where TValidationKey : notnull, IEquatable<TValidationKey>
     {
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, filter, skipManyToMany: false))
             {
                 continue;
             }
 
             foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
-                AttachAsUpsertRecursive(item, currentDepth + 1, maxDepth, visited, validationService);
+                AttachAsUpsertRecursive(item, currentDepth + 1, maxDepth, visited, validationService, filter);
             }
         }
     }
 
     internal ReferenceTrackingResult AttachEntityGraphAsUpsertWithReferences<TValidationEntity, TValidationKey>(
-        TEntity entity, int maxDepth, CircularReferenceHandling circularHandling,
+        TEntity entity, TraversalContext tc,
         ValidationService<TValidationEntity, TValidationKey> validationService)
         where TValidationEntity : class
         where TValidationKey : notnull, IEquatable<TValidationKey>
@@ -422,14 +427,16 @@ internal class EntityAttachmentService<TEntity, TKey>
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
         var referenceResult = new ReferenceTrackingResult();
         AttachAsUpsertWithReferences(
-            entity, 0, ClampDepth(maxDepth), visited, circularHandling, referenceResult, validationService);
+            entity, 0, ClampDepth(tc.MaxDepth), visited, tc.CircularReferenceHandling, referenceResult,
+            validationService, tc.NavigationFilter);
         return referenceResult;
     }
 
     private void AttachAsUpsertWithReferences<TValidationEntity, TValidationKey>(
         object entity, int currentDepth, int maxDepth, HashSet<object> visited,
         CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
-        ValidationService<TValidationEntity, TValidationKey> validationService)
+        ValidationService<TValidationEntity, TValidationKey> validationService,
+        NavigationFilter? filter)
         where TValidationEntity : class
         where TValidationKey : notnull, IEquatable<TValidationKey>
     {
@@ -448,21 +455,22 @@ internal class EntityAttachmentService<TEntity, TKey>
         }
 
         AttachUpsertChildrenWithReferences(
-            entry, currentDepth, maxDepth, visited, circularHandling, refResult, validationService);
+            entry, currentDepth, maxDepth, visited, circularHandling, refResult, validationService, filter);
         AttachUpsertReferences(
-            entry, currentDepth, maxDepth, visited, circularHandling, refResult, validationService);
+            entry, currentDepth, maxDepth, visited, circularHandling, refResult, validationService, filter);
     }
 
     private void AttachUpsertChildrenWithReferences<TValidationEntity, TValidationKey>(
         EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited,
         CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
-        ValidationService<TValidationEntity, TValidationKey> validationService)
+        ValidationService<TValidationEntity, TValidationKey> validationService,
+        NavigationFilter? filter)
         where TValidationEntity : class
         where TValidationKey : notnull, IEquatable<TValidationKey>
     {
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, filter, skipManyToMany: false))
             {
                 continue;
             }
@@ -470,7 +478,7 @@ internal class EntityAttachmentService<TEntity, TKey>
             foreach (var item in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
                 AttachAsUpsertWithReferences(
-                    item, currentDepth + 1, maxDepth, visited, circularHandling, refResult, validationService);
+                    item, currentDepth + 1, maxDepth, visited, circularHandling, refResult, validationService, filter);
             }
         }
     }
@@ -478,12 +486,18 @@ internal class EntityAttachmentService<TEntity, TKey>
     private void AttachUpsertReferences<TValidationEntity, TValidationKey>(
         EntityEntry entry, int currentDepth, int maxDepth, HashSet<object> visited,
         CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
-        ValidationService<TValidationEntity, TValidationKey> validationService)
+        ValidationService<TValidationEntity, TValidationKey> validationService,
+        NavigationFilter? filter)
         where TValidationEntity : class
         where TValidationKey : notnull, IEquatable<TValidationKey>
     {
         foreach (var navigation in NavigationPropertyHelper.GetReferenceNavigations(entry))
         {
+            if (!TraversalHelper.ShouldTraverseReference(navigation, filter))
+            {
+                continue;
+            }
+
             var refEntity = NavigationPropertyHelper.GetReferenceValue(navigation);
             if (refEntity == null || !TryVisitEntity(refEntity, visited, circularHandling, currentDepth + 1))
             {
@@ -491,14 +505,15 @@ internal class EntityAttachmentService<TEntity, TKey>
             }
 
             ProcessUpsertReferenceEntity(
-                refEntity, currentDepth, maxDepth, visited, circularHandling, refResult, validationService);
+                refEntity, currentDepth, maxDepth, visited, circularHandling, refResult, validationService, filter);
         }
     }
 
     private void ProcessUpsertReferenceEntity<TValidationEntity, TValidationKey>(
         object refEntity, int currentDepth, int maxDepth, HashSet<object> visited,
         CircularReferenceHandling circularHandling, ReferenceTrackingResult refResult,
-        ValidationService<TValidationEntity, TValidationKey> validationService)
+        ValidationService<TValidationEntity, TValidationKey> validationService,
+        NavigationFilter? filter)
         where TValidationEntity : class
         where TValidationKey : notnull, IEquatable<TValidationKey>
     {
@@ -512,8 +527,8 @@ internal class EntityAttachmentService<TEntity, TKey>
         }
 
         AttachUpsertChildrenWithReferences(
-            refEntry, currentDepth + 1, maxDepth, visited, circularHandling, refResult, validationService);
+            refEntry, currentDepth + 1, maxDepth, visited, circularHandling, refResult, validationService, filter);
         AttachUpsertReferences(
-            refEntry, currentDepth + 1, maxDepth, visited, circularHandling, refResult, validationService);
+            refEntry, currentDepth + 1, maxDepth, visited, circularHandling, refResult, validationService, filter);
     }
 }

@@ -156,18 +156,19 @@ internal class ValidationService<TEntity, TKey>
     }
 
     internal void ValidateCascadeBehaviorRecursive(
-        TEntity entity, int maxDepth, DeleteGraphBatchOptions options)
+        TEntity entity, TraversalContext tc, DeleteGraphBatchOptions options)
     {
         if (options.CascadeBehavior != DeleteCascadeBehavior.Throw)
         {
             return;
         }
 
-        var ctx = GraphTraversalContext.Create(maxDepth);
-        ValidateCascadeRecursive(entity, 0, ctx);
+        var ctx = GraphTraversalContext.Create(tc.MaxDepth);
+        ValidateCascadeRecursive(entity, 0, ctx, tc.NavigationFilter);
     }
 
-    private void ValidateCascadeRecursive(object entity, int currentDepth, GraphTraversalContext ctx)
+    private void ValidateCascadeRecursive(
+        object entity, int currentDepth, GraphTraversalContext ctx, NavigationFilter? filter)
     {
         if (!ctx.TryVisit(entity))
         {
@@ -183,7 +184,8 @@ internal class ValidationService<TEntity, TKey>
         }
 
         TraversalHelper.TraverseCollectionChildren(entry, child =>
-            ValidateCascadeRecursive(child, currentDepth + 1, ctx), skipManyToMany: false);
+            ValidateCascadeRecursive(child, currentDepth + 1, ctx, filter),
+            skipManyToMany: false, filter: filter);
     }
 
     private void ValidateEntityHasNoChildren(EntityEntry entry, TKey entityId)
@@ -235,20 +237,16 @@ internal class ValidationService<TEntity, TKey>
 
     // ========== Reference Validation Methods ==========
 
-    internal void ValidateCircularReferences(
-        TEntity entity,
-        int maxDepth,
-        CircularReferenceHandling handling = CircularReferenceHandling.Throw)
+    internal void ValidateCircularReferences(TEntity entity, TraversalContext tc)
     {
-        var ctx = GraphTraversalContext.Create(maxDepth);
-        ValidateCircularReferencesRecursive(entity, 0, ctx, handling);
+        var ctx = GraphTraversalContext.Create(tc.MaxDepth);
+        ValidateCircularReferencesRecursive(entity, 0, ctx, tc.CircularReferenceHandling, tc.NavigationFilter);
     }
 
     private void ValidateCircularReferencesRecursive(
-        object entity,
-        int currentDepth,
-        GraphTraversalContext ctx,
-        CircularReferenceHandling handling)
+        object entity, int currentDepth,
+        GraphTraversalContext ctx, CircularReferenceHandling handling,
+        NavigationFilter? filter)
     {
         if (!ctx.TryVisit(entity))
         {
@@ -265,8 +263,8 @@ internal class ValidationService<TEntity, TKey>
         }
 
         var entry = _context.Entry(entity);
-        ValidateCollectionReferencesRecursive(entry, currentDepth, ctx, handling);
-        ValidateReferenceNavigationsRecursive(entry, currentDepth, ctx, handling);
+        ValidateCollectionReferencesRecursive(entry, currentDepth, ctx, handling, filter);
+        ValidateReferenceNavigationsRecursive(entry, currentDepth, ctx, handling, filter);
     }
 
     private void ThrowCircularReferenceException(object entity, int currentDepth)
@@ -281,16 +279,15 @@ internal class ValidationService<TEntity, TKey>
     }
 
     private void ValidateCollectionReferencesRecursive(
-        EntityEntry entry,
-        int currentDepth,
-        GraphTraversalContext ctx,
-        CircularReferenceHandling handling)
+        EntityEntry entry, int currentDepth,
+        GraphTraversalContext ctx, CircularReferenceHandling handling,
+        NavigationFilter? filter)
     {
         TraversalHelper.TraverseCollectionChildren(entry, child =>
         {
             ValidateSelfReferenceInCollection(entry, child, handling);
-            ValidateCircularReferencesRecursive(child, currentDepth + 1, ctx, handling);
-        }, skipManyToMany: false);
+            ValidateCircularReferencesRecursive(child, currentDepth + 1, ctx, handling, filter);
+        }, skipManyToMany: false, filter: filter);
     }
 
     private void ValidateSelfReferenceInCollection(
@@ -299,16 +296,15 @@ internal class ValidationService<TEntity, TKey>
             "contains itself in a collection navigation. An entity cannot be its own child");
 
     private void ValidateReferenceNavigationsRecursive(
-        EntityEntry entry,
-        int currentDepth,
-        GraphTraversalContext ctx,
-        CircularReferenceHandling handling)
+        EntityEntry entry, int currentDepth,
+        GraphTraversalContext ctx, CircularReferenceHandling handling,
+        NavigationFilter? filter)
     {
         TraversalHelper.TraverseReferenceNavigations(entry, refEntity =>
         {
             ValidateSelfReference(entry, refEntity, handling);
-            ValidateCircularReferencesRecursive(refEntity, currentDepth + 1, ctx, handling);
-        });
+            ValidateCircularReferencesRecursive(refEntity, currentDepth + 1, ctx, handling, filter);
+        }, filter: filter);
     }
 
     private void ValidateSelfReference(
@@ -339,13 +335,14 @@ internal class ValidationService<TEntity, TKey>
             $"If this is intentional, set CircularReferenceHandling to IgnoreAll.");
     }
 
-    internal void ValidateReferencedEntitiesExist(TEntity entity, int maxDepth)
+    internal void ValidateReferencedEntitiesExist(TEntity entity, TraversalContext tc)
     {
-        var ctx = GraphTraversalContext.Create(maxDepth);
-        ValidateReferencedEntitiesExistRecursive(entity, 0, ctx);
+        var ctx = GraphTraversalContext.Create(tc.MaxDepth);
+        ValidateReferencedEntitiesExistRecursive(entity, 0, ctx, tc.NavigationFilter);
     }
 
-    private void ValidateReferencedEntitiesExistRecursive(object entity, int currentDepth, GraphTraversalContext ctx)
+    private void ValidateReferencedEntitiesExistRecursive(
+        object entity, int currentDepth, GraphTraversalContext ctx, NavigationFilter? filter)
     {
         if (!ctx.TryVisit(entity))
         {
@@ -361,7 +358,8 @@ internal class ValidationService<TEntity, TKey>
         ValidateEntityReferencesExist(entry);
 
         TraversalHelper.TraverseCollectionChildren(entry, child =>
-            ValidateReferencedEntitiesExistRecursive(child, currentDepth + 1, ctx), skipManyToMany: false);
+            ValidateReferencedEntitiesExistRecursive(child, currentDepth + 1, ctx, filter),
+            skipManyToMany: false, filter: filter);
     }
 
     private void ValidateEntityReferencesExist(EntityEntry entry)

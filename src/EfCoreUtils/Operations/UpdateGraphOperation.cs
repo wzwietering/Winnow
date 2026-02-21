@@ -11,6 +11,7 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly GraphBatchOptions _options;
+    private readonly TraversalContext _tc;
     private readonly List<TKey> _successfulIds = [];
     private readonly List<BatchFailure<TKey>> _failures = [];
     private readonly List<GraphNode<TKey>> _graphHierarchy = [];
@@ -20,25 +21,28 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
     internal UpdateGraphOperation(GraphBatchOptions options)
     {
         _options = options;
+        _tc = TraversalContext.FromOptions(options);
     }
 
     public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
-        context.CaptureAllOriginalChildIdsRecursive(entities, _options.MaxDepth);
+        NavigationFilterValidator.Validate(
+            _tc.NavigationFilter, context.Context.Model, _options.IncludeReferences, _options.IncludeManyToMany);
+
+        context.CaptureAllOriginalChildIdsRecursive(entities, _tc);
 
         if (_options.IncludeManyToMany)
         {
-            context.CaptureOriginalManyToManyLinks(entities, _options.MaxDepth);
+            context.CaptureOriginalManyToManyLinks(entities, _tc);
         }
 
         foreach (var entity in entities)
         {
-            context.ValidateNoOrphanedChildrenRecursive(entity, _options.MaxDepth, _options);
+            context.ValidateNoOrphanedChildrenRecursive(entity, _tc, _options);
 
             if (_options.IncludeReferences)
             {
-                context.ValidateCircularReferences(
-                    entity, _options.MaxDepth, _options.CircularReferenceHandling);
+                context.ValidateCircularReferences(entity, _tc);
             }
         }
     }
@@ -47,16 +51,15 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
     {
         if (_options.IncludeReferences)
         {
-            var refResult = context.AttachEntityGraphAsModifiedWithReferences(
-                entity, _options.MaxDepth, _options.CircularReferenceHandling);
+            var refResult = context.AttachEntityGraphAsModifiedWithReferences(entity, _tc);
             _statsTracker.AggregateReferenceStats(refResult);
         }
         else
         {
-            context.AttachEntityGraphAsModifiedRecursive(entity, _options.MaxDepth);
+            context.AttachEntityGraphAsModifiedRecursive(entity, _tc);
         }
 
-        context.HandleOrphanedChildrenRecursive(entity, _options.MaxDepth, _options.OrphanedChildBehavior);
+        context.HandleOrphanedChildrenRecursive(entity, _tc, _options.OrphanedChildBehavior);
 
         if (_options.IncludeManyToMany)
         {
@@ -66,8 +69,8 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
 
         var entityId = context.GetEntityId(entity);
         var (node, stats) = _options.IncludeReferences
-            ? context.BuildGraphHierarchyWithReferences(entity, _options.MaxDepth)
-            : context.BuildGraphHierarchy(entity, _options.MaxDepth);
+            ? context.BuildGraphHierarchyWithReferences(entity, _tc)
+            : context.BuildGraphHierarchy(entity, _tc);
         _pendingGraphNodes[entityId] = (node, stats);
     }
 
@@ -99,7 +102,8 @@ internal class UpdateGraphOperation<TEntity, TKey> : IBatchOperation<TEntity, TK
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.DetachEntityWithOrphansRecursive(entity, _options.MaxDepth);
+    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) =>
+        context.DetachEntityWithOrphansRecursive(entity, _tc);
 
     public BatchResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {

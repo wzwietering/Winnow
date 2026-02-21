@@ -27,6 +27,7 @@ Used with `InsertGraphBatch`.
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `MaxDepth` | `int` | `10` | Maximum traversal depth |
+| `NavigationFilter` | `NavigationFilter?` | `null` | Filter which navigations are traversed |
 | `IncludeReferences` | `bool` | `false` | Include many-to-one references |
 | `IncludeManyToMany` | `bool` | `false` | Include many-to-many navigations |
 | `ManyToManyInsertBehavior` | `ManyToManyInsertBehavior` | `AttachExisting` | How to handle M2M related entities |
@@ -41,6 +42,7 @@ Used with `UpdateGraphBatch`.
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `MaxDepth` | `int` | `10` | Maximum traversal depth |
+| `NavigationFilter` | `NavigationFilter?` | `null` | Filter which navigations are traversed |
 | `OrphanedChildBehavior` | `OrphanBehavior` | `Throw` | What to do with removed children |
 | `IncludeReferences` | `bool` | `false` | Include many-to-one references |
 | `IncludeManyToMany` | `bool` | `false` | Include many-to-many navigations |
@@ -62,6 +64,7 @@ Used with `DeleteGraphBatch`.
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `MaxDepth` | `int` | `10` | Maximum traversal depth |
+| `NavigationFilter` | `NavigationFilter?` | `null` | Filter which navigations are traversed |
 | `CascadeBehavior` | `DeleteCascadeBehavior` | `Cascade` | How to handle children on delete |
 | `IncludeManyToMany` | `bool` | `false` | Clean up M2M join records |
 
@@ -82,6 +85,7 @@ Used with `UpsertGraphBatch`.
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `MaxDepth` | `int` | `10` | Maximum traversal depth |
+| `NavigationFilter` | `NavigationFilter?` | `null` | Filter which navigations are traversed |
 | `OrphanedChildBehavior` | `OrphanBehavior` | `Throw` | What to do with removed children |
 | `IncludeReferences` | `bool` | `false` | Include many-to-one references |
 | `IncludeManyToMany` | `bool` | `false` | Include many-to-many navigations |

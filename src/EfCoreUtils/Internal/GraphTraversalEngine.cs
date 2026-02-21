@@ -28,6 +28,11 @@ internal sealed class TraversalOptions
     internal bool SkipManyToMany { get; init; } = true;
 
     /// <summary>
+    /// Optional filter for navigation properties.
+    /// </summary>
+    internal NavigationFilter? NavigationFilter { get; init; }
+
+    /// <summary>
     /// Default traversal options (top-down, no references, skip many-to-many).
     /// </summary>
     internal static TraversalOptions Default { get; } = new();
@@ -175,6 +180,11 @@ internal sealed class GraphTraversalEngine
     {
         foreach (var navigation in NavigationPropertyHelper.GetReferenceNavigations(entry))
         {
+            if (!TraversalHelper.ShouldTraverseReference(navigation, options.NavigationFilter))
+            {
+                continue;
+            }
+
             var refEntity = NavigationPropertyHelper.GetReferenceValue(navigation);
             if (refEntity != null)
             {
@@ -183,18 +193,6 @@ internal sealed class GraphTraversalEngine
         }
     }
 
-    private static bool ShouldTraverseNavigation(NavigationEntry navigation, TraversalOptions options)
-    {
-        if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
-        {
-            return false;
-        }
-
-        if (options.SkipManyToMany && ManyToManyNavigationHelper.IsManyToManyNavigation(navigation))
-        {
-            return false;
-        }
-
-        return true;
-    }
+    private static bool ShouldTraverseNavigation(NavigationEntry navigation, TraversalOptions options) =>
+        TraversalHelper.ShouldTraverseCollection(navigation, options.NavigationFilter, options.SkipManyToMany);
 }

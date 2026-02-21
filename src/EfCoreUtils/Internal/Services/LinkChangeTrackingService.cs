@@ -22,22 +22,16 @@ internal class LinkChangeTrackingService<TEntity, TKey>
         _keyService = keyService;
     }
 
-    internal void CaptureOriginalLinks(IEnumerable<TEntity> entities, int maxDepth)
+    internal void CaptureOriginalLinks(IEnumerable<TEntity> entities, TraversalContext tc)
     {
         ArgumentNullException.ThrowIfNull(entities);
-
-        if (maxDepth < 0 || maxDepth > DepthConstants.AbsoluteMaxDepth)
-        {
-            throw new ArgumentOutOfRangeException(nameof(maxDepth),
-                $"maxDepth must be between 0 and {DepthConstants.AbsoluteMaxDepth}");
-        }
 
         _originalLinks.Clear();
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
 
         foreach (var entity in entities)
         {
-            CaptureEntityLinks(entity, visited, 0, maxDepth);
+            CaptureEntityLinks(entity, visited, 0, tc.MaxDepth, tc.NavigationFilter);
         }
     }
 
@@ -54,11 +48,13 @@ internal class LinkChangeTrackingService<TEntity, TKey>
 
         var tracker = new ManyToManyStatisticsTracker();
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
-        ApplyEntityLinkChanges(entity, tracker, visited, 0, options.MaxDepth, options.MaxManyToManyCollectionSize);
+        ApplyEntityLinkChanges(entity, tracker, visited, 0, options.MaxDepth,
+            options.MaxManyToManyCollectionSize, options.NavigationFilter);
         return tracker;
     }
 
-    private void CaptureEntityLinks(object entity, HashSet<object> visited, int depth, int maxDepth)
+    private void CaptureEntityLinks(
+        object entity, HashSet<object> visited, int depth, int maxDepth, NavigationFilter? filter)
     {
         if (!visited.Add(entity))
         {
@@ -73,7 +69,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
             return;
         }
 
-        CaptureChildLinks(entry, visited, depth, maxDepth);
+        CaptureChildLinks(entry, visited, depth, maxDepth, filter);
     }
 
     private void CaptureEntryLinks(EntityEntry entry)
@@ -123,30 +119,27 @@ internal class LinkChangeTrackingService<TEntity, TKey>
         return ids;
     }
 
-    private void CaptureChildLinks(EntityEntry entry, HashSet<object> visited, int depth, int maxDepth)
+    private void CaptureChildLinks(
+        EntityEntry entry, HashSet<object> visited, int depth, int maxDepth, NavigationFilter? filter)
     {
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
-            {
-                continue;
-            }
-
-            if (ManyToManyNavigationHelper.IsManyToManyNavigation(navigation))
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, filter))
             {
                 continue;
             }
 
             foreach (var child in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
-                CaptureEntityLinks(child, visited, depth + 1, maxDepth);
+                CaptureEntityLinks(child, visited, depth + 1, maxDepth, filter);
             }
         }
     }
 
     private void ApplyEntityLinkChanges(
         object entity, ManyToManyStatisticsTracker tracker,
-        HashSet<object> visited, int depth, int maxDepth, int maxCollectionSize)
+        HashSet<object> visited, int depth, int maxDepth, int maxCollectionSize,
+        NavigationFilter? filter)
     {
         if (!visited.Add(entity))
         {
@@ -161,7 +154,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
             return;
         }
 
-        ApplyChildLinkChanges(entry, tracker, visited, depth, maxDepth, maxCollectionSize);
+        ApplyChildLinkChanges(entry, tracker, visited, depth, maxDepth, maxCollectionSize, filter);
     }
 
     private void ApplyEntryLinkChanges(EntityEntry entry, ManyToManyStatisticsTracker tracker, int maxCollectionSize)
@@ -282,23 +275,19 @@ internal class LinkChangeTrackingService<TEntity, TKey>
 
     private void ApplyChildLinkChanges(
         EntityEntry entry, ManyToManyStatisticsTracker tracker,
-        HashSet<object> visited, int depth, int maxDepth, int maxCollectionSize)
+        HashSet<object> visited, int depth, int maxDepth, int maxCollectionSize,
+        NavigationFilter? filter)
     {
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
-            {
-                continue;
-            }
-
-            if (ManyToManyNavigationHelper.IsManyToManyNavigation(navigation))
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, filter))
             {
                 continue;
             }
 
             foreach (var child in NavigationPropertyHelper.GetCollectionItems(navigation))
             {
-                ApplyEntityLinkChanges(child, tracker, visited, depth + 1, maxDepth, maxCollectionSize);
+                ApplyEntityLinkChanges(child, tracker, visited, depth + 1, maxDepth, maxCollectionSize, filter);
             }
         }
     }

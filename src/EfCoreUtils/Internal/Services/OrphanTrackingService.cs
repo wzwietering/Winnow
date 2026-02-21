@@ -1,3 +1,4 @@
+using EfCoreUtils.Internal;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -50,24 +51,21 @@ internal class OrphanTrackingService<TEntity, TKey>
         _singleLevelTracker.DetachEntityWithOrphans(entity, detachmentService);
 
     // Recursive operations
-    internal void CaptureAllOriginalChildIdsRecursive(List<TEntity> entities, int maxDepth) =>
-        _recursiveTracker.CaptureAllOriginalChildIdsRecursive(entities, maxDepth);
-
-    internal List<(string EntityType, TKey EntityId, int Depth)> GetOrphanedChildIdsRecursive(
-        TEntity entity, int maxDepth) =>
-        _recursiveTracker.GetOrphanedChildIdsRecursive(entity, maxDepth);
+    internal void CaptureAllOriginalChildIdsRecursive(List<TEntity> entities, TraversalContext tc) =>
+        _recursiveTracker.CaptureAllOriginalChildIdsRecursive(entities, tc);
 
     internal void ValidateNoOrphanedChildrenRecursive(
-        TEntity entity, int maxDepth, GraphBatchOptions options) =>
-        _recursiveTracker.ValidateNoOrphanedChildrenRecursive(entity, maxDepth, options);
+        TEntity entity, TraversalContext tc, GraphBatchOptions options) =>
+        _recursiveTracker.ValidateNoOrphanedChildrenRecursive(entity, tc, options);
 
     internal void HandleOrphanedChildrenRecursive(
-        TEntity entity, int maxDepth, OrphanBehavior behavior) =>
-        _recursiveTracker.HandleOrphanedChildrenRecursive(entity, maxDepth, behavior);
+        TEntity entity, TraversalContext tc, OrphanBehavior behavior) =>
+        _recursiveTracker.HandleOrphanedChildrenRecursive(entity, tc, behavior);
 
     internal void DetachEntityWithOrphansRecursive(
-        TEntity entity, int maxDepth, EntityDetachmentService<TEntity, TKey> detachmentService) =>
-        _recursiveTracker.DetachEntityWithOrphansRecursive(entity, maxDepth, detachmentService);
+        TEntity entity, TraversalContext tc,
+        EntityDetachmentService<TEntity, TKey> detachmentService) =>
+        _recursiveTracker.DetachEntityWithOrphansRecursive(entity, tc, detachmentService);
 
     // Shared index management
     private Dictionary<IEntityType, List<EntityEntry>> GetOrBuildDeletedIndex() =>

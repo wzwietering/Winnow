@@ -38,17 +38,22 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
         var entry = _context.Entry(entity);
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance) { entity };
 
-        ProcessEntityManyToMany(entry, options, tracker, visited, 0, options.MaxDepth);
+        ProcessEntityManyToMany(entry, options, tracker, visited, 0, options.MaxDepth, options.NavigationFilter);
         return tracker;
     }
 
     private void ProcessEntityManyToMany(
         EntityEntry entry, InsertGraphBatchOptions options,
         ManyToManyStatisticsTracker tracker, HashSet<object> visited,
-        int currentDepth, int maxDepth)
+        int currentDepth, int maxDepth, NavigationFilter? filter)
     {
         foreach (var navigation in ManyToManyNavigationHelper.GetManyToManyNavigations(entry))
         {
+            if (!TraversalHelper.IsAllowedByFilter(navigation, filter))
+            {
+                continue;
+            }
+
             ProcessManyToManyNavigation(entry, navigation, options, tracker);
         }
 
@@ -57,22 +62,17 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
             return;
         }
 
-        ProcessChildrenManyToMany(entry, options, tracker, visited, currentDepth, maxDepth);
+        ProcessChildrenManyToMany(entry, options, tracker, visited, currentDepth, maxDepth, filter);
     }
 
     private void ProcessChildrenManyToMany(
         EntityEntry entry, InsertGraphBatchOptions options,
         ManyToManyStatisticsTracker tracker, HashSet<object> visited,
-        int currentDepth, int maxDepth)
+        int currentDepth, int maxDepth, NavigationFilter? filter)
     {
         foreach (var navigation in entry.Navigations)
         {
-            if (!NavigationPropertyHelper.IsTraversableCollection(navigation))
-            {
-                continue;
-            }
-
-            if (ManyToManyNavigationHelper.IsManyToManyNavigation(navigation))
+            if (!TraversalHelper.ShouldTraverseCollection(navigation, filter))
             {
                 continue;
             }
@@ -85,7 +85,7 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
                 }
 
                 var childEntry = _context.Entry(child);
-                ProcessEntityManyToMany(childEntry, options, tracker, visited, currentDepth + 1, maxDepth);
+                ProcessEntityManyToMany(childEntry, options, tracker, visited, currentDepth + 1, maxDepth, filter);
             }
         }
     }
