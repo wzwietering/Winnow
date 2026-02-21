@@ -43,9 +43,9 @@ public class InsertGraphBenchmarks
     public void IterationSetup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.ExecuteSqlRaw("DELETE FROM OrderReservations");
-        context.Database.ExecuteSqlRaw("DELETE FROM OrderItems");
-        context.Database.ExecuteSqlRaw("DELETE FROM Orders");
+        context.OrderReservations.ExecuteDelete();
+        context.OrderItems.ExecuteDelete();
+        context.Orders.ExecuteDelete();
 
         _orders = EntityGenerator.CreateOrders(BatchSize);
     }
@@ -64,6 +64,8 @@ public class InsertGraphBenchmarks
     public void GlobalCleanup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.EnsureDeleted();
+        context.OrderReservations.ExecuteDelete();
+        context.OrderItems.ExecuteDelete();
+        context.Orders.ExecuteDelete();
     }
 }

@@ -44,7 +44,7 @@ public class FailureRateBenchmarks
     public void IterationSetup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.ExecuteSqlRaw("DELETE FROM Products");
+        context.Products.ExecuteDelete();
 
         _products = FailureRate > 0
             ? EntityGenerator.CreateProductsWithFailures(BatchSize, FailureRate)
@@ -65,6 +65,6 @@ public class FailureRateBenchmarks
     public void GlobalCleanup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.EnsureDeleted();
+        context.Products.ExecuteDelete();
     }
 }

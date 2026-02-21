@@ -68,15 +68,17 @@ public class UpsertGraphBenchmarks
     public void GlobalCleanup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.EnsureDeleted();
+        context.OrderReservations.ExecuteDelete();
+        context.OrderItems.ExecuteDelete();
+        context.Orders.ExecuteDelete();
     }
 
     private void SeedOrders(int count)
     {
         using var seedContext = new BenchmarkDbContext(_options);
-        seedContext.Database.ExecuteSqlRaw("DELETE FROM OrderReservations");
-        seedContext.Database.ExecuteSqlRaw("DELETE FROM OrderItems");
-        seedContext.Database.ExecuteSqlRaw("DELETE FROM Orders");
+        seedContext.OrderReservations.ExecuteDelete();
+        seedContext.OrderItems.ExecuteDelete();
+        seedContext.Orders.ExecuteDelete();
 
         var seedOrders = EntityGenerator.CreateOrders(count);
         seedContext.Orders.AddRange(seedOrders);

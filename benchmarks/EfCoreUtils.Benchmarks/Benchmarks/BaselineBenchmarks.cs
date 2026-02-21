@@ -38,7 +38,7 @@ public class BaselineInsertBenchmarks
     public void IterationSetup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.ExecuteSqlRaw("DELETE FROM Products");
+        context.Products.ExecuteDelete();
     }
 
     [Benchmark(Baseline = true)]
@@ -76,6 +76,6 @@ public class BaselineInsertBenchmarks
     public void GlobalCleanup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.EnsureDeleted();
+        context.Products.ExecuteDelete();
     }
 }

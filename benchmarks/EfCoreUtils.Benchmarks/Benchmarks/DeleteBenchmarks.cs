@@ -40,7 +40,7 @@ public class DeleteBenchmarks
     {
         // Seed fresh entities for each iteration
         using var seedContext = new BenchmarkDbContext(_options);
-        seedContext.Database.ExecuteSqlRaw("DELETE FROM Products");
+        seedContext.Products.ExecuteDelete();
 
         var seedProducts = EntityGenerator.CreateProducts(BatchSize);
         seedContext.Products.AddRange(seedProducts);
@@ -68,6 +68,6 @@ public class DeleteBenchmarks
     public void GlobalCleanup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.EnsureDeleted();
+        context.Products.ExecuteDelete();
     }
 }

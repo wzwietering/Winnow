@@ -46,7 +46,7 @@ public class UpdateBenchmarks
     {
         // Reset all prices back to original values
         using var resetContext = new BenchmarkDbContext(_options);
-        resetContext.Database.ExecuteSqlRaw("UPDATE Products SET Price = 10 + Id");
+        resetContext.Products.ExecuteUpdate(p => p.SetProperty(x => x.Price, x => 10 + x.Id));
 
         // Load and modify products in a fresh tracked context
         _context = new BenchmarkDbContext(_options);
@@ -76,6 +76,6 @@ public class UpdateBenchmarks
     public void GlobalCleanup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.EnsureDeleted();
+        context.Products.ExecuteDelete();
     }
 }

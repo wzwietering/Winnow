@@ -42,7 +42,7 @@ public class UpsertBenchmarks
     {
         // Clear and seed half the batch as existing entities
         using var seedContext = new BenchmarkDbContext(_options);
-        seedContext.Database.ExecuteSqlRaw("DELETE FROM Products");
+        seedContext.Products.ExecuteDelete();
 
         var existingCount = BatchSize / 2;
         var seedProducts = EntityGenerator.CreateProducts(existingCount);
@@ -78,6 +78,6 @@ public class UpsertBenchmarks
     public void GlobalCleanup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.EnsureDeleted();
+        context.Products.ExecuteDelete();
     }
 }

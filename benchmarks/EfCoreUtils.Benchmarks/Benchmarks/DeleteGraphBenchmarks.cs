@@ -44,9 +44,9 @@ public class DeleteGraphBenchmarks
     {
         // Seed fresh order graphs
         using var seedContext = new BenchmarkDbContext(_options);
-        seedContext.Database.ExecuteSqlRaw("DELETE FROM OrderReservations");
-        seedContext.Database.ExecuteSqlRaw("DELETE FROM OrderItems");
-        seedContext.Database.ExecuteSqlRaw("DELETE FROM Orders");
+        seedContext.OrderReservations.ExecuteDelete();
+        seedContext.OrderItems.ExecuteDelete();
+        seedContext.Orders.ExecuteDelete();
 
         var seedOrders = EntityGenerator.CreateOrders(BatchSize);
         seedContext.Orders.AddRange(seedOrders);
@@ -80,6 +80,8 @@ public class DeleteGraphBenchmarks
     public void GlobalCleanup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.EnsureDeleted();
+        context.OrderReservations.ExecuteDelete();
+        context.OrderItems.ExecuteDelete();
+        context.Orders.ExecuteDelete();
     }
 }

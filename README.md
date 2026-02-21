@@ -200,7 +200,7 @@ DivideAndConquer adds near-zero overhead compared to raw `SaveChanges()`:
 
 Graph operations (parent + children) are 2-3x more expensive per entity in memory. Pre-validate your data when using DivideAndConquer — at 25% failure rate, it degrades to near-OneByOne performance.
 
-For full results including graph, parallel, and failure rate benchmarks, see [SQLite Benchmarks](docs/benchmarks/sqlite.md).
+For full results including graph, parallel, and failure rate benchmarks, see [SQLite](docs/benchmarks/sqlite.md), [PostgreSQL](docs/benchmarks/postgresql.md), and [SQL Server](docs/benchmarks/sqlserver.md) benchmarks.
 
 ## Handling Results
 
@@ -310,6 +310,8 @@ Detailed documentation for complex scenarios:
 - [Results Reference](docs/results-reference.md) - Full result type API
 - [Options Reference](docs/api/options-reference.md) - All configuration options
 - [SQLite Benchmarks](docs/benchmarks/sqlite.md) - Performance data and strategy guidance
+- [PostgreSQL Benchmarks](docs/benchmarks/postgresql.md) - Network database performance
+- [SQL Server Benchmarks](docs/benchmarks/sqlserver.md) - Network database performance
 
 ## Common Mistakes
 

@@ -42,7 +42,7 @@ public class ParallelInsertBenchmarks
     public void IterationSetup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.ExecuteSqlRaw("DELETE FROM Products");
+        context.Products.ExecuteDelete();
 
         _products = EntityGenerator.CreateProducts(BatchSize);
     }
@@ -63,6 +63,6 @@ public class ParallelInsertBenchmarks
     public void GlobalCleanup()
     {
         using var context = new BenchmarkDbContext(_options);
-        context.Database.EnsureDeleted();
+        context.Products.ExecuteDelete();
     }
 }
