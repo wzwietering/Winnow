@@ -10,10 +10,13 @@ Used with `UpdateBatch`.
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `ValidateNavigationProperties` | `bool` | `true` | When true, validates navigation properties are not modified |
+| `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff for transient failures |
+
+All options classes that inherit from `BatchOptions` also support `Strategy`, `ValidateNavigationProperties`, and `Retry`. All options classes that inherit from `GraphBatchOptionsBase` also support `Retry`.
 
 ## InsertBatchOptions
 
-Used with `InsertBatch`.
+Used with `InsertBatch`. Inherits from `BatchOptions`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -33,6 +36,9 @@ Used with `InsertGraphBatch`.
 | `ManyToManyInsertBehavior` | `ManyToManyInsertBehavior` | `AttachExisting` | How to handle M2M related entities |
 | `ValidateManyToManyEntitiesExist` | `bool` | `true` | Validate M2M entities exist |
 | `CircularReferenceHandling` | `CircularReferenceHandling` | `Throw` | How to handle circular references |
+| `ThrowOnUnsupportedValidation` | `bool` | `false` | Throws if M2M validation can't be performed for composite key entities |
+| `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
+| `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
 
 ## GraphBatchOptions
 
@@ -47,6 +53,8 @@ Used with `UpdateGraphBatch`.
 | `IncludeReferences` | `bool` | `false` | Include many-to-one references |
 | `IncludeManyToMany` | `bool` | `false` | Include many-to-many navigations |
 | `CircularReferenceHandling` | `CircularReferenceHandling` | `Throw` | How to handle circular references |
+| `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
+| `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
 
 ## DeleteBatchOptions
 
@@ -67,6 +75,8 @@ Used with `DeleteGraphBatch`.
 | `NavigationFilter` | `NavigationFilter?` | `null` | Filter which navigations are traversed |
 | `CascadeBehavior` | `DeleteCascadeBehavior` | `Cascade` | How to handle children on delete |
 | `IncludeManyToMany` | `bool` | `false` | Clean up M2M join records |
+| `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
+| `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
 
 ## UpsertBatchOptions
 
@@ -93,6 +103,33 @@ Used with `UpsertGraphBatch`.
 | `ValidateManyToManyEntitiesExist` | `bool` | `true` | Validate M2M entities exist |
 | `CircularReferenceHandling` | `CircularReferenceHandling` | `Throw` | How to handle circular references |
 | `DuplicateKeyStrategy` | `DuplicateKeyStrategy` | `Fail` | How to handle duplicate key errors during INSERT |
+| `ThrowOnUnsupportedValidation` | `bool` | `false` | Throws if M2M validation can't be performed for composite key entities |
+| `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
+| `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
+
+## RetryOptions
+
+Configure automatic retry with exponential backoff for transient failures. Available on all batch operations via the `Retry` property.
+
+```csharp
+var result = saver.UpdateBatch(entities, new BatchOptions
+{
+    Retry = new RetryOptions
+    {
+        MaxRetries = 5,
+        InitialDelay = TimeSpan.FromMilliseconds(200)
+    }
+});
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `MaxRetries` | `int` | `3` | Maximum retry attempts. Must be non-negative. |
+| `InitialDelay` | `TimeSpan` | `100ms` | Delay before first retry. Subsequent retries use exponential backoff. |
+| `BackoffMultiplier` | `double` | `2.0` | Multiplier applied to delay between retries. Must be positive. |
+| `IsTransient` | `Func<Exception, bool>?` | `null` | Custom predicate for transient exception detection. When null, uses built-in classifier. |
+
+> **Note:** The retry handler re-invokes `SaveChanges` on the same `DbContext`. For providers that do not automatically recover entity state after transient failures, consider using the provider's built-in retry strategy (e.g., `EnableRetryOnFailure`) instead.
 
 ## Enums
 

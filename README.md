@@ -79,6 +79,24 @@ var saver = new BatchSaver<Setting, string>(context);   // String keys
 
 For composite keys, see [Composite Keys](docs/composite-keys.md).
 
+### Dependency Injection
+
+Register Winnow with your DI container:
+
+```csharp
+services.AddWinnow<AppDbContext>();
+```
+
+Then inject `IBatchSaver<TEntity, TKey>` or `IBatchSaver<TEntity>`:
+
+```csharp
+public class ProductService(IBatchSaver<Product, int> saver)
+{
+    public BatchResult<int> ImportProducts(List<Product> products)
+        => saver.UpdateBatch(products);
+}
+```
+
 ## Choosing Your Operation
 
 ```

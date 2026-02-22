@@ -39,7 +39,7 @@ var result = saver.UpdateGraphBatch(new[] { student }, new GraphBatchOptions
 });
 
 // Check what happened
-var stats = result.TraversalInfo?.JoinOperationsByNavigation["MyApp.Entities.Student.Courses"];
+var stats = result.TraversalInfo?.JoinOperationsByNavigation["Student.Courses"];
 Console.WriteLine($"Join records added: {stats?.Created}");
 Console.WriteLine($"Join records removed: {stats?.Removed}");
 ```

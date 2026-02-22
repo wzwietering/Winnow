@@ -28,10 +28,10 @@ var result = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
 });
 
 // Parent and child IDs are populated after insert
-foreach (var parentId in result.InsertedIds)
+foreach (var node in result.GraphHierarchy ?? [])
 {
-    var childIds = result.ChildIdsByParentId![parentId];
-    Console.WriteLine($"Order {parentId} has items: {string.Join(", ", childIds)}");
+    var childIds = node.GetChildIds();
+    Console.WriteLine($"Order {node.EntityId} has items: {string.Join(", ", childIds)}");
 }
 ```
 
@@ -132,15 +132,14 @@ Console.WriteLine($"Updated: {result.UpdatedCount}");
 For graph operations, results include the full hierarchy:
 
 ```csharp
-// Access child IDs by parent ID
-var childIds = result.ChildIdsByParentId![parentId];
-
-// For upsert, get detailed hierarchy
-var graphNode = result.GraphHierarchy![parentId];
-Console.WriteLine($"Parent operation: {graphNode.Operation}");
-foreach (var child in graphNode.Children)
+// Access the entity hierarchy
+foreach (var node in result.GraphHierarchy ?? [])
 {
-    Console.WriteLine($"  Child {child.EntityId}: {child.Operation}");
+    Console.WriteLine($"Parent {node.EntityId} ({node.EntityType})");
+    foreach (var child in node.Children)
+    {
+        Console.WriteLine($"  Child {child.EntityId} ({child.EntityType})");
+    }
 }
 ```
 

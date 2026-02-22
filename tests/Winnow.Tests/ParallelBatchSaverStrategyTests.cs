@@ -7,8 +7,10 @@ namespace Winnow.Tests;
 
 public class ParallelBatchSaverStrategyTests : ParallelTestBase
 {
-    [Fact]
-    public async Task InsertBatchAsync_OneByOne_AllInserted()
+    [Theory]
+    [InlineData(BatchStrategy.OneByOne)]
+    [InlineData(BatchStrategy.DivideAndConquer)]
+    public async Task InsertBatchAsync_AllInserted(BatchStrategy strategy)
     {
         EnsureDatabaseCreated();
 
@@ -16,31 +18,17 @@ public class ParallelBatchSaverStrategyTests : ParallelTestBase
         var products = new TestDataBuilder().CreateValidProducts(6);
         foreach (var p in products) p.Id = 0;
 
-        var options = new InsertBatchOptions { Strategy = BatchStrategy.OneByOne };
+        var options = new InsertBatchOptions { Strategy = strategy };
         var result = await saver.InsertBatchAsync(products, options);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(6);
     }
 
-    [Fact]
-    public async Task InsertBatchAsync_DivideAndConquer_AllInserted()
-    {
-        EnsureDatabaseCreated();
-
-        var saver = CreateSaver(maxDegreeOfParallelism: 2);
-        var products = new TestDataBuilder().CreateValidProducts(6);
-        foreach (var p in products) p.Id = 0;
-
-        var options = new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer };
-        var result = await saver.InsertBatchAsync(products, options);
-
-        result.IsCompleteSuccess.ShouldBeTrue();
-        result.SuccessCount.ShouldBe(6);
-    }
-
-    [Fact]
-    public async Task UpdateBatchAsync_OneByOne_AllUpdated()
+    [Theory]
+    [InlineData(BatchStrategy.OneByOne)]
+    [InlineData(BatchStrategy.DivideAndConquer)]
+    public async Task UpdateBatchAsync_AllUpdated(BatchStrategy strategy)
     {
         EnsureDatabaseCreated();
         SeedWithFactory(ctx => SeedData(ctx, 6));
@@ -49,24 +37,7 @@ public class ParallelBatchSaverStrategyTests : ParallelTestBase
         var products = QueryWithFactory(ctx => ctx.Products.ToList());
         foreach (var p in products) p.Price += 5;
 
-        var options = new BatchOptions { Strategy = BatchStrategy.OneByOne };
-        var result = await saver.UpdateBatchAsync(products, options);
-
-        result.IsCompleteSuccess.ShouldBeTrue();
-        result.SuccessCount.ShouldBe(6);
-    }
-
-    [Fact]
-    public async Task UpdateBatchAsync_DivideAndConquer_AllUpdated()
-    {
-        EnsureDatabaseCreated();
-        SeedWithFactory(ctx => SeedData(ctx, 6));
-
-        var saver = CreateSaver(maxDegreeOfParallelism: 2);
-        var products = QueryWithFactory(ctx => ctx.Products.ToList());
-        foreach (var p in products) p.Price += 5;
-
-        var options = new BatchOptions { Strategy = BatchStrategy.DivideAndConquer };
+        var options = new BatchOptions { Strategy = strategy };
         var result = await saver.UpdateBatchAsync(products, options);
 
         result.IsCompleteSuccess.ShouldBeTrue();
@@ -124,8 +95,10 @@ public class ParallelBatchSaverStrategyTests : ParallelTestBase
         result2.DatabaseRoundTrips.ShouldBeLessThanOrEqualTo(result1.DatabaseRoundTrips);
     }
 
-    [Fact]
-    public async Task OneByOne_WithParallel_CorrectResults()
+    [Theory]
+    [InlineData(BatchStrategy.OneByOne)]
+    [InlineData(BatchStrategy.DivideAndConquer)]
+    public async Task InsertBatchAsync_WithParallel_CorrectResults(BatchStrategy strategy)
     {
         EnsureDatabaseCreated();
 
@@ -133,24 +106,7 @@ public class ParallelBatchSaverStrategyTests : ParallelTestBase
         var products = new TestDataBuilder().CreateValidProducts(6);
         foreach (var p in products) p.Id = 0;
 
-        var result = await saver.InsertBatchAsync(products, new InsertBatchOptions { Strategy = BatchStrategy.OneByOne });
-
-        result.InsertedEntities.Count.ShouldBe(6);
-
-        var dbProducts = QueryWithFactory(ctx => ctx.Products.ToList());
-        dbProducts.Count.ShouldBe(6);
-    }
-
-    [Fact]
-    public async Task DivideAndConquer_WithParallel_CorrectResults()
-    {
-        EnsureDatabaseCreated();
-
-        var saver = CreateSaver(maxDegreeOfParallelism: 2);
-        var products = new TestDataBuilder().CreateValidProducts(6);
-        foreach (var p in products) p.Id = 0;
-
-        var result = await saver.InsertBatchAsync(products, new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
+        var result = await saver.InsertBatchAsync(products, new InsertBatchOptions { Strategy = strategy });
 
         result.InsertedEntities.Count.ShouldBe(6);
 

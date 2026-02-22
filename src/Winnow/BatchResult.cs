@@ -5,6 +5,8 @@ namespace Winnow;
 /// </summary>
 public class BatchResult<TKey> : BatchResultBase<TKey> where TKey : notnull, IEquatable<TKey>
 {
+    private IReadOnlyList<TKey>? _failedIds;
+
     /// <summary>
     /// IDs of entities that were successfully processed.
     /// </summary>
@@ -21,7 +23,7 @@ public class BatchResult<TKey> : BatchResultBase<TKey> where TKey : notnull, IEq
     /// <summary>
     /// IDs of entities that failed processing.
     /// </summary>
-    public IReadOnlyList<TKey> FailedIds => Failures.Select(f => f.EntityId).ToList();
+    public IReadOnlyList<TKey> FailedIds => _failedIds ??= Failures.Select(f => f.EntityId).ToList();
 
     /// <inheritdoc />
     public override int FailureCount => Failures.Count;

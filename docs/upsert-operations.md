@@ -106,7 +106,7 @@ result.SuccessfulIds      // IReadOnlyList<TKey> - All successful IDs (inserted 
 result.InsertedCount      // Count of inserts
 result.UpdatedCount       // Count of updates
 result.Failures           // List<UpsertBatchFailure<TKey>> with EntityIndex, AttemptedOperation
-result.GraphHierarchy     // For graph upserts: parent ID -> GraphNode
+result.GraphHierarchy     // For graph upserts: IReadOnlyList<GraphNode<TKey>>?
 result.TraversalInfo      // Graph traversal statistics
 ```
 

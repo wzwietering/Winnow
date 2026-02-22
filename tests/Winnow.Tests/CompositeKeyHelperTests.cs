@@ -117,6 +117,87 @@ public class CompositeKeyHelperTests : TestBase
 
     #endregion
 
+    #region CompositeKey.IsAllDefaults Tests
+
+    [Fact]
+    public void IsAllDefaults_AllIntZeros_ReturnsTrue()
+    {
+        var key = new CompositeKey(0, 0);
+        key.IsAllDefaults().ShouldBeTrue();
+    }
+
+    [Fact]
+    public void IsAllDefaults_IntAndGuidDefaults_ReturnsTrue()
+    {
+        var key = new CompositeKey(0, Guid.Empty);
+        key.IsAllDefaults().ShouldBeTrue();
+    }
+
+    [Fact]
+    public void IsAllDefaults_NonDefaultInt_ReturnsFalse()
+    {
+        var key = new CompositeKey(1, Guid.Empty);
+        key.IsAllDefaults().ShouldBeFalse();
+    }
+
+    [Fact]
+    public void IsAllDefaults_NonDefaultGuid_ReturnsFalse()
+    {
+        var key = new CompositeKey(0, Guid.NewGuid());
+        key.IsAllDefaults().ShouldBeFalse();
+    }
+
+    [Fact]
+    public void IsAllDefaults_EmptyString_ReturnsTrue()
+    {
+        var key = new CompositeKey(0, string.Empty);
+        key.IsAllDefaults().ShouldBeTrue();
+    }
+
+    [Fact]
+    public void IsAllDefaults_NonEmptyString_ReturnsFalse()
+    {
+        var key = new CompositeKey(0, "abc");
+        key.IsAllDefaults().ShouldBeFalse();
+    }
+
+    [Fact]
+    public void IsAllDefaults_AllNumericTypeDefaults_ReturnsTrue()
+    {
+        var key = new CompositeKey(0, 0L, (short)0, (byte)0);
+        key.IsAllDefaults().ShouldBeTrue();
+    }
+
+    [Fact]
+    public void IsAllDefaults_NonDefaultLong_ReturnsFalse()
+    {
+        var key = new CompositeKey(0, 1L);
+        key.IsAllDefaults().ShouldBeFalse();
+    }
+
+    [Fact]
+    public void IsAllDefaults_SingleComponent_DefaultInt_ReturnsTrue()
+    {
+        var key = new CompositeKey(0);
+        key.IsAllDefaults().ShouldBeTrue();
+    }
+
+    [Fact]
+    public void IsAllDefaults_DefaultDecimal_FallbackPath_ReturnsTrue()
+    {
+        var key = new CompositeKey(0, 0m);
+        key.IsAllDefaults().ShouldBeTrue();
+    }
+
+    [Fact]
+    public void IsAllDefaults_NonDefaultDecimal_FallbackPath_ReturnsFalse()
+    {
+        var key = new CompositeKey(0, 1.5m);
+        key.IsAllDefaults().ShouldBeFalse();
+    }
+
+    #endregion
+
     #region IsCompatibleKeyType Tests
 
     [Fact]
