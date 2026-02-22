@@ -1,4 +1,5 @@
 using EfCoreUtils.Internal;
+using Microsoft.Extensions.Logging;
 
 namespace EfCoreUtils.Strategies;
 
@@ -155,7 +156,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         try
         {
             operation.PrepareEntity(entity, context);
-            await context.Context.SaveChangesAsync(cancellationToken);
+            await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, context);
             return false;
@@ -187,7 +188,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         try
         {
             operation.PrepareEntity(entity, index, context);
-            await context.Context.SaveChangesAsync(cancellationToken);
+            await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, index, context);
             return false;
@@ -219,7 +220,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         try
         {
             operation.PrepareEntity(entity, index, context);
-            await context.Context.SaveChangesAsync(cancellationToken);
+            await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, index, context);
             return false;
@@ -362,6 +363,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         var midpoint = entities.Count / 2;
         var firstHalf = entities.Take(midpoint).ToList();
         var secondHalf = entities.Skip(midpoint).ToList();
+        BatchLogger.LogDivideAndConquerSplit(context.Logger, entities.Count, firstHalf.Count, secondHalf.Count);
 
         var firstCancelled = await ProcessBatchAsync(firstHalf, context, operation, cancellationToken);
         if (firstCancelled)
@@ -381,6 +383,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         var midpoint = indexedEntities.Count / 2;
         var firstHalf = indexedEntities.Take(midpoint).ToList();
         var secondHalf = indexedEntities.Skip(midpoint).ToList();
+        BatchLogger.LogDivideAndConquerSplit(context.Logger, indexedEntities.Count, firstHalf.Count, secondHalf.Count);
 
         var firstCancelled = await ProcessInsertBatchAsync(firstHalf, context, operation, cancellationToken);
         if (firstCancelled)
@@ -400,6 +403,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         var midpoint = indexedEntities.Count / 2;
         var firstHalf = indexedEntities.Take(midpoint).ToList();
         var secondHalf = indexedEntities.Skip(midpoint).ToList();
+        BatchLogger.LogDivideAndConquerSplit(context.Logger, indexedEntities.Count, firstHalf.Count, secondHalf.Count);
 
         var firstCancelled = await ProcessUpsertBatchAsync(firstHalf, context, operation, cancellationToken);
         if (firstCancelled)
@@ -535,9 +539,14 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         try
         {
             operation.PrepareEntity(entity, context);
-            context.Context.SaveChanges();
+            SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, context);
+        }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
         }
         catch (Exception ex)
         {
@@ -559,9 +568,14 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         try
         {
             operation.PrepareEntity(entity, index, context);
-            context.Context.SaveChanges();
+            SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, index, context);
+        }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
         }
         catch (Exception ex)
         {
@@ -583,9 +597,14 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         try
         {
             operation.PrepareEntity(entity, index, context);
-            context.Context.SaveChanges();
+            SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, index, context);
+        }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
         }
         catch (Exception ex)
         {
@@ -764,6 +783,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         var midpoint = entities.Count / 2;
         var firstHalf = entities.Take(midpoint).ToList();
         var secondHalf = entities.Skip(midpoint).ToList();
+        BatchLogger.LogDivideAndConquerSplit(context.Logger, entities.Count, firstHalf.Count, secondHalf.Count);
 
         ProcessBatch(firstHalf, context, operation);
         ProcessBatch(secondHalf, context, operation);
@@ -777,6 +797,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         var midpoint = indexedEntities.Count / 2;
         var firstHalf = indexedEntities.Take(midpoint).ToList();
         var secondHalf = indexedEntities.Skip(midpoint).ToList();
+        BatchLogger.LogDivideAndConquerSplit(context.Logger, indexedEntities.Count, firstHalf.Count, secondHalf.Count);
 
         ProcessInsertBatch(firstHalf, context, operation);
         ProcessInsertBatch(secondHalf, context, operation);
@@ -790,6 +811,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         var midpoint = indexedEntities.Count / 2;
         var firstHalf = indexedEntities.Take(midpoint).ToList();
         var secondHalf = indexedEntities.Skip(midpoint).ToList();
+        BatchLogger.LogDivideAndConquerSplit(context.Logger, indexedEntities.Count, firstHalf.Count, secondHalf.Count);
 
         ProcessUpsertBatch(firstHalf, context, operation);
         ProcessUpsertBatch(secondHalf, context, operation);

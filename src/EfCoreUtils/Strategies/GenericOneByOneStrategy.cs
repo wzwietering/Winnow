@@ -1,4 +1,5 @@
 using EfCoreUtils.Internal;
+using Microsoft.Extensions.Logging;
 
 namespace EfCoreUtils.Strategies;
 
@@ -94,7 +95,7 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         try
         {
             operation.PrepareEntity(entity, context);
-            await context.Context.SaveChangesAsync(cancellationToken);
+            await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, context);
         }
@@ -106,6 +107,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
+            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+                context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, ex, context);
         }
         finally
@@ -124,7 +127,7 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         try
         {
             operation.PrepareEntity(entity, index, context);
-            await context.Context.SaveChangesAsync(cancellationToken);
+            await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, index, context);
         }
@@ -136,6 +139,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
+            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+                context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
         }
         finally
@@ -154,7 +159,7 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         try
         {
             operation.PrepareEntity(entity, index, context);
-            await context.Context.SaveChangesAsync(cancellationToken);
+            await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, index, context);
         }
@@ -178,6 +183,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
                 return;
             }
 
+            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+                context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
         }
         finally
@@ -244,13 +251,20 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         try
         {
             operation.PrepareEntity(entity, context);
-            context.Context.SaveChanges();
+            SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, context);
+        }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
         }
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
+            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+                context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, ex, context);
         }
         finally
@@ -268,13 +282,20 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         try
         {
             operation.PrepareEntity(entity, index, context);
-            context.Context.SaveChanges();
+            SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, index, context);
+        }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
         }
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
+            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+                context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
         }
         finally
@@ -292,9 +313,14 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         try
         {
             operation.PrepareEntity(entity, index, context);
-            context.Context.SaveChanges();
+            SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
             context.IncrementRoundTrip();
             operation.RecordSuccess(entity, index, context);
+        }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            throw;
         }
         catch (Exception ex)
         {
@@ -310,6 +336,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
                 return;
             }
 
+            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+                context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
         }
         finally

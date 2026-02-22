@@ -1,6 +1,7 @@
 using EfCoreUtils.Internal;
 using EfCoreUtils.Internal.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace EfCoreUtils;
 
@@ -52,12 +53,24 @@ internal class BatchStrategyContext<TEntity, TKey>
         _graphBuilder ??= new GraphHierarchyBuilder<TKey>(_context, _keyService.GetEntityIdFromEntry);
 
     internal DbContext Context => _context;
+    internal ILogger? Logger { get; init; }
+    internal RetryOptions? RetryOptions { get; init; }
     internal int RoundTripCounter => _roundTripCounter;
     internal void IncrementRoundTrip() => _roundTripCounter++;
+
+    private int _retryCounter;
+    internal int RetryCounter => _retryCounter;
+    internal void IncrementRetryCount() => _retryCounter++;
 
     // ========== Key Service Delegation ==========
 
     internal TKey GetEntityId(TEntity entity) => _keyService.GetEntityId(entity);
+
+    internal string GetEntityIdString(TEntity entity)
+    {
+        try { return GetEntityId(entity).ToString()!; }
+        catch (Exception) { return "unknown"; }
+    }
 
     // ========== Batch Result Factory Delegation ==========
 

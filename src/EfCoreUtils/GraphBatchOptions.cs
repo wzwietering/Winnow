@@ -11,10 +11,4 @@ public class GraphBatchOptions : GraphBatchOptionsBase
     /// </summary>
     public OrphanBehavior OrphanedChildBehavior { get; set; } = OrphanBehavior.Throw;
 
-    /// <summary>
-    /// Maximum allowed size for many-to-many collections.
-    /// Throws if a collection exceeds this size.
-    /// Default: 0 (no limit). Set to a positive value to enable.
-    /// </summary>
-    public int MaxManyToManyCollectionSize { get; set; } = 0;
 }

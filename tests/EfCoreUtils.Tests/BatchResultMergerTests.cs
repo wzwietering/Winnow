@@ -12,7 +12,7 @@ public class BatchResultMergerTests
     [Fact]
     public void MergeBatchResults_EmptyList_ReturnsEmptyResult()
     {
-        var result = BatchResultMerger.MergeBatchResults<int>([], TestDuration, 0);
+        var result = BatchResultMerger.MergeBatchResults<int>([], TestDuration, 0, 0);
 
         result.SuccessfulIds.ShouldBeEmpty();
         result.Failures.ShouldBeEmpty();
@@ -27,7 +27,7 @@ public class BatchResultMergerTests
             Failures = [new() { EntityId = 3, ErrorMessage = "fail" }]
         };
 
-        var result = BatchResultMerger.MergeBatchResults([single], TestDuration, 2);
+        var result = BatchResultMerger.MergeBatchResults([single], TestDuration, 2, 0);
 
         result.SuccessfulIds.ShouldBe([1, 2]);
         result.Failures.Count.ShouldBe(1);
@@ -43,7 +43,7 @@ public class BatchResultMergerTests
             Failures = [new() { EntityId = 4, ErrorMessage = "err" }]
         };
 
-        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 5);
+        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 5, 0);
 
         result.SuccessfulIds.ShouldBe([1, 2, 3]);
         result.Failures.Count.ShouldBe(1);
@@ -55,7 +55,7 @@ public class BatchResultMergerTests
     {
         var r1 = new BatchResult<int> { SuccessfulIds = [1], Duration = TimeSpan.FromSeconds(10) };
 
-        var result = BatchResultMerger.MergeBatchResults([r1], TestDuration, 1);
+        var result = BatchResultMerger.MergeBatchResults([r1], TestDuration, 1, 0);
 
         result.Duration.ShouldBe(TestDuration);
     }
@@ -65,7 +65,7 @@ public class BatchResultMergerTests
     {
         var r1 = new BatchResult<int> { SuccessfulIds = [1], DatabaseRoundTrips = 99 };
 
-        var result = BatchResultMerger.MergeBatchResults([r1], TestDuration, 7);
+        var result = BatchResultMerger.MergeBatchResults([r1], TestDuration, 7, 0);
 
         result.DatabaseRoundTrips.ShouldBe(7);
     }
@@ -76,7 +76,7 @@ public class BatchResultMergerTests
         var r1 = new BatchResult<int> { SuccessfulIds = [1] };
         var r2 = new BatchResult<int> { SuccessfulIds = [2] };
 
-        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2);
+        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2, 0);
 
         result.IsCompleteSuccess.ShouldBeTrue();
     }
@@ -89,7 +89,7 @@ public class BatchResultMergerTests
             Failures = [new() { EntityId = 1, ErrorMessage = "err" }]
         };
 
-        var result = BatchResultMerger.MergeBatchResults([r1], TestDuration, 1);
+        var result = BatchResultMerger.MergeBatchResults([r1], TestDuration, 1, 0);
 
         result.IsCompleteFailure.ShouldBeTrue();
     }
@@ -103,7 +103,7 @@ public class BatchResultMergerTests
             Failures = [new() { EntityId = 2, ErrorMessage = "err" }]
         };
 
-        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2);
+        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2, 0);
 
         result.IsPartialSuccess.ShouldBeTrue();
     }
@@ -114,9 +114,20 @@ public class BatchResultMergerTests
         var r1 = new BatchResult<int> { SuccessfulIds = [1] };
         var r2 = new BatchResult<int> { SuccessfulIds = [2], WasCancelled = true };
 
-        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2);
+        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2, 0);
 
         result.WasCancelled.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void MergeBatchResults_UsesProvidedTotalRetries()
+    {
+        var r1 = new BatchResult<int> { SuccessfulIds = [1] };
+        var r2 = new BatchResult<int> { SuccessfulIds = [2] };
+
+        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2, totalRetries: 5);
+
+        result.TotalRetries.ShouldBe(5);
     }
 
     #endregion
@@ -143,7 +154,7 @@ public class BatchResultMergerTests
         };
 
         var result = BatchResultMerger.MergeInsertResults(
-            [(r1, 0), (r2, 5)], TestDuration, 2);
+            [(r1, 0), (r2, 5)], TestDuration, 2, 0);
 
         result.InsertedEntities[0].OriginalIndex.ShouldBe(0);
         result.InsertedEntities[1].OriginalIndex.ShouldBe(1);
@@ -163,7 +174,7 @@ public class BatchResultMergerTests
         };
 
         var result = BatchResultMerger.MergeInsertResults(
-            [(r1, 0), (r2, 3)], TestDuration, 2);
+            [(r1, 0), (r2, 3)], TestDuration, 2, 0);
 
         result.Failures[0].EntityIndex.ShouldBe(0);
         result.Failures[1].EntityIndex.ShouldBe(4);
@@ -182,9 +193,23 @@ public class BatchResultMergerTests
         };
 
         var result = BatchResultMerger.MergeInsertResults(
-            [(r1, 0), (r2, 1)], TestDuration, 2);
+            [(r1, 0), (r2, 1)], TestDuration, 2, 0);
 
         result.InsertedIds.ShouldBe([10, 20]);
+    }
+
+    [Fact]
+    public void MergeInsertResults_UsesProvidedTotalRetries()
+    {
+        var r1 = new InsertBatchResult<int>
+        {
+            InsertedEntities = [new() { Id = 10, OriginalIndex = 0, Entity = "a" }]
+        };
+
+        var result = BatchResultMerger.MergeInsertResults(
+            [(r1, 0)], TestDuration, 1, totalRetries: 3);
+
+        result.TotalRetries.ShouldBe(3);
     }
 
     #endregion
@@ -210,7 +235,7 @@ public class BatchResultMergerTests
         };
 
         var result = BatchResultMerger.MergeUpsertResults(
-            [(r1, 0), (r2, 5)], TestDuration, 2);
+            [(r1, 0), (r2, 5)], TestDuration, 2, 0);
 
         result.InsertedEntities[0].OriginalIndex.ShouldBe(0);
         result.InsertedEntities[1].OriginalIndex.ShouldBe(5);
@@ -228,7 +253,7 @@ public class BatchResultMergerTests
         };
 
         var result = BatchResultMerger.MergeUpsertResults(
-            [(r1, 10)], TestDuration, 1);
+            [(r1, 10)], TestDuration, 1, 0);
 
         result.UpdatedEntities[0].OriginalIndex.ShouldBe(12);
     }
@@ -245,9 +270,26 @@ public class BatchResultMergerTests
         };
 
         var result = BatchResultMerger.MergeUpsertResults(
-            [(r1, 7)], TestDuration, 1);
+            [(r1, 7)], TestDuration, 1, 0);
 
         result.Failures[0].EntityIndex.ShouldBe(7);
+    }
+
+    [Fact]
+    public void MergeUpsertResults_UsesProvidedTotalRetries()
+    {
+        var r1 = new UpsertBatchResult<int>
+        {
+            InsertedEntities =
+            [
+                new() { Id = 10, OriginalIndex = 0, Entity = "a", Operation = UpsertOperationType.Insert }
+            ]
+        };
+
+        var result = BatchResultMerger.MergeUpsertResults(
+            [(r1, 0)], TestDuration, 1, totalRetries: 7);
+
+        result.TotalRetries.ShouldBe(7);
     }
 
     #endregion
@@ -268,7 +310,7 @@ public class BatchResultMergerTests
             TraversalInfo = new() { TotalEntitiesTraversed = 3, MaxDepthReached = 2 }
         };
 
-        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2);
+        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2, 0);
 
         result.TraversalInfo.ShouldNotBeNull();
         result.TraversalInfo!.TotalEntitiesTraversed.ShouldBe(8);
@@ -288,7 +330,7 @@ public class BatchResultMergerTests
             TraversalInfo = new() { MaxDepthReached = 1 }
         };
 
-        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2);
+        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2, 0);
 
         result.TraversalInfo!.MaxDepthReached.ShouldBe(3);
     }
@@ -313,7 +355,7 @@ public class BatchResultMergerTests
             }
         };
 
-        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2);
+        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2, 0);
 
         result.TraversalInfo!.EntitiesByDepth[0].ShouldBe(3);
         result.TraversalInfo!.EntitiesByDepth[1].ShouldBe(3);
@@ -334,7 +376,7 @@ public class BatchResultMergerTests
             TraversalInfo = new() { JoinRecordsCreated = 2, JoinRecordsRemoved = 3 }
         };
 
-        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2);
+        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2, 0);
 
         result.TraversalInfo!.JoinRecordsCreated.ShouldBe(6);
         result.TraversalInfo!.JoinRecordsRemoved.ShouldBe(4);
@@ -367,7 +409,7 @@ public class BatchResultMergerTests
             }
         };
 
-        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2);
+        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2, 0);
 
         result.TraversalInfo!.JoinOperationsByNavigation["Student.Courses"].ShouldBe((5, 1));
         result.TraversalInfo!.JoinOperationsByNavigation["Course.Students"].ShouldBe((1, 1));
@@ -387,7 +429,7 @@ public class BatchResultMergerTests
             GraphHierarchy = [new() { EntityId = 2, EntityType = "B", Depth = 0 }]
         };
 
-        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2);
+        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2, 0);
 
         result.GraphHierarchy.ShouldNotBeNull();
         result.GraphHierarchy!.Count.ShouldBe(2);
@@ -399,7 +441,7 @@ public class BatchResultMergerTests
         var r1 = new BatchResult<int> { SuccessfulIds = [1] };
         var r2 = new BatchResult<int> { SuccessfulIds = [2] };
 
-        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2);
+        var result = BatchResultMerger.MergeBatchResults([r1, r2], TestDuration, 2, 0);
 
         result.GraphHierarchy.ShouldBeNull();
     }
@@ -409,7 +451,7 @@ public class BatchResultMergerTests
     {
         var r1 = new BatchResult<int> { SuccessfulIds = [1] };
 
-        var result = BatchResultMerger.MergeBatchResults([r1], TestDuration, 1);
+        var result = BatchResultMerger.MergeBatchResults([r1], TestDuration, 1, 0);
 
         result.TraversalInfo.ShouldBeNull();
     }

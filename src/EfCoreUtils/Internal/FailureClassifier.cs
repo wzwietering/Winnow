@@ -23,4 +23,25 @@ internal static class FailureClassifier
                message.Contains("duplicate key value violates") ||  // PostgreSQL
                message.Contains("duplicate entry");                 // MySQL
     }
+
+    internal static bool IsTransient(Exception ex) => ex switch
+    {
+        DbUpdateConcurrencyException => false,
+        DbUpdateException dbEx => IsTransientDatabaseError(dbEx),
+        TimeoutException => true,
+        _ => false
+    };
+
+    private static bool IsTransientDatabaseError(DbUpdateException ex)
+    {
+        var message = (ex.InnerException?.Message ?? ex.Message).ToLowerInvariant();
+        return message.Contains("deadlock") ||
+               message.Contains("lock timeout") ||
+               message.Contains("serialize access") ||
+               message.Contains("connection failed") ||
+               message.Contains("connection reset") ||
+               message.Contains("connection timed out") ||
+               message.Contains("command timeout") ||
+               message.Contains("database is locked");
+    }
 }

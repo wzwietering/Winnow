@@ -21,7 +21,8 @@ internal static class BatchResultFactory
     internal static BatchResult<TKey> Enrich<TKey>(
         BatchResult<TKey> result,
         TimeSpan duration,
-        int roundTrips)
+        int roundTrips,
+        int totalRetries = 0)
         where TKey : notnull, IEquatable<TKey> => new()
         {
             SuccessfulIds = result.SuccessfulIds,
@@ -30,7 +31,8 @@ internal static class BatchResultFactory
             DatabaseRoundTrips = roundTrips,
             GraphHierarchy = result.GraphHierarchy,
             TraversalInfo = result.TraversalInfo,
-            WasCancelled = result.WasCancelled
+            WasCancelled = result.WasCancelled,
+            TotalRetries = totalRetries
         };
 
     internal static InsertBatchResult<TKey> CreateEmptyInsert<TKey>(TimeSpan duration, bool includeGraph = false)
@@ -47,7 +49,8 @@ internal static class BatchResultFactory
     internal static InsertBatchResult<TKey> EnrichInsert<TKey>(
         InsertBatchResult<TKey> result,
         TimeSpan duration,
-        int roundTrips)
+        int roundTrips,
+        int totalRetries = 0)
         where TKey : notnull, IEquatable<TKey> => new()
         {
             InsertedEntities = result.InsertedEntities,
@@ -56,7 +59,8 @@ internal static class BatchResultFactory
             DatabaseRoundTrips = roundTrips,
             GraphHierarchy = result.GraphHierarchy,
             TraversalInfo = result.TraversalInfo,
-            WasCancelled = result.WasCancelled
+            WasCancelled = result.WasCancelled,
+            TotalRetries = totalRetries
         };
 
     internal static UpsertBatchResult<TKey> CreateEmptyUpsert<TKey>(TimeSpan duration, bool includeGraph = false)
@@ -74,7 +78,8 @@ internal static class BatchResultFactory
     internal static UpsertBatchResult<TKey> EnrichUpsert<TKey>(
         UpsertBatchResult<TKey> result,
         TimeSpan duration,
-        int roundTrips)
+        int roundTrips,
+        int totalRetries = 0)
         where TKey : notnull, IEquatable<TKey> => new()
         {
             InsertedEntities = result.InsertedEntities,
@@ -84,7 +89,8 @@ internal static class BatchResultFactory
             DatabaseRoundTrips = roundTrips,
             GraphHierarchy = result.GraphHierarchy,
             TraversalInfo = result.TraversalInfo,
-            WasCancelled = result.WasCancelled
+            WasCancelled = result.WasCancelled,
+            TotalRetries = totalRetries
         };
 
     private static GraphTraversalResult<TKey> CreateEmptyTraversalInfo<TKey>()

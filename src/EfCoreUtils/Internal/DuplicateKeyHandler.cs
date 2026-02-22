@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace EfCoreUtils.Internal;
 
@@ -41,7 +42,7 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
         try
         {
             context.Context.Entry(entity).State = EntityState.Modified;
-            context.Context.SaveChanges();
+            SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
             context.IncrementRoundTrip();
             operation.RecordSuccessAsUpdate(entity, index, context);
         }
@@ -66,7 +67,7 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
         try
         {
             context.Context.Entry(entity).State = EntityState.Modified;
-            await context.Context.SaveChangesAsync(cancellationToken);
+            await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
             context.IncrementRoundTrip();
             operation.RecordSuccessAsUpdate(entity, index, context);
             return false;
