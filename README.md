@@ -1,4 +1,4 @@
-# EfCoreUtils
+# Winnow
 
 Batch operations for Entity Framework Core with per-entity failure isolation.
 
@@ -15,12 +15,12 @@ if (!result.IsCompleteSuccess)
 
 ## Motivation
 
-Entity Framework Core's `SaveChanges()` operates atomically: a single invalid entity causes the entire batch to fail. EfCoreUtils provides failure isolation, allowing valid entities to persist while capturing detailed failure information for invalid ones.
+Entity Framework Core's `SaveChanges()` operates atomically: a single invalid entity causes the entire batch to fail. Winnow provides failure isolation, allowing valid entities to persist while capturing detailed failure information for invalid ones.
 
 ## Installation
 
 ```bash
-dotnet add package EfCoreUtils
+dotnet add package Winnow
 ```
 
 **Requirements:** .NET 10.0+, Entity Framework Core 10.0+
@@ -267,7 +267,7 @@ For full result type documentation, see [Results Reference](docs/results-referen
 
 ## When NOT to Use This
 
-EfCoreUtils is not the right choice for every scenario:
+Winnow is not the right choice for every scenario:
 
 - **Single entity operations**: Standard EF Core `Add`/`Update`/`Remove` + `SaveChanges()` is simpler
 - **All-or-nothing transactions**: If a single failure should roll back everything, use standard `SaveChanges()`

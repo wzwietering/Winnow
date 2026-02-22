@@ -33,7 +33,7 @@ jobs:
       run: dotnet test --configuration Release --no-build --verbosity normal
 
     - name: Pack
-      run: dotnet pack src/EfCoreUtils/EfCoreUtils.csproj --configuration Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkgs
+      run: dotnet pack src/Winnow/Winnow.csproj --configuration Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} --output ./nupkgs
 
     - name: Push to NuGet
       run: |

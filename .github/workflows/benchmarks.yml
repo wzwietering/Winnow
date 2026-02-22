@@ -23,7 +23,7 @@ jobs:
     - name: Run benchmarks
       run: >
         dotnet run -c Release
-        --project benchmarks/EfCoreUtils.Benchmarks
+        --project benchmarks/Winnow.Benchmarks
         --
         --filter '${{ github.event.inputs.filter }}'
 

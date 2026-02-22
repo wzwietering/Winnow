@@ -152,13 +152,13 @@ Memory follows the same pattern:
 
 ```bash
 # All providers (requires Docker for PostgreSQL/SQL Server)
-dotnet run -c Release --project benchmarks/EfCoreUtils.Benchmarks
+dotnet run -c Release --project benchmarks/Winnow.Benchmarks
 
 # Specific benchmark class
-dotnet run -c Release --project benchmarks/EfCoreUtils.Benchmarks -- --filter '*InsertBenchmarks*'
+dotnet run -c Release --project benchmarks/Winnow.Benchmarks -- --filter '*InsertBenchmarks*'
 
 # SQLite only (no Docker required)
-dotnet run -c Release --project benchmarks/EfCoreUtils.Benchmarks -- --sqlite-only
+dotnet run -c Release --project benchmarks/Winnow.Benchmarks -- --sqlite-only
 ```
 
-Results are written to `benchmarks/EfCoreUtils.Benchmarks/BenchmarkDotNet.Artifacts/results/`.
+Results are written to `benchmarks/Winnow.Benchmarks/BenchmarkDotNet.Artifacts/results/`.
