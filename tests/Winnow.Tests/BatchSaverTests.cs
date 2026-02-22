@@ -144,12 +144,147 @@ public class BatchSaverTests : TestBase
     }
 
     [Fact]
-    public void UpdateEntities_WithNullCollection_ThrowsArgumentException()
+    public void UpdateBatch_WithNullCollection_ThrowsArgumentNullException()
     {
         using var context = CreateContext();
         var saver = new BatchSaver<Product, int>(context);
 
         Should.Throw<ArgumentNullException>(() => saver.UpdateBatch(null!));
+    }
+
+    [Fact]
+    public async Task UpdateBatchAsync_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        await Should.ThrowAsync<ArgumentNullException>(() => saver.UpdateBatchAsync(null!));
+    }
+
+    [Fact]
+    public void InsertBatch_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        Should.Throw<ArgumentNullException>(() => saver.InsertBatch(null!));
+    }
+
+    [Fact]
+    public async Task InsertBatchAsync_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        await Should.ThrowAsync<ArgumentNullException>(() => saver.InsertBatchAsync(null!));
+    }
+
+    [Fact]
+    public void DeleteBatch_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        Should.Throw<ArgumentNullException>(() => saver.DeleteBatch(null!));
+    }
+
+    [Fact]
+    public async Task DeleteBatchAsync_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        await Should.ThrowAsync<ArgumentNullException>(() => saver.DeleteBatchAsync(null!));
+    }
+
+    [Fact]
+    public void UpsertBatch_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        Should.Throw<ArgumentNullException>(() => saver.UpsertBatch(null!));
+    }
+
+    [Fact]
+    public async Task UpsertBatchAsync_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        await Should.ThrowAsync<ArgumentNullException>(() => saver.UpsertBatchAsync(null!));
+    }
+
+    [Fact]
+    public void UpdateGraphBatch_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        Should.Throw<ArgumentNullException>(() => saver.UpdateGraphBatch(null!));
+    }
+
+    [Fact]
+    public async Task UpdateGraphBatchAsync_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        await Should.ThrowAsync<ArgumentNullException>(() => saver.UpdateGraphBatchAsync(null!));
+    }
+
+    [Fact]
+    public void InsertGraphBatch_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        Should.Throw<ArgumentNullException>(() => saver.InsertGraphBatch(null!));
+    }
+
+    [Fact]
+    public async Task InsertGraphBatchAsync_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        await Should.ThrowAsync<ArgumentNullException>(() => saver.InsertGraphBatchAsync(null!));
+    }
+
+    [Fact]
+    public void DeleteGraphBatch_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        Should.Throw<ArgumentNullException>(() => saver.DeleteGraphBatch(null!));
+    }
+
+    [Fact]
+    public async Task DeleteGraphBatchAsync_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        await Should.ThrowAsync<ArgumentNullException>(() => saver.DeleteGraphBatchAsync(null!));
+    }
+
+    [Fact]
+    public void UpsertGraphBatch_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        Should.Throw<ArgumentNullException>(() => saver.UpsertGraphBatch(null!));
+    }
+
+    [Fact]
+    public async Task UpsertGraphBatchAsync_WithNullCollection_ThrowsArgumentNullException()
+    {
+        using var context = CreateContext();
+        var saver = new BatchSaver<Product, int>(context);
+
+        await Should.ThrowAsync<ArgumentNullException>(() => saver.UpsertGraphBatchAsync(null!));
     }
 
     [Fact]

@@ -174,7 +174,6 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
 
             if (DuplicateKeyHandler<TEntity, TKey>.ShouldHandle(ex, index, operation, out var strategy))
             {
-                operation.CleanupEntity(entity, context);
                 if (strategy == DuplicateKeyStrategy.RetryAsUpdate)
                 {
                     await DuplicateKeyHandler<TEntity, TKey>.RetryAsUpdateAsync(
@@ -328,7 +327,6 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
 
             if (DuplicateKeyHandler<TEntity, TKey>.ShouldHandle(ex, index, operation, out var strategy))
             {
-                operation.CleanupEntity(entity, context);
                 if (strategy == DuplicateKeyStrategy.RetryAsUpdate)
                 {
                     DuplicateKeyHandler<TEntity, TKey>.RetryAsUpdate(entity, index, context, operation);

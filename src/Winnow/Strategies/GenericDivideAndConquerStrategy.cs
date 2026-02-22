@@ -236,7 +236,6 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
             if (DuplicateKeyHandler<TEntity, TKey>.ShouldHandle(ex, index, operation, out var strategy))
             {
-                operation.CleanupEntity(entity, context);
                 if (strategy == DuplicateKeyStrategy.RetryAsUpdate)
                 {
                     return await DuplicateKeyHandler<TEntity, TKey>.RetryAsUpdateAsync(
@@ -612,7 +611,6 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
             if (DuplicateKeyHandler<TEntity, TKey>.ShouldHandle(ex, index, operation, out var strategy))
             {
-                operation.CleanupEntity(entity, context);
                 if (strategy == DuplicateKeyStrategy.RetryAsUpdate)
                 {
                     DuplicateKeyHandler<TEntity, TKey>.RetryAsUpdate(entity, index, context, operation);
@@ -646,6 +644,12 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
             RecordAllSuccesses(entities, context, operation);
             return true;
         }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            CleanupAllEntities(entities, context, operation);
+            throw;
+        }
         catch
         {
             context.IncrementRoundTrip();
@@ -672,6 +676,12 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
             RecordAllInsertSuccesses(indexedEntities, context, operation);
             return true;
         }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            CleanupAllInsertEntities(indexedEntities, context, operation);
+            throw;
+        }
         catch
         {
             context.IncrementRoundTrip();
@@ -697,6 +707,12 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
             RecordAllUpsertSuccesses(indexedEntities, context, operation);
             return true;
+        }
+        catch (OperationCanceledException)
+        {
+            context.IncrementRoundTrip();
+            CleanupAllUpsertEntities(indexedEntities, context, operation);
+            throw;
         }
         catch
         {
