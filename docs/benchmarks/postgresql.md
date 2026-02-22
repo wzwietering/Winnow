@@ -4,9 +4,9 @@ Performance measurements on PostgreSQL (via Docker) using BenchmarkDotNet. All b
 
 **Environment:** Windows 11, Intel Core Ultra 5 225U (12 cores), .NET 10.0.3, BenchmarkDotNet v0.14.0
 
-## Raw EF Core vs Library
+## Raw EF Core vs Winnow
 
-Compares `context.AddRange(); context.SaveChanges()` against the library's strategies.
+Compares `context.AddRange(); context.SaveChanges()` against Winnow's strategies.
 
 | BatchSize | Raw EF Core | D&C | Ratio | OneByOne | Ratio |
 |-----------|-------------|-----|-------|----------|-------|
@@ -14,7 +14,7 @@ Compares `context.AddRange(); context.SaveChanges()` against the library's strat
 | 1,000 | 80.9 ms | 86.5 ms | 1.07x | 733.8 ms | 9.1x |
 | 5,000 | 268.7 ms | 273.5 ms | 1.02x | 3,409.0 ms | 12.7x |
 
-DivideAndConquer adds 2-17% overhead compared to raw EF Core. At 5,000 entities it's only 2% slower while providing error isolation and result tracking. The library adds ~31-34% memory overhead.
+DivideAndConquer adds 2-17% overhead compared to raw EF Core. At 5,000 entities it's only 2% slower while providing error isolation and result tracking. Winnow adds ~31-34% memory overhead.
 
 OneByOne is 9-13x slower than raw EF Core. This is much lower than on SQLite (66-374x) because PostgreSQL handles individual round-trips efficiently through connection pooling and server-side processing.
 

@@ -5,7 +5,7 @@ namespace Winnow.Tests.Infrastructure;
 
 public abstract class ParallelTestBase : TestBase
 {
-    protected readonly string DbPath = Path.Combine(Path.GetTempPath(), $"efcoreutils_test_{Guid.NewGuid():N}.db");
+    protected readonly string DbPath = Path.Combine(Path.GetTempPath(), $"winnow_test_{Guid.NewGuid():N}.db");
 
     protected Func<DbContext> CreateContextFactory()
     {

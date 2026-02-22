@@ -336,7 +336,7 @@ public class RetryBehaviorTests : IDisposable
     [Fact]
     public async Task ParallelInsertBatchAsync_tracks_TotalRetries()
     {
-        var dbPath = Path.Combine(Path.GetTempPath(), $"efcoreutils_retry_{Guid.NewGuid():N}.db");
+        var dbPath = Path.Combine(Path.GetTempPath(), $"winnow_retry_{Guid.NewGuid():N}.db");
         try
         {
             CreateSchemaOnDisk(dbPath);

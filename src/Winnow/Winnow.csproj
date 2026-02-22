@@ -8,7 +8,7 @@
     <PackageId>Winnow</PackageId>
     <Description>Winnow — batch operations for Entity Framework Core with per-entity failure isolation, graph traversal, and parallel execution. Separates successful saves from failures using divide-and-conquer.</Description>
     <Authors>wzwietering</Authors>
-    <PackageTags>efcore;entityframeworkcore;entityframework;batch;bulk;upsert;insert;update;delete;graph;failure-isolation;parallel;divide-and-conquer</PackageTags>
+    <PackageTags>winnow;efcore;entityframeworkcore;entityframework;batch;bulk;upsert;insert;update;delete;graph;failure-isolation;parallel;divide-and-conquer</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/wzwietering/Winnow</RepositoryUrl>

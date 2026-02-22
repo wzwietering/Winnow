@@ -1,5 +1,7 @@
 # Winnow
 
+*Separate the good saves from the bad.*
+
 Batch operations for Entity Framework Core with per-entity failure isolation.
 
 ```csharp
@@ -15,7 +17,7 @@ if (!result.IsCompleteSuccess)
 
 ## Motivation
 
-Entity Framework Core's `SaveChanges()` operates atomically: a single invalid entity causes the entire batch to fail. Winnow provides failure isolation, allowing valid entities to persist while capturing detailed failure information for invalid ones.
+Entity Framework Core's `SaveChanges()` operates atomically: a single invalid entity causes the entire batch to fail. Winnow — named for the process of separating grain from chaff — winnows out the failures, allowing valid entities to persist while capturing detailed failure information for invalid ones.
 
 ## Installation
 
@@ -221,7 +223,7 @@ For full results, see [SQLite](docs/benchmarks/sqlite.md), [PostgreSQL](docs/ben
 
 ## Handling Results
 
-All operations return detailed results:
+Every batch operation winnows out the failures, giving you detailed results for each entity:
 
 ```csharp
 var result = saver.UpdateBatch(products);
