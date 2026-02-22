@@ -1,5 +1,10 @@
-﻿namespace Winnow;
+namespace Winnow;
 
+/// <summary>
+/// Provides batch CRUD operations with failure isolation for entities with a known key type.
+/// </summary>
+/// <typeparam name="TEntity">The entity type to save.</typeparam>
+/// <typeparam name="TKey">The primary key type.</typeparam>
 public interface IBatchSaver<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
@@ -61,16 +66,42 @@ public interface IBatchSaver<TEntity, TKey>
     /// Insert entities individually with failure isolation.
     /// </summary>
     InsertBatchResult<TKey> InsertBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="InsertBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entities to insert.</param>
+    /// <param name="options">Insert operation options.</param>
     InsertBatchResult<TKey> InsertBatch(IEnumerable<TEntity> entities, InsertBatchOptions options);
+
+    /// <inheritdoc cref="InsertBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entities to insert.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<InsertBatchResult<TKey>> InsertBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="InsertBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entities to insert.</param>
+    /// <param name="options">Insert operation options.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<InsertBatchResult<TKey>> InsertBatchAsync(IEnumerable<TEntity> entities, InsertBatchOptions options, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Insert entity graphs (parent + children) with failure isolation.
     /// </summary>
     InsertBatchResult<TKey> InsertGraphBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="InsertGraphBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entity graphs to insert.</param>
+    /// <param name="options">Insert graph operation options.</param>
     InsertBatchResult<TKey> InsertGraphBatch(IEnumerable<TEntity> entities, InsertGraphBatchOptions options);
+
+    /// <inheritdoc cref="InsertGraphBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entity graphs to insert.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="InsertGraphBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entity graphs to insert.</param>
+    /// <param name="options">Insert graph operation options.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(IEnumerable<TEntity> entities, InsertGraphBatchOptions options, CancellationToken cancellationToken = default);
 
     // === DELETE OPERATIONS ===
@@ -79,16 +110,42 @@ public interface IBatchSaver<TEntity, TKey>
     /// Delete entities individually with failure isolation.
     /// </summary>
     BatchResult<TKey> DeleteBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="DeleteBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entities to delete.</param>
+    /// <param name="options">Delete operation options.</param>
     BatchResult<TKey> DeleteBatch(IEnumerable<TEntity> entities, DeleteBatchOptions options);
+
+    /// <inheritdoc cref="DeleteBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entities to delete.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<BatchResult<TKey>> DeleteBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="DeleteBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entities to delete.</param>
+    /// <param name="options">Delete operation options.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<BatchResult<TKey>> DeleteBatchAsync(IEnumerable<TEntity> entities, DeleteBatchOptions options, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Delete entity graphs (parent + children) with failure isolation.
     /// </summary>
     BatchResult<TKey> DeleteGraphBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="DeleteGraphBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entity graphs to delete.</param>
+    /// <param name="options">Delete graph operation options.</param>
     BatchResult<TKey> DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options);
+
+    /// <inheritdoc cref="DeleteGraphBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entity graphs to delete.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<BatchResult<TKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="DeleteGraphBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entity graphs to delete.</param>
+    /// <param name="options">Delete graph operation options.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<BatchResult<TKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default);
 
     // === UPSERT OPERATIONS ===
@@ -239,26 +296,54 @@ public interface IBatchSaver<TEntity>
 
     // === INSERT OPERATIONS ===
 
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.InsertBatch(IEnumerable{TEntity})"/>
     InsertBatchResult<CompositeKey> InsertBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.InsertBatch(IEnumerable{TEntity}, InsertBatchOptions)"/>
     InsertBatchResult<CompositeKey> InsertBatch(IEnumerable<TEntity> entities, InsertBatchOptions options);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.InsertBatchAsync(IEnumerable{TEntity}, CancellationToken)"/>
     Task<InsertBatchResult<CompositeKey>> InsertBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.InsertBatchAsync(IEnumerable{TEntity}, InsertBatchOptions, CancellationToken)"/>
     Task<InsertBatchResult<CompositeKey>> InsertBatchAsync(IEnumerable<TEntity> entities, InsertBatchOptions options, CancellationToken cancellationToken = default);
 
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.InsertGraphBatch(IEnumerable{TEntity})"/>
     InsertBatchResult<CompositeKey> InsertGraphBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.InsertGraphBatch(IEnumerable{TEntity}, InsertGraphBatchOptions)"/>
     InsertBatchResult<CompositeKey> InsertGraphBatch(IEnumerable<TEntity> entities, InsertGraphBatchOptions options);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.InsertGraphBatchAsync(IEnumerable{TEntity}, CancellationToken)"/>
     Task<InsertBatchResult<CompositeKey>> InsertGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.InsertGraphBatchAsync(IEnumerable{TEntity}, InsertGraphBatchOptions, CancellationToken)"/>
     Task<InsertBatchResult<CompositeKey>> InsertGraphBatchAsync(IEnumerable<TEntity> entities, InsertGraphBatchOptions options, CancellationToken cancellationToken = default);
 
     // === DELETE OPERATIONS ===
 
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.DeleteBatch(IEnumerable{TEntity})"/>
     BatchResult<CompositeKey> DeleteBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.DeleteBatch(IEnumerable{TEntity}, DeleteBatchOptions)"/>
     BatchResult<CompositeKey> DeleteBatch(IEnumerable<TEntity> entities, DeleteBatchOptions options);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.DeleteBatchAsync(IEnumerable{TEntity}, CancellationToken)"/>
     Task<BatchResult<CompositeKey>> DeleteBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.DeleteBatchAsync(IEnumerable{TEntity}, DeleteBatchOptions, CancellationToken)"/>
     Task<BatchResult<CompositeKey>> DeleteBatchAsync(IEnumerable<TEntity> entities, DeleteBatchOptions options, CancellationToken cancellationToken = default);
 
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.DeleteGraphBatch(IEnumerable{TEntity})"/>
     BatchResult<CompositeKey> DeleteGraphBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.DeleteGraphBatch(IEnumerable{TEntity}, DeleteGraphBatchOptions)"/>
     BatchResult<CompositeKey> DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.DeleteGraphBatchAsync(IEnumerable{TEntity}, CancellationToken)"/>
     Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.DeleteGraphBatchAsync(IEnumerable{TEntity}, DeleteGraphBatchOptions, CancellationToken)"/>
     Task<BatchResult<CompositeKey>> DeleteGraphBatchAsync(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default);
 
     // === UPSERT OPERATIONS ===

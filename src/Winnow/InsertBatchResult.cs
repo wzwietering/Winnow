@@ -8,13 +8,26 @@ public class InsertBatchResult<TKey> : BatchResultBase<TKey> where TKey : notnul
 {
     private IReadOnlyList<TKey>? _insertedIds;
 
+    /// <summary>
+    /// Entities that were successfully inserted with their generated IDs.
+    /// </summary>
     public IReadOnlyList<InsertedEntity<TKey>> InsertedEntities { get; init; } = [];
 
+    /// <summary>
+    /// Database-generated IDs of all successfully inserted entities.
+    /// </summary>
     public IReadOnlyList<TKey> InsertedIds =>
         _insertedIds ??= InsertedEntities.Select(e => e.Id).ToList();
+
+    /// <inheritdoc />
     public override int SuccessCount => InsertedEntities.Count;
 
+    /// <summary>
+    /// Details of each failed insert operation.
+    /// </summary>
     public IReadOnlyList<InsertBatchFailure> Failures { get; init; } = [];
+
+    /// <inheritdoc />
     public override int FailureCount => Failures.Count;
 }
 
@@ -49,7 +62,18 @@ public class InsertBatchFailure
     /// </summary>
     public int EntityIndex { get; init; }
 
+    /// <summary>
+    /// Human-readable description of the failure.
+    /// </summary>
     public string ErrorMessage { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Classified reason for the failure.
+    /// </summary>
     public FailureReason Reason { get; init; }
+
+    /// <summary>
+    /// The original exception, if available.
+    /// </summary>
     public Exception? Exception { get; init; }
 }
