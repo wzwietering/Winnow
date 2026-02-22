@@ -50,6 +50,7 @@ public sealed class NavigationFilter
 
     internal IReadOnlyDictionary<Type, IReadOnlySet<string>> Rules => _rules;
 
+    /// <inheritdoc />
     public override string ToString()
     {
         var mode = IsIncludeMode ? "Include" : "Exclude";

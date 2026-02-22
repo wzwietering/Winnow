@@ -48,6 +48,14 @@ public class ParallelBatchSaver<TEntity, TKey>
     /// </remarks>
     public int MaxDegreeOfParallelism { get; }
 
+    /// <summary>
+    /// Creates a ParallelBatchSaver with a context factory for parallel database operations.
+    /// </summary>
+    /// <param name="contextFactory">Factory that creates a new DbContext on each call.</param>
+    /// <param name="maxDegreeOfParallelism">Maximum parallel partitions (default: 4, minimum: 1).</param>
+    /// <param name="logger">Optional logger for operation diagnostics.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when maxDegreeOfParallelism is less than 1.</exception>
+    /// <exception cref="ArgumentException">Thrown when factory returns the same instance twice.</exception>
     public ParallelBatchSaver(
         Func<DbContext> contextFactory,
         int maxDegreeOfParallelism = 4,
@@ -68,16 +76,20 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     // === UPDATE OPERATIONS ===
 
+    /// <inheritdoc />
     public BatchResult<TKey> UpdateBatch(IEnumerable<TEntity> entities) =>
         UpdateBatch(entities, new BatchOptions());
 
+    /// <inheritdoc />
     public BatchResult<TKey> UpdateBatch(IEnumerable<TEntity> entities, BatchOptions options) =>
         ExecuteSync(saver => saver.UpdateBatch(entities, options));
 
+    /// <inheritdoc />
     public Task<BatchResult<TKey>> UpdateBatchAsync(
         IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
         UpdateBatchAsync(entities, new BatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     /// <remarks>Not atomic across partitions. If one partition fails, others that already committed will NOT be rolled back.</remarks>
     public Task<BatchResult<TKey>> UpdateBatchAsync(
         IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default) =>
@@ -90,16 +102,20 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     // === UPDATE GRAPH OPERATIONS ===
 
+    /// <inheritdoc />
     public BatchResult<TKey> UpdateGraphBatch(IEnumerable<TEntity> entities) =>
         UpdateGraphBatch(entities, new GraphBatchOptions());
 
+    /// <inheritdoc />
     public BatchResult<TKey> UpdateGraphBatch(IEnumerable<TEntity> entities, GraphBatchOptions options) =>
         ExecuteSync(saver => saver.UpdateGraphBatch(entities, options));
 
+    /// <inheritdoc />
     public Task<BatchResult<TKey>> UpdateGraphBatchAsync(
         IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
         UpdateGraphBatchAsync(entities, new GraphBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     /// <remarks>Not atomic across partitions. If one partition fails, others that already committed will NOT be rolled back.</remarks>
     public Task<BatchResult<TKey>> UpdateGraphBatchAsync(
         IEnumerable<TEntity> entities, GraphBatchOptions options, CancellationToken cancellationToken = default) =>
@@ -112,16 +128,20 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     // === INSERT OPERATIONS ===
 
+    /// <inheritdoc />
     public InsertBatchResult<TKey> InsertBatch(IEnumerable<TEntity> entities) =>
         InsertBatch(entities, new InsertBatchOptions());
 
+    /// <inheritdoc />
     public InsertBatchResult<TKey> InsertBatch(IEnumerable<TEntity> entities, InsertBatchOptions options) =>
         ExecuteSync(saver => saver.InsertBatch(entities, options));
 
+    /// <inheritdoc />
     public Task<InsertBatchResult<TKey>> InsertBatchAsync(
         IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
         InsertBatchAsync(entities, new InsertBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     /// <remarks>Not atomic across partitions. If one partition fails, others that already committed will NOT be rolled back.</remarks>
     public Task<InsertBatchResult<TKey>> InsertBatchAsync(
         IEnumerable<TEntity> entities, InsertBatchOptions options, CancellationToken cancellationToken = default) =>
@@ -134,16 +154,20 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     // === INSERT GRAPH OPERATIONS ===
 
+    /// <inheritdoc />
     public InsertBatchResult<TKey> InsertGraphBatch(IEnumerable<TEntity> entities) =>
         InsertGraphBatch(entities, new InsertGraphBatchOptions());
 
+    /// <inheritdoc />
     public InsertBatchResult<TKey> InsertGraphBatch(IEnumerable<TEntity> entities, InsertGraphBatchOptions options) =>
         ExecuteSync(saver => saver.InsertGraphBatch(entities, options));
 
+    /// <inheritdoc />
     public Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(
         IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
         InsertGraphBatchAsync(entities, new InsertGraphBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     /// <remarks>Not atomic across partitions. If one partition fails, others that already committed will NOT be rolled back.</remarks>
     public Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(
         IEnumerable<TEntity> entities, InsertGraphBatchOptions options, CancellationToken cancellationToken = default) =>
@@ -156,16 +180,20 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     // === DELETE OPERATIONS ===
 
+    /// <inheritdoc />
     public BatchResult<TKey> DeleteBatch(IEnumerable<TEntity> entities) =>
         DeleteBatch(entities, new DeleteBatchOptions());
 
+    /// <inheritdoc />
     public BatchResult<TKey> DeleteBatch(IEnumerable<TEntity> entities, DeleteBatchOptions options) =>
         ExecuteSync(saver => saver.DeleteBatch(entities, options));
 
+    /// <inheritdoc />
     public Task<BatchResult<TKey>> DeleteBatchAsync(
         IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
         DeleteBatchAsync(entities, new DeleteBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     /// <remarks>Not atomic across partitions. If one partition fails, others that already committed will NOT be rolled back.</remarks>
     public Task<BatchResult<TKey>> DeleteBatchAsync(
         IEnumerable<TEntity> entities, DeleteBatchOptions options, CancellationToken cancellationToken = default) =>
@@ -178,16 +206,20 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     // === DELETE GRAPH OPERATIONS ===
 
+    /// <inheritdoc />
     public BatchResult<TKey> DeleteGraphBatch(IEnumerable<TEntity> entities) =>
         DeleteGraphBatch(entities, new DeleteGraphBatchOptions());
 
+    /// <inheritdoc />
     public BatchResult<TKey> DeleteGraphBatch(IEnumerable<TEntity> entities, DeleteGraphBatchOptions options) =>
         ExecuteSync(saver => saver.DeleteGraphBatch(entities, options));
 
+    /// <inheritdoc />
     public Task<BatchResult<TKey>> DeleteGraphBatchAsync(
         IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
         DeleteGraphBatchAsync(entities, new DeleteGraphBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     /// <remarks>Not atomic across partitions. If one partition fails, others that already committed will NOT be rolled back.</remarks>
     public Task<BatchResult<TKey>> DeleteGraphBatchAsync(
         IEnumerable<TEntity> entities, DeleteGraphBatchOptions options, CancellationToken cancellationToken = default) =>
@@ -200,16 +232,20 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     // === UPSERT OPERATIONS ===
 
+    /// <inheritdoc />
     public UpsertBatchResult<TKey> UpsertBatch(IEnumerable<TEntity> entities) =>
         UpsertBatch(entities, new UpsertBatchOptions());
 
+    /// <inheritdoc />
     public UpsertBatchResult<TKey> UpsertBatch(IEnumerable<TEntity> entities, UpsertBatchOptions options) =>
         ExecuteSync(saver => saver.UpsertBatch(entities, options));
 
+    /// <inheritdoc />
     public Task<UpsertBatchResult<TKey>> UpsertBatchAsync(
         IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
         UpsertBatchAsync(entities, new UpsertBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     /// <remarks>Not atomic across partitions. If one partition fails, others that already committed will NOT be rolled back.</remarks>
     public Task<UpsertBatchResult<TKey>> UpsertBatchAsync(
         IEnumerable<TEntity> entities, UpsertBatchOptions options, CancellationToken cancellationToken = default) =>
@@ -222,16 +258,20 @@ public class ParallelBatchSaver<TEntity, TKey>
 
     // === UPSERT GRAPH OPERATIONS ===
 
+    /// <inheritdoc />
     public UpsertBatchResult<TKey> UpsertGraphBatch(IEnumerable<TEntity> entities) =>
         UpsertGraphBatch(entities, new UpsertGraphBatchOptions());
 
+    /// <inheritdoc />
     public UpsertBatchResult<TKey> UpsertGraphBatch(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options) =>
         ExecuteSync(saver => saver.UpsertGraphBatch(entities, options));
 
+    /// <inheritdoc />
     public Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(
         IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
         UpsertGraphBatchAsync(entities, new UpsertGraphBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     /// <remarks>Not atomic across partitions. If one partition fails, others that already committed will NOT be rolled back.</remarks>
     public Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(
         IEnumerable<TEntity> entities, UpsertGraphBatchOptions options, CancellationToken cancellationToken = default) =>

@@ -76,9 +76,11 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
         return EnrichResultWithMetrics(result, stopwatch, strategyContext, "UpdateBatch");
     }
 
+    /// <inheritdoc />
     public Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default) =>
         UpdateBatchAsync(entities, new BatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     public async Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(entities);
@@ -138,11 +140,13 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
         return EnrichResultWithMetrics(result, stopwatch, strategyContext, "UpdateGraphBatch");
     }
 
+    /// <inheritdoc />
     public Task<BatchResult<TKey>> UpdateGraphBatchAsync(
         IEnumerable<TEntity> entities,
         CancellationToken cancellationToken = default) =>
         UpdateGraphBatchAsync(entities, new GraphBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     public async Task<BatchResult<TKey>> UpdateGraphBatchAsync(
         IEnumerable<TEntity> entities,
         GraphBatchOptions options,
@@ -200,11 +204,13 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
         return EnrichInsertResultWithMetrics(result, stopwatch, strategyContext, "InsertBatch");
     }
 
+    /// <inheritdoc />
     public Task<InsertBatchResult<TKey>> InsertBatchAsync(
         IEnumerable<TEntity> entities,
         CancellationToken cancellationToken = default) =>
         InsertBatchAsync(entities, new InsertBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     public async Task<InsertBatchResult<TKey>> InsertBatchAsync(
         IEnumerable<TEntity> entities,
         InsertBatchOptions options,
@@ -262,11 +268,13 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
         return EnrichInsertResultWithMetrics(result, stopwatch, strategyContext, "InsertGraphBatch");
     }
 
+    /// <inheritdoc />
     public Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(
         IEnumerable<TEntity> entities,
         CancellationToken cancellationToken = default) =>
         InsertGraphBatchAsync(entities, new InsertGraphBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     public async Task<InsertBatchResult<TKey>> InsertGraphBatchAsync(
         IEnumerable<TEntity> entities,
         InsertGraphBatchOptions options,
@@ -324,11 +332,13 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
         return EnrichResultWithMetrics(result, stopwatch, strategyContext, "DeleteBatch");
     }
 
+    /// <inheritdoc />
     public Task<BatchResult<TKey>> DeleteBatchAsync(
         IEnumerable<TEntity> entities,
         CancellationToken cancellationToken = default) =>
         DeleteBatchAsync(entities, new DeleteBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     public async Task<BatchResult<TKey>> DeleteBatchAsync(
         IEnumerable<TEntity> entities,
         DeleteBatchOptions options,
@@ -386,11 +396,13 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
         return EnrichResultWithMetrics(result, stopwatch, strategyContext, "DeleteGraphBatch");
     }
 
+    /// <inheritdoc />
     public Task<BatchResult<TKey>> DeleteGraphBatchAsync(
         IEnumerable<TEntity> entities,
         CancellationToken cancellationToken = default) =>
         DeleteGraphBatchAsync(entities, new DeleteGraphBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     public async Task<BatchResult<TKey>> DeleteGraphBatchAsync(
         IEnumerable<TEntity> entities,
         DeleteGraphBatchOptions options,
@@ -446,11 +458,13 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
         return EnrichUpsertResultWithMetrics(result, stopwatch, strategyContext, "UpsertBatch");
     }
 
+    /// <inheritdoc />
     public Task<UpsertBatchResult<TKey>> UpsertBatchAsync(
         IEnumerable<TEntity> entities,
         CancellationToken cancellationToken = default) =>
         UpsertBatchAsync(entities, new UpsertBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     public async Task<UpsertBatchResult<TKey>> UpsertBatchAsync(
         IEnumerable<TEntity> entities,
         UpsertBatchOptions options,
@@ -504,11 +518,13 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
         return EnrichUpsertResultWithMetrics(result, stopwatch, strategyContext, "UpsertGraphBatch");
     }
 
+    /// <inheritdoc />
     public Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(
         IEnumerable<TEntity> entities,
         CancellationToken cancellationToken = default) =>
         UpsertGraphBatchAsync(entities, new UpsertGraphBatchOptions(), cancellationToken);
 
+    /// <inheritdoc />
     public async Task<UpsertBatchResult<TKey>> UpsertGraphBatchAsync(
         IEnumerable<TEntity> entities,
         UpsertGraphBatchOptions options,

@@ -12,7 +12,7 @@ namespace Winnow.Operations;
 /// <para>
 /// This operation has a potential race condition between key detection and SaveChanges.
 /// If another process inserts a row with the same key between these steps, the operation
-/// may fail with a conflict error (classified as <see cref="FailureReason.Conflict"/>).
+/// may fail with a conflict error (classified as <see cref="FailureReason.DuplicateKey"/>).
 /// </para>
 /// <para><strong>Mitigation strategies:</strong></para>
 /// <list type="bullet">

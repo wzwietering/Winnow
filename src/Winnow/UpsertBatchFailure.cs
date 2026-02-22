@@ -15,8 +15,19 @@ public class UpsertBatchFailure<TKey> where TKey : notnull, IEquatable<TKey>
     /// </summary>
     public TKey? EntityId { get; init; }
 
+    /// <summary>
+    /// Human-readable description of the failure.
+    /// </summary>
     public string ErrorMessage { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Classified reason for the failure.
+    /// </summary>
     public FailureReason Reason { get; init; }
+
+    /// <summary>
+    /// The original exception, if available.
+    /// </summary>
     public Exception? Exception { get; init; }
 
     /// <summary>

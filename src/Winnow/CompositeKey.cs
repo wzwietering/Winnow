@@ -12,6 +12,11 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
     private readonly object[] _values;
     private readonly int _hashCode;
 
+    /// <summary>
+    /// Creates a composite key from the specified values.
+    /// </summary>
+    /// <exception cref="ArgumentNullException">Thrown when values is null.</exception>
+    /// <exception cref="ArgumentException">Thrown when values is empty or contains null.</exception>
     public CompositeKey(params object[] values)
     {
         _values = ValidateAndCopy(values);
@@ -136,6 +141,7 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
             $"Cannot convert key component at index {index} from {value.GetType().Name} to {typeof(T).Name}.");
     }
 
+    /// <inheritdoc />
     public bool Equals(CompositeKey other)
     {
         if (_hashCode != other._hashCode) return false;
@@ -148,14 +154,23 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
         return true;
     }
 
+    /// <inheritdoc />
     public override bool Equals(object? obj) => obj is CompositeKey other && Equals(other);
 
+    /// <inheritdoc />
     public override int GetHashCode() => _hashCode;
 
+    /// <inheritdoc />
     public override string ToString() => $"({string.Join(", ", _values)})";
 
+    /// <summary>
+    /// Determines whether two composite keys are equal.
+    /// </summary>
     public static bool operator ==(CompositeKey left, CompositeKey right) => left.Equals(right);
 
+    /// <summary>
+    /// Determines whether two composite keys are not equal.
+    /// </summary>
     public static bool operator !=(CompositeKey left, CompositeKey right) => !left.Equals(right);
 
     /// <summary>
