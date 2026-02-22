@@ -169,6 +169,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
+            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+                context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, ex, context);
             return false;
         }
@@ -201,6 +203,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
+            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+                context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
             return false;
         }
@@ -244,6 +248,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
                 return false;
             }
 
+            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+                context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
             return false;
         }
@@ -278,7 +284,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
             CleanupAllEntities(entities, context, operation);
             throw;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             context.IncrementRoundTrip();
             CleanupAllEntities(entities, context, operation);
@@ -311,7 +317,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
             CleanupAllInsertEntities(indexedEntities, context, operation);
             throw;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             context.IncrementRoundTrip();
             CleanupAllInsertEntities(indexedEntities, context, operation);
@@ -345,7 +351,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
             CleanupAllUpsertEntities(indexedEntities, context, operation);
             throw;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             context.IncrementRoundTrip();
             CleanupAllUpsertEntities(indexedEntities, context, operation);
@@ -550,6 +556,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
+            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+                context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, ex, context);
         }
         finally
@@ -579,6 +587,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
+            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+                context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
         }
         finally
@@ -618,6 +628,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
                 return;
             }
 
+            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+                context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
         }
         finally
@@ -650,7 +662,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
             CleanupAllEntities(entities, context, operation);
             throw;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             context.IncrementRoundTrip();
             CleanupAllEntities(entities, context, operation);
@@ -682,7 +694,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
             CleanupAllInsertEntities(indexedEntities, context, operation);
             throw;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             context.IncrementRoundTrip();
             CleanupAllInsertEntities(indexedEntities, context, operation);
@@ -714,7 +726,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
             CleanupAllUpsertEntities(indexedEntities, context, operation);
             throw;
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             context.IncrementRoundTrip();
             CleanupAllUpsertEntities(indexedEntities, context, operation);

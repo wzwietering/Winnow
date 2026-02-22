@@ -229,17 +229,6 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
             return false;
         }
 
-        return keyProperties.All(p => IsDefaultValue(entry.Property(p.Name).CurrentValue, p.ClrType));
-    }
-
-    private static bool IsDefaultValue(object? value, Type clrType)
-    {
-        if (value == null)
-        {
-            return true;
-        }
-
-        var defaultValue = clrType.IsValueType ? Activator.CreateInstance(clrType) : null;
-        return value.Equals(defaultValue);
+        return keyProperties.All(p => DefaultValueHelper.IsDefault(entry.Property(p.Name).CurrentValue, p.ClrType));
     }
 }

@@ -814,6 +814,117 @@ public class ManyToManyGraphTests : TestBase
         context.Students.Count().ShouldBe(0);
     }
 
+    [Fact]
+    public void DeleteGraph_StudentWithEnrollments_JoinRowsCleanedUp()
+    {
+        using var context = CreateContext();
+        SeedCourses(context, 3);
+        var courseIds = context.Courses.Select(c => c.Id).ToList();
+
+        var student = CreateStudent("DeleteJoin");
+        context.Students.Add(student);
+        context.SaveChanges();
+
+        context.Enrollments.AddRange(courseIds.Select(cid => new Enrollment
+        {
+            StudentId = student.Id,
+            CourseId = cid,
+            EnrolledAt = DateTime.UtcNow
+        }));
+        context.SaveChanges();
+        var studentId = student.Id;
+        context.ChangeTracker.Clear();
+
+        var loaded = context.Students.Include(s => s.Enrollments).First(s => s.Id == studentId);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            CascadeBehavior = DeleteCascadeBehavior.Cascade
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        context.ChangeTracker.Clear();
+        context.Students.Count().ShouldBe(0);
+        context.Enrollments.Count().ShouldBe(0);
+        context.Courses.Count().ShouldBe(3);
+    }
+
+    [Fact]
+    public void DeleteGraph_WithIncludeManyToMany_CoursesNotDeleted()
+    {
+        using var context = CreateContext();
+        SeedCourses(context, 2);
+
+        var student = CreateStudent("KeepCourses");
+        student.Courses = context.Courses.ToList();
+        context.Students.Add(student);
+        context.SaveChanges();
+        var studentId = student.Id;
+        context.ChangeTracker.Clear();
+
+        var loaded = context.Students
+            .Include(s => s.Courses)
+            .Include(s => s.Enrollments)
+            .First(s => s.Id == studentId);
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            CascadeBehavior = DeleteCascadeBehavior.Cascade
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        context.ChangeTracker.Clear();
+        context.Students.Count().ShouldBe(0);
+        context.Courses.Count().ShouldBe(2);
+    }
+
+    [Fact]
+    public void DeleteGraph_MultipleStudentsWithEnrollments_AllCleanedUp()
+    {
+        using var context = CreateContext();
+        SeedCourses(context, 2);
+        var courseIds = context.Courses.Select(c => c.Id).ToList();
+
+        var students = new[] { CreateStudent("Del1"), CreateStudent("Del2") };
+        context.Students.AddRange(students);
+        context.SaveChanges();
+
+        foreach (var s in students)
+        {
+            context.Enrollments.AddRange(courseIds.Select(cid => new Enrollment
+            {
+                StudentId = s.Id,
+                CourseId = cid,
+                EnrolledAt = DateTime.UtcNow
+            }));
+        }
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+
+        var loaded = context.Students.Include(s => s.Enrollments).ToList();
+
+        var saver = new BatchSaver<Student, int>(context);
+        var result = saver.DeleteGraphBatch(loaded, new DeleteGraphBatchOptions
+        {
+            IncludeManyToMany = true,
+            CascadeBehavior = DeleteCascadeBehavior.Cascade
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.SuccessCount.ShouldBe(2);
+
+        context.ChangeTracker.Clear();
+        context.Students.Count().ShouldBe(0);
+        context.Enrollments.Count().ShouldBe(0);
+        context.Courses.Count().ShouldBe(2);
+    }
+
     #endregion
 
     #region Edge Cases and Configuration

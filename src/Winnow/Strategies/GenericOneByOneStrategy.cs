@@ -176,8 +176,12 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
             {
                 if (strategy == DuplicateKeyStrategy.RetryAsUpdate)
                 {
-                    await DuplicateKeyHandler<TEntity, TKey>.RetryAsUpdateAsync(
+                    var wasCancelled = await DuplicateKeyHandler<TEntity, TKey>.RetryAsUpdateAsync(
                         entity, index, context, operation, cancellationToken);
+                    if (wasCancelled)
+                    {
+                        throw new OperationCanceledException(cancellationToken);
+                    }
                 }
                 return;
             }

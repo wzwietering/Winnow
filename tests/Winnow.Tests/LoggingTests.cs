@@ -130,6 +130,26 @@ public class LoggingTests : TestBase
     }
 
     [Fact]
+    public void DivideAndConquer_logs_entity_failure()
+    {
+        using var context = CreateContext();
+        var logger = new ListLogger();
+        var saver = new BatchSaver<Product, int>(context, logger);
+        var products = new List<Product>
+        {
+            new() { Name = "Bad", Price = -1, Stock = 0 }
+        };
+
+        var result = saver.InsertBatch(products, new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
+
+        result.FailureCount.ShouldBe(1);
+        logger.Entries.ShouldContain(e =>
+            e.Level == LogLevel.Warning &&
+            e.Message.Contains("Product") &&
+            e.Message.Contains("failed"));
+    }
+
+    [Fact]
     public void No_exception_without_logger()
     {
         using var context = CreateContext();

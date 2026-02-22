@@ -989,6 +989,89 @@ public class SelfReferencingHierarchyTests : TestBase
     }
 
     [Fact]
+    public void UpdateGraph_CircularChain_ViaCollection_IgnoreAll()
+    {
+        using var context = CreateContext();
+        var catA = CreateCategory("A");
+        var catB = CreateCategory("B");
+        context.Categories.AddRange(catA, catB);
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+
+        var loadedA = context.Categories.Include(c => c.SubCategories).First(c => c.Id == catA.Id);
+        var loadedB = context.Categories.Include(c => c.SubCategories).First(c => c.Id == catB.Id);
+
+        loadedA.SubCategories.Add(loadedB);
+        loadedB.SubCategories.Add(loadedA);
+        loadedA.Description = "IgnoreAll-A";
+
+        var saver = new BatchSaver<Category, int>(context);
+        var result = saver.UpdateGraphBatch([loadedA], new GraphBatchOptions
+        {
+            CircularReferenceHandling = CircularReferenceHandling.IgnoreAll,
+            OrphanedChildBehavior = OrphanBehavior.Detach
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        context.ChangeTracker.Clear();
+        context.Categories.First(c => c.Id == catA.Id).Description.ShouldBe("IgnoreAll-A");
+    }
+
+    [Fact]
+    public void UpdateGraph_DirectSelfRef_ViaCollection_IgnoreAll()
+    {
+        using var context = CreateContext();
+        var category = CreateCategory("SelfRef");
+        SeedCategoryHierarchy(context, category);
+
+        var loaded = context.Categories.Include(c => c.SubCategories).First(c => c.Id == category.Id);
+        loaded.SubCategories.Add(loaded);
+        loaded.Description = "SelfRefIgnoreAll";
+
+        var saver = new BatchSaver<Category, int>(context);
+        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        {
+            CircularReferenceHandling = CircularReferenceHandling.IgnoreAll,
+            OrphanedChildBehavior = OrphanBehavior.Detach
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        context.ChangeTracker.Clear();
+        context.Categories.First(c => c.Id == category.Id).Description.ShouldBe("SelfRefIgnoreAll");
+    }
+
+    [Fact]
+    public void DeleteGraph_WithChildren_IgnoreAll_CascadeDeletes()
+    {
+        using var context = CreateContext();
+        var root = CreateTwoLevelHierarchy("IgnoreAllDel", 2);
+        SeedCategoryHierarchy(context, root);
+
+        var loaded = context.Categories
+            .Include(c => c.SubCategories)
+            .First(c => c.Id == root.Id);
+        var childIds = loaded.SubCategories.Select(c => c.Id).ToList();
+
+        var saver = new BatchSaver<Category, int>(context);
+        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        {
+            CircularReferenceHandling = CircularReferenceHandling.IgnoreAll,
+            CascadeBehavior = DeleteCascadeBehavior.Cascade
+        });
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+
+        context.ChangeTracker.Clear();
+        context.Categories.Find(root.Id).ShouldBeNull();
+        foreach (var childId in childIds)
+        {
+            context.Categories.Find(childId).ShouldBeNull();
+        }
+    }
+
+    [Fact]
     public void Circular_ViaCollection_Chain_Ignore_ProcessesOnce()
     {
         // Test circular chain via collection navigations (SubCategories)

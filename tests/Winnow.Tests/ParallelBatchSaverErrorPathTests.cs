@@ -69,7 +69,7 @@ public class ParallelBatchSaverErrorPathTests : ParallelTestBase
 
         var cts = new CancellationTokenSource();
         // Cancel after a very short delay to try to catch mid-execution
-        cts.CancelAfter(TimeSpan.FromMilliseconds(1));
+        cts.CancelAfter(TimeSpan.FromMilliseconds(50));
 
         var result = await saver.UpdateBatchAsync(products, cts.Token);
 
