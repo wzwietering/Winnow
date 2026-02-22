@@ -5,7 +5,8 @@ internal static class BatchResultMerger
     internal static BatchResult<TKey> MergeBatchResults<TKey>(
         List<BatchResult<TKey>> results,
         TimeSpan duration,
-        int totalRoundTrips) where TKey : notnull, IEquatable<TKey> => new()
+        int totalRoundTrips,
+        int totalRetries) where TKey : notnull, IEquatable<TKey> => new()
     {
         SuccessfulIds = results.SelectMany(r => r.SuccessfulIds).ToList(),
         Failures = results.SelectMany(r => r.Failures).ToList(),
@@ -14,13 +15,14 @@ internal static class BatchResultMerger
         WasCancelled = results.Any(r => r.WasCancelled),
         GraphHierarchy = MergeGraphHierarchy<TKey>(results.Cast<BatchResultBase<TKey>>()),
         TraversalInfo = MergeTraversalInfoFromResults<TKey>(results.Cast<BatchResultBase<TKey>>()),
-        TotalRetries = results.Sum(r => r.TotalRetries)
+        TotalRetries = totalRetries
     };
 
     internal static InsertBatchResult<TKey> MergeInsertResults<TKey>(
         List<(InsertBatchResult<TKey> Result, int Offset)> partitions,
         TimeSpan duration,
-        int totalRoundTrips) where TKey : notnull, IEquatable<TKey> => new()
+        int totalRoundTrips,
+        int totalRetries) where TKey : notnull, IEquatable<TKey> => new()
     {
         InsertedEntities = RemapInsertedEntities<TKey>(partitions),
         Failures = RemapInsertFailures(partitions),
@@ -29,13 +31,14 @@ internal static class BatchResultMerger
         WasCancelled = partitions.Any(p => p.Result.WasCancelled),
         GraphHierarchy = MergeGraphHierarchy<TKey>(partitions.Select(p => (BatchResultBase<TKey>)p.Result)),
         TraversalInfo = MergeTraversalInfoFromResults<TKey>(partitions.Select(p => (BatchResultBase<TKey>)p.Result)),
-        TotalRetries = partitions.Sum(p => p.Result.TotalRetries)
+        TotalRetries = totalRetries
     };
 
     internal static UpsertBatchResult<TKey> MergeUpsertResults<TKey>(
         List<(UpsertBatchResult<TKey> Result, int Offset)> partitions,
         TimeSpan duration,
-        int totalRoundTrips) where TKey : notnull, IEquatable<TKey> => new()
+        int totalRoundTrips,
+        int totalRetries) where TKey : notnull, IEquatable<TKey> => new()
     {
         InsertedEntities = RemapUpsertedEntities<TKey>(partitions, e => e.InsertedEntities),
         UpdatedEntities = RemapUpsertedEntities<TKey>(partitions, e => e.UpdatedEntities),
@@ -45,7 +48,7 @@ internal static class BatchResultMerger
         WasCancelled = partitions.Any(p => p.Result.WasCancelled),
         GraphHierarchy = MergeGraphHierarchy<TKey>(partitions.Select(p => (BatchResultBase<TKey>)p.Result)),
         TraversalInfo = MergeTraversalInfoFromResults<TKey>(partitions.Select(p => (BatchResultBase<TKey>)p.Result)),
-        TotalRetries = partitions.Sum(p => p.Result.TotalRetries)
+        TotalRetries = totalRetries
     };
 
     private static List<InsertedEntity<TKey>> RemapInsertedEntities<TKey>(

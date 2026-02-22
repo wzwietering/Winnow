@@ -21,6 +21,10 @@ internal static class SaveChangesRetryHandler
             return;
         }
 
+        // Snapshot values to prevent mutation during async execution
+        var maxRetries = retryOptions.MaxRetries;
+        var backoffMultiplier = retryOptions.BackoffMultiplier;
+        var isTransient = retryOptions.IsTransient;
         var attempt = 0;
         var delay = retryOptions.InitialDelay;
 
@@ -35,13 +39,13 @@ internal static class SaveChangesRetryHandler
             {
                 throw;
             }
-            catch (Exception ex) when (attempt < retryOptions.MaxRetries && ShouldRetry(ex, retryOptions))
+            catch (Exception ex) when (attempt < maxRetries && ShouldRetry(ex, isTransient))
             {
                 attempt++;
                 incrementRetry();
-                BatchLogger.LogRetryAttempt(logger, attempt, retryOptions.MaxRetries, delay.TotalMilliseconds, ex.Message);
+                BatchLogger.LogRetryAttempt(logger, attempt, maxRetries, delay.TotalMilliseconds, ex.Message);
                 await Task.Delay(delay, cancellationToken);
-                delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * retryOptions.BackoffMultiplier);
+                delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * backoffMultiplier);
             }
         }
     }
@@ -58,6 +62,10 @@ internal static class SaveChangesRetryHandler
             return;
         }
 
+        // Snapshot values to prevent mutation during execution
+        var maxRetries = retryOptions.MaxRetries;
+        var backoffMultiplier = retryOptions.BackoffMultiplier;
+        var isTransient = retryOptions.IsTransient;
         var attempt = 0;
         var delay = retryOptions.InitialDelay;
 
@@ -68,20 +76,22 @@ internal static class SaveChangesRetryHandler
                 context.SaveChanges();
                 return;
             }
-            catch (Exception ex) when (attempt < retryOptions.MaxRetries && ShouldRetry(ex, retryOptions))
+            catch (Exception ex) when (attempt < maxRetries && ShouldRetry(ex, isTransient))
             {
                 attempt++;
                 incrementRetry();
-                BatchLogger.LogRetryAttempt(logger, attempt, retryOptions.MaxRetries, delay.TotalMilliseconds, ex.Message);
+                BatchLogger.LogRetryAttempt(logger, attempt, maxRetries, delay.TotalMilliseconds, ex.Message);
                 Thread.Sleep(delay);
-                delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * retryOptions.BackoffMultiplier);
+                delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * backoffMultiplier);
             }
         }
     }
 
-    private static bool ShouldRetry(Exception ex, RetryOptions options)
+    private static bool ShouldRetry(Exception ex, Func<Exception, bool>? isTransient)
     {
-        if (FailureClassifier.IsTransient(ex)) return true;
-        return options.IsTransient?.Invoke(ex) ?? false;
+        if (isTransient is not null)
+            return isTransient(ex);
+
+        return FailureClassifier.IsTransient(ex);
     }
 }

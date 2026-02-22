@@ -27,9 +27,9 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
         : this(context, (ILogger?)logger) { }
 
     /// <summary>
-    /// Creates a BatchSaver with optional logger support.
+    /// Creates a BatchSaver with optional untyped logger support.
     /// </summary>
-    public BatchSaver(DbContext context, ILogger? logger)
+    internal BatchSaver(DbContext context, ILogger? logger)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _logger = logger;
@@ -66,7 +66,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "UpdateBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
@@ -91,7 +91,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "UpdateBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
@@ -128,7 +128,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyGraphResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateGraphStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "UpdateGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
@@ -158,7 +158,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyGraphResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateGraphStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "UpdateGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
@@ -190,7 +190,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyInsertResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateInsertStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "InsertBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
@@ -220,7 +220,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyInsertResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateInsertStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "InsertBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
@@ -252,7 +252,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyInsertResult(stopwatch, includeGraph: true);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateInsertGraphStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "InsertGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
@@ -282,7 +282,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyInsertResult(stopwatch, includeGraph: true);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateInsertGraphStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "InsertGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
@@ -314,7 +314,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateDeleteStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "DeleteBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
@@ -344,7 +344,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateDeleteStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "DeleteBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
@@ -376,7 +376,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyGraphResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateDeleteGraphStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "DeleteGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
@@ -406,7 +406,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyGraphResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateDeleteGraphStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "DeleteGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
@@ -437,7 +437,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
         if (entityList.Count == 0)
             return CreateEmptyUpsertResult(stopwatch);
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateUpsertStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "UpsertBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
@@ -466,7 +466,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyUpsertResult(stopwatch);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateUpsertStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "UpsertBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
@@ -495,7 +495,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
         if (entityList.Count == 0)
             return CreateEmptyUpsertResult(stopwatch, includeGraph: true);
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateUpsertGraphStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "UpsertGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = strategy.Execute(entityList, strategyContext, options);
@@ -524,7 +524,7 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
             return CreateEmptyUpsertResult(stopwatch, includeGraph: true);
         }
 
-        var strategyContext = new BatchStrategyContext<TEntity, TKey>(_context) { Logger = _logger, RetryOptions = options.Retry };
+        var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = BatchStrategyFactory.CreateUpsertGraphStrategy<TEntity, TKey>(options.Strategy);
         BatchLogger.LogBatchStarting(_logger, "UpsertGraphBatch", typeof(TEntity).Name, entityList.Count, options.Strategy);
         var result = await strategy.ExecuteAsync(entityList, strategyContext, options, cancellationToken);
@@ -535,6 +535,9 @@ public class BatchSaver<TEntity, TKey> : IBatchSaver<TEntity, TKey>
     }
 
     // === PRIVATE HELPERS ===
+
+    private BatchStrategyContext<TEntity, TKey> CreateStrategyContext(RetryOptions? retry) =>
+        new(_context) { Logger = _logger, RetryOptions = retry };
 
     private BatchResult<TKey> CreateEmptyResult(Stopwatch stopwatch)
     {
@@ -651,9 +654,9 @@ public class BatchSaver<TEntity> : IBatchSaver<TEntity>
         : this(context, (ILogger?)logger) { }
 
     /// <summary>
-    /// Creates a BatchSaver that auto-detects the key type, with optional logger support.
+    /// Creates a BatchSaver that auto-detects the key type, with optional untyped logger support.
     /// </summary>
-    public BatchSaver(DbContext context, ILogger? logger)
+    internal BatchSaver(DbContext context, ILogger? logger)
     {
         ArgumentNullException.ThrowIfNull(context);
 

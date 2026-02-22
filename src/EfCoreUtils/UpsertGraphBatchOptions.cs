@@ -40,13 +40,6 @@ public class UpsertGraphBatchOptions : GraphBatchOptionsBase
     public bool ValidateManyToManyEntitiesExist { get; set; } = true;
 
     /// <summary>
-    /// Maximum allowed size for many-to-many collections.
-    /// Throws if a collection exceeds this size.
-    /// Default: 0 (no limit). Set to a positive value to enable.
-    /// </summary>
-    public int MaxManyToManyCollectionSize { get; set; } = 0;
-
-    /// <summary>
     /// When true, throws an exception if many-to-many validation cannot be performed
     /// for entities with composite primary keys.
     /// When false, validation is silently skipped for composite key entities.

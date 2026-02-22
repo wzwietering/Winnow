@@ -15,7 +15,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     private readonly Lazy<(DbContext Context, EntityKeyService<TEntity, TKey> Service)> _keyService;
 
     private readonly RetryOptions? _retryOptions;
-    private record PartitionResult<TResult>(TResult Result, int RoundTrips);
+    private record PartitionResult<TResult>(TResult Result, int RoundTrips, int Retries);
 
     internal ParallelExecutionOrchestrator(
         Func<DbContext> contextFactory,
@@ -52,8 +52,9 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
 
         stopwatch.Stop();
         var totalRoundTrips = results.Sum(r => r.RoundTrips);
+        var totalRetries = results.Sum(r => r.Retries);
         return BatchResultMerger.MergeBatchResults(
-            results.Select(r => r.Result).ToList(), stopwatch.Elapsed, totalRoundTrips);
+            results.Select(r => r.Result).ToList(), stopwatch.Elapsed, totalRoundTrips, totalRetries);
     }
 
     internal async Task<InsertBatchResult<TKey>> ExecuteInsertAsync(
@@ -69,8 +70,9 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
 
         stopwatch.Stop();
         var totalRoundTrips = results.Sum(r => r.Result.RoundTrips);
+        var totalRetries = results.Sum(r => r.Result.Retries);
         var merged = ZipWithOffsets(results, partitions);
-        return BatchResultMerger.MergeInsertResults(merged, stopwatch.Elapsed, totalRoundTrips);
+        return BatchResultMerger.MergeInsertResults(merged, stopwatch.Elapsed, totalRoundTrips, totalRetries);
     }
 
     internal async Task<UpsertBatchResult<TKey>> ExecuteUpsertAsync(
@@ -86,8 +88,9 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
 
         stopwatch.Stop();
         var totalRoundTrips = results.Sum(r => r.Result.RoundTrips);
+        var totalRetries = results.Sum(r => r.Result.Retries);
         var merged = ZipUpsertWithOffsets(results, partitions);
-        return BatchResultMerger.MergeUpsertResults(merged, stopwatch.Elapsed, totalRoundTrips);
+        return BatchResultMerger.MergeUpsertResults(merged, stopwatch.Elapsed, totalRoundTrips, totalRetries);
     }
 
     private async Task<List<PartitionResult<TResult>>> RunPartitionsAsync<TResult>(
@@ -129,7 +132,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         }
         catch (OperationCanceledException ex)
         {
-            return new PartitionResult<TResult>(createFailure(partition, ex), 0);
+            return new PartitionResult<TResult>(createFailure(partition, ex), 0, 0);
         }
 
         try
@@ -166,11 +169,11 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
             context = _contextFactory();
             var strategyContext = new BatchStrategyContext<TEntity, TKey>(context) { Logger = _logger, RetryOptions = _retryOptions };
             var result = await execute(partition, strategyContext, cancellationToken);
-            return new PartitionResult<TResult>(result, strategyContext.RoundTripCounter);
+            return new PartitionResult<TResult>(result, strategyContext.RoundTripCounter, strategyContext.RetryCounter);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
-            return new PartitionResult<TResult>(createFailure(partition, ex), 0);
+            return new PartitionResult<TResult>(createFailure(partition, ex), 0, 0);
         }
         finally
         {

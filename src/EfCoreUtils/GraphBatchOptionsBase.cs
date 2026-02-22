@@ -37,6 +37,13 @@ public abstract class GraphBatchOptionsBase
     public bool IncludeManyToMany { get; set; } = false;
 
     /// <summary>
+    /// Maximum allowed size for many-to-many collections.
+    /// Throws if a collection exceeds this size.
+    /// Default: 0 (no limit). Set to a positive value to enable.
+    /// </summary>
+    public int MaxManyToManyCollectionSize { get; set; } = 0;
+
+    /// <summary>
     /// Optional filter to control which navigation properties are traversed.
     /// Use NavigationFilter.Include() or NavigationFilter.Exclude() to create.
     /// When null (default), all navigations are traversed.

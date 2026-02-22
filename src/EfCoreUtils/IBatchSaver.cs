@@ -6,14 +6,53 @@ public interface IBatchSaver<TEntity, TKey>
 {
     // === UPDATE OPERATIONS ===
 
+    /// <summary>
+    /// Updates entities individually with failure isolation.
+    /// Only properties of TEntity are updated; navigation properties are NOT modified.
+    /// </summary>
+    /// <param name="entities">The entities to update.</param>
+    /// <returns>Result containing successful IDs, failures, and performance metrics.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when navigation properties are modified and ValidateNavigationProperties is true.</exception>
     BatchResult<TKey> UpdateBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="UpdateBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entities to update.</param>
+    /// <param name="options">Batch operation options.</param>
     BatchResult<TKey> UpdateBatch(IEnumerable<TEntity> entities, BatchOptions options);
+
+    /// <inheritdoc cref="UpdateBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entities to update.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="UpdateBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The entities to update.</param>
+    /// <param name="options">Batch operation options.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<BatchResult<TKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Updates entity graphs (parent + children) with failure isolation.
+    /// Each graph succeeds or fails as a unit.
+    /// </summary>
+    /// <param name="entities">The parent entities with their navigation properties loaded.</param>
+    /// <returns>Result containing successful IDs, failures, and performance metrics.</returns>
     BatchResult<TKey> UpdateGraphBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="UpdateGraphBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The parent entities with their navigation properties loaded.</param>
+    /// <param name="options">Graph batch operation options.</param>
     BatchResult<TKey> UpdateGraphBatch(IEnumerable<TEntity> entities, GraphBatchOptions options);
+
+    /// <inheritdoc cref="UpdateGraphBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The parent entities with their navigation properties loaded.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<BatchResult<TKey>> UpdateGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="UpdateGraphBatch(IEnumerable{TEntity})"/>
+    /// <param name="entities">The parent entities with their navigation properties loaded.</param>
+    /// <param name="options">Graph batch operation options.</param>
+    /// <param name="cancellationToken">Token to cancel the operation.</param>
     Task<BatchResult<TKey>> UpdateGraphBatchAsync(IEnumerable<TEntity> entities, GraphBatchOptions options, CancellationToken cancellationToken = default);
 
     // === INSERT OPERATIONS ===
@@ -174,14 +213,28 @@ public interface IBatchSaver<TEntity>
 
     // === UPDATE OPERATIONS ===
 
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.UpdateBatch(IEnumerable{TEntity})"/>
     BatchResult<CompositeKey> UpdateBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.UpdateBatch(IEnumerable{TEntity}, BatchOptions)"/>
     BatchResult<CompositeKey> UpdateBatch(IEnumerable<TEntity> entities, BatchOptions options);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.UpdateBatchAsync(IEnumerable{TEntity}, CancellationToken)"/>
     Task<BatchResult<CompositeKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.UpdateBatchAsync(IEnumerable{TEntity}, BatchOptions, CancellationToken)"/>
     Task<BatchResult<CompositeKey>> UpdateBatchAsync(IEnumerable<TEntity> entities, BatchOptions options, CancellationToken cancellationToken = default);
 
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.UpdateGraphBatch(IEnumerable{TEntity})"/>
     BatchResult<CompositeKey> UpdateGraphBatch(IEnumerable<TEntity> entities);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.UpdateGraphBatch(IEnumerable{TEntity}, GraphBatchOptions)"/>
     BatchResult<CompositeKey> UpdateGraphBatch(IEnumerable<TEntity> entities, GraphBatchOptions options);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.UpdateGraphBatchAsync(IEnumerable{TEntity}, CancellationToken)"/>
     Task<BatchResult<CompositeKey>> UpdateGraphBatchAsync(IEnumerable<TEntity> entities, CancellationToken cancellationToken = default);
+
+    /// <inheritdoc cref="IBatchSaver{TEntity, TKey}.UpdateGraphBatchAsync(IEnumerable{TEntity}, GraphBatchOptions, CancellationToken)"/>
     Task<BatchResult<CompositeKey>> UpdateGraphBatchAsync(IEnumerable<TEntity> entities, GraphBatchOptions options, CancellationToken cancellationToken = default);
 
     // === INSERT OPERATIONS ===
@@ -247,26 +300,4 @@ public interface IBatchSaver<TEntity>
 
     /// <inheritdoc cref="UpsertGraphBatch(IEnumerable{TEntity})"/>
     Task<UpsertBatchResult<CompositeKey>> UpsertGraphBatchAsync(IEnumerable<TEntity> entities, UpsertGraphBatchOptions options, CancellationToken cancellationToken = default);
-}
-
-public class BatchOptions
-{
-    public BatchStrategy Strategy { get; set; } = BatchStrategy.OneByOne;
-
-    /// <summary>
-    /// When true (default), validates that navigation properties are not modified.
-    /// Set to false to allow navigation properties to be loaded but ignored.
-    /// </summary>
-    public bool ValidateNavigationProperties { get; set; } = true;
-
-    /// <summary>
-    /// When set, enables automatic retry with exponential backoff for transient failures.
-    /// </summary>
-    public RetryOptions? Retry { get; set; }
-}
-
-public enum BatchStrategy
-{
-    OneByOne,
-    DivideAndConquer
 }

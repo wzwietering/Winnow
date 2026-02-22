@@ -107,6 +107,7 @@ public class LoggingTests : TestBase
 
         result.FailureCount.ShouldBe(1);
         logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("1 failed"));
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Warning && e.Message.Contains("failed"));
     }
 
     [Fact]

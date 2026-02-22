@@ -47,6 +47,13 @@ public class RetryTests : TestBase
     }
 
     [Fact]
+    public void IsTransient_connection_timed_out_returns_true()
+    {
+        var ex = new DbUpdateException("connection timed out", new Exception("connection timed out"));
+        FailureClassifier.IsTransient(ex).ShouldBeTrue();
+    }
+
+    [Fact]
     public void IsTransient_command_timeout_returns_true()
     {
         var ex = new DbUpdateException("command timeout expired", new Exception("command timeout expired"));

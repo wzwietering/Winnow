@@ -132,7 +132,7 @@ public class RetryBehaviorTests : IDisposable
     // === Custom IsTransient predicate tests ===
 
     [Fact]
-    public void Custom_IsTransient_adds_to_built_in_classifier()
+    public void Custom_IsTransient_replaces_built_in_classifier()
     {
         using var context = CreateFailingContext(0);
         context.Products.Add(new Product { Name = "Bad", Price = -1, Stock = 1 });
@@ -155,6 +155,29 @@ public class RetryBehaviorTests : IDisposable
                 () => { }));
 
         customCalled.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Custom_IsTransient_can_disable_built_in_transient_detection()
+    {
+        using var context = CreateFailingContext(1);
+        context.Products.Add(new Product { Name = "Test", Price = 10, Stock = 1 });
+        var retryCount = 0;
+
+        // "database is locked" is normally transient, but custom predicate disables it
+        Should.Throw<DbUpdateException>(() =>
+            SaveChangesRetryHandler.SaveWithRetry(
+                context,
+                new RetryOptions
+                {
+                    MaxRetries = 3,
+                    InitialDelay = TimeSpan.Zero,
+                    IsTransient = _ => false
+                },
+                null,
+                () => retryCount++));
+
+        retryCount.ShouldBe(0);
     }
 
     [Fact]
@@ -282,6 +305,62 @@ public class RetryBehaviorTests : IDisposable
         result.TotalRetries.ShouldBe(1);
     }
 
+    [Fact]
+    public void DeleteBatch_tracks_TotalRetries()
+    {
+        using var context = CreateFailingContext(0);
+        context.Products.Add(new Product { Name = "Seed", Price = 10, Stock = 1 });
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+
+        var product = context.Products.First();
+        context.ChangeTracker.Clear();
+
+        // Set failures AFTER seed
+        context.FailuresRemaining = 1;
+
+        var saver = new BatchSaver<Product, int>(context);
+        var result = saver.DeleteBatch(
+            [product],
+            new DeleteBatchOptions
+            {
+                Retry = new RetryOptions { MaxRetries = 3, InitialDelay = TimeSpan.Zero }
+            });
+
+        result.SuccessCount.ShouldBe(1);
+        result.TotalRetries.ShouldBe(1);
+    }
+
+    // === Parallel path ===
+
+    [Fact]
+    public async Task ParallelInsertBatchAsync_tracks_TotalRetries()
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"efcoreutils_retry_{Guid.NewGuid():N}.db");
+        try
+        {
+            CreateSchemaOnDisk(dbPath);
+
+            Func<DbContext> factory = () => CreateFailingContextOnDisk(dbPath, 1);
+            var saver = new ParallelBatchSaver<Product, int>(factory, maxDegreeOfParallelism: 2);
+            var products = Enumerable.Range(0, 4)
+                .Select(i => new Product { Name = $"P{i}", Price = 10 + i, Stock = 1 })
+                .ToList();
+
+            var result = await saver.InsertBatchAsync(products, new InsertBatchOptions
+            {
+                Retry = new RetryOptions { MaxRetries = 3, InitialDelay = TimeSpan.Zero }
+            });
+
+            result.SuccessCount.ShouldBe(4);
+            result.TotalRetries.ShouldBeGreaterThan(0);
+        }
+        finally
+        {
+            TryDeleteFile(dbPath);
+        }
+    }
+
     // === MaxRetries boundary ===
 
     [Fact]
@@ -299,6 +378,30 @@ public class RetryBehaviorTests : IDisposable
     }
 
     public void Dispose() => GC.SuppressFinalize(this);
+
+    private static void CreateSchemaOnDisk(string dbPath)
+    {
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite($"DataSource={dbPath}")
+            .Options;
+        using var ctx = new TestDbContext(options);
+        ctx.Database.EnsureCreated();
+    }
+
+    private static TransientFailureDbContext CreateFailingContextOnDisk(
+        string dbPath, int failuresBeforeSuccess)
+    {
+        var options = new DbContextOptionsBuilder<TestDbContext>()
+            .UseSqlite($"DataSource={dbPath}")
+            .Options;
+        return new TransientFailureDbContext(options, failuresBeforeSuccess);
+    }
+
+    private static void TryDeleteFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch { /* Best effort cleanup */ }
+    }
 
     /// <summary>
     /// DbContext that throws "database is locked" DbUpdateException

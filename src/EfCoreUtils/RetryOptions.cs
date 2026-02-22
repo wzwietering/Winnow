@@ -54,7 +54,8 @@ public sealed class RetryOptions
 
     /// <summary>
     /// Custom predicate to determine if an exception is transient.
-    /// When null, uses the built-in classifier.
+    /// When null (default), uses the built-in classifier.
+    /// When set, replaces the built-in classifier entirely.
     /// </summary>
     public Func<Exception, bool>? IsTransient { get; set; }
 }
