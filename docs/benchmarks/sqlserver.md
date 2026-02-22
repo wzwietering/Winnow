@@ -4,9 +4,9 @@ Performance measurements on SQL Server (via Docker) using BenchmarkDotNet. All b
 
 **Environment:** Windows 11, Intel Core Ultra 5 225U (12 cores), .NET 10.0.3, BenchmarkDotNet v0.14.0
 
-## Raw EF Core vs Library
+## Raw EF Core vs Winnow
 
-Compares `context.AddRange(); context.SaveChanges()` against the library's strategies.
+Compares `context.AddRange(); context.SaveChanges()` against Winnow's strategies.
 
 | BatchSize | Raw EF Core | D&C | Ratio | OneByOne | Ratio |
 |-----------|-------------|-----|-------|----------|-------|
@@ -14,7 +14,7 @@ Compares `context.AddRange(); context.SaveChanges()` against the library's strat
 | 1,000 | 100.4 ms | 100.0 ms | **1.00x** | 6,935.0 ms | 69.1x |
 | 5,000 | 323.1 ms | 244.4 ms | **0.76x** | 32,843.1 ms | 101.7x |
 
-DivideAndConquer matches raw EF Core at 1,000 entities and is **24% faster** at 5,000 entities. The library's batching strategy appears to outperform raw `AddRange` + `SaveChanges` at larger scales, likely because dividing into smaller `SaveChanges` calls reduces SQL Server's per-statement overhead. The library adds ~30-38% memory overhead for result tracking and metadata.
+DivideAndConquer matches raw EF Core at 1,000 entities and is **24% faster** at 5,000 entities. Winnow's batching strategy appears to outperform raw `AddRange` + `SaveChanges` at larger scales, likely because dividing into smaller `SaveChanges` calls reduces SQL Server's per-statement overhead. Winnow adds ~30-38% memory overhead for result tracking and metadata.
 
 OneByOne is 39-102x slower than raw EF Core, confirming it should only be used when individual entity error isolation is required.
 
@@ -152,13 +152,13 @@ Memory follows the same pattern:
 
 ```bash
 # All providers (requires Docker for PostgreSQL/SQL Server)
-dotnet run -c Release --project benchmarks/EfCoreUtils.Benchmarks
+dotnet run -c Release --project benchmarks/Winnow.Benchmarks
 
 # Specific benchmark class
-dotnet run -c Release --project benchmarks/EfCoreUtils.Benchmarks -- --filter '*InsertBenchmarks*'
+dotnet run -c Release --project benchmarks/Winnow.Benchmarks -- --filter '*InsertBenchmarks*'
 
 # SQLite only (no Docker required)
-dotnet run -c Release --project benchmarks/EfCoreUtils.Benchmarks -- --sqlite-only
+dotnet run -c Release --project benchmarks/Winnow.Benchmarks -- --sqlite-only
 ```
 
-Results are written to `benchmarks/EfCoreUtils.Benchmarks/BenchmarkDotNet.Artifacts/results/`.
+Results are written to `benchmarks/Winnow.Benchmarks/BenchmarkDotNet.Artifacts/results/`.

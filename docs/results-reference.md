@@ -166,7 +166,7 @@ node.Children    // List<GraphNode<TKey>> - child nodes
 
 ## Failure Isolation
 
-Each entity (or graph) succeeds or fails independently:
+Winnow separates each entity's outcome independently — the good saves are kept, and the failures are set aside:
 
 ```
 Batch: [Order1 + items, Order2 + items, Order3 + items]

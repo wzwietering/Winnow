@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="src/Winnow/Winnow.csproj" />
+  <Project Path="tests/Winnow.Tests/Winnow.Tests.csproj" />
+  <Project Path="benchmarks/Winnow.Benchmarks/Winnow.Benchmarks.csproj" />
+</Solution>

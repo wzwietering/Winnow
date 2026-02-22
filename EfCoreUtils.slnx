@@ -1,5 +1,0 @@
-<Solution>
-  <Project Path="src/EfCoreUtils/EfCoreUtils.csproj" />
-  <Project Path="tests/EfCoreUtils.Tests/EfCoreUtils.Tests.csproj" />
-  <Project Path="benchmarks/EfCoreUtils.Benchmarks/EfCoreUtils.Benchmarks.csproj" />
-</Solution>

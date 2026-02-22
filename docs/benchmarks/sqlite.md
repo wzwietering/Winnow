@@ -4,9 +4,9 @@ Performance measurements on SQLite using BenchmarkDotNet. All benchmarks use a f
 
 **Environment:** Windows 11, Intel Core Ultra 5 225U (12 cores), .NET 10.0.3, BenchmarkDotNet v0.14.0
 
-## Raw EF Core vs Library
+## Raw EF Core vs Winnow
 
-Compares `context.AddRange(); context.SaveChanges()` against the library's strategies.
+Compares `context.AddRange(); context.SaveChanges()` against Winnow's strategies.
 
 | BatchSize | Raw EF Core | D&C | Ratio | OneByOne | Ratio |
 |-----------|-------------|-----|-------|----------|-------|
@@ -14,7 +14,7 @@ Compares `context.AddRange(); context.SaveChanges()` against the library's strat
 | 1,000 | 69.0 ms | 75.5 ms | 1.09x | 10,572.9 ms | 153.2x |
 | 5,000 | 127.5 ms | 136.2 ms | 1.07x | 47,641.7 ms | 373.6x |
 
-DivideAndConquer adds 6-9% overhead compared to raw EF Core while providing error isolation and result tracking. The library adds ~27-30% memory overhead for result tracking and metadata.
+DivideAndConquer adds 6-9% overhead compared to raw EF Core while providing error isolation and result tracking. Winnow adds ~27-30% memory overhead for result tracking and metadata.
 
 OneByOne is 66-374x slower than raw EF Core, confirming it should only be used when individual entity error isolation is required.
 
@@ -152,13 +152,13 @@ Memory follows the same pattern:
 
 ```bash
 # SQLite only
-dotnet run -c Release --project benchmarks/EfCoreUtils.Benchmarks -- --sqlite-only
+dotnet run -c Release --project benchmarks/Winnow.Benchmarks -- --sqlite-only
 
 # Specific benchmark class
-dotnet run -c Release --project benchmarks/EfCoreUtils.Benchmarks -- --sqlite-only --filter '*BaselineInsertBenchmarks*'
+dotnet run -c Release --project benchmarks/Winnow.Benchmarks -- --sqlite-only --filter '*BaselineInsertBenchmarks*'
 
 # All providers (requires Docker for PostgreSQL/SQL Server)
-dotnet run -c Release --project benchmarks/EfCoreUtils.Benchmarks
+dotnet run -c Release --project benchmarks/Winnow.Benchmarks
 ```
 
-Results are written to `benchmarks/EfCoreUtils.Benchmarks/BenchmarkDotNet.Artifacts/results/`.
+Results are written to `benchmarks/Winnow.Benchmarks/BenchmarkDotNet.Artifacts/results/`.
