@@ -136,5 +136,6 @@ var result = saver.InsertGraph([orderLine]);
 
 // Access hierarchy with composite parent key
 var parentKey = new CompositeKey(orderId, 1);
-var childIds = result.ChildIdsByParentId![parentKey];
+var parentNode = result.GraphHierarchy!.First(n => n.EntityId.Equals(parentKey));
+var childIds = parentNode.GetChildIds();
 ```

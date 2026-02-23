@@ -280,8 +280,8 @@ For full result type documentation, see [Results Reference](docs/results-referen
 | Insert parent + children | `InsertGraph` | DivideAndConquer; 2-3x more memory |
 | Update parent + children | `UpdateGraph` | Set `OrphanBehavior` explicitly |
 | Delete parent + children | `DeleteGraph` | Set `CascadeBehavior` explicitly |
-| Many-to-one references | `*GraphBatch` | Set `IncludeReferences = true` |
-| Many-to-many relationships | `*GraphBatch` | Set `IncludeManyToMany = true` |
+| Many-to-one references | `*Graph` | Set `IncludeReferences = true` |
+| Many-to-many relationships | `*Graph` | Set `IncludeManyToMany = true` |
 | High failure rate (>5%) | Any | Pre-validate, then DivideAndConquer |
 | Per-entity error isolation needed | Any | OneByOne |
 
