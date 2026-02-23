@@ -1,5 +1,9 @@
 # Winnow
 
+[![NuGet](https://img.shields.io/nuget/v/Winnow.svg)](https://www.nuget.org/packages/Winnow)
+[![Build](https://github.com/wzwietering/Winnow/actions/workflows/dotnet.yml/badge.svg)](https://github.com/wzwietering/Winnow/actions/workflows/dotnet.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/wzwietering/Winnow/blob/master/LICENSE)
+
 *Separate the good saves from the bad.*
 
 Batch operations for Entity Framework Core with per-entity failure isolation.
@@ -25,7 +29,7 @@ Entity Framework Core's `SaveChanges()` operates atomically: a single invalid en
 dotnet add package Winnow
 ```
 
-**Requirements:** .NET 10.0+, Entity Framework Core 10.0+
+**Requirements:** .NET 8.0+, Entity Framework Core 8.0+
 
 ## Table of Contents
 

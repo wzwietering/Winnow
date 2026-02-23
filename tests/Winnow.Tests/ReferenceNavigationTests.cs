@@ -701,7 +701,7 @@ public class ReferenceNavigationTests : TestBase
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.TraversalInfo!.UniqueReferencesProcessed.ShouldBeGreaterThan(0);
-        result.TraversalInfo.ProcessedReferencesByType.ShouldContainKey("Product");
+        result.TraversalInfo.ProcessedReferencesByType.ContainsKey("Product").ShouldBeTrue();
     }
 
     #endregion
@@ -1106,7 +1106,7 @@ public class ReferenceNavigationTests : TestBase
         });
 
         result.IsCompleteSuccess.ShouldBeTrue();
-        result.TraversalInfo!.ProcessedReferencesByType.ShouldContainKey("Product");
+        result.TraversalInfo!.ProcessedReferencesByType.ContainsKey("Product").ShouldBeTrue();
         result.TraversalInfo.ProcessedReferencesByType["Product"].Count.ShouldBe(1);
     }
 
@@ -1171,8 +1171,8 @@ public class ReferenceNavigationTests : TestBase
         });
 
         result.IsCompleteSuccess.ShouldBeTrue();
-        result.TraversalInfo!.ProcessedReferencesByType.ShouldContainKey("Product");
-        result.TraversalInfo.ProcessedReferencesByType.ShouldContainKey("Category");
+        result.TraversalInfo!.ProcessedReferencesByType.ContainsKey("Product").ShouldBeTrue();
+        result.TraversalInfo.ProcessedReferencesByType.ContainsKey("Category").ShouldBeTrue();
     }
 
     #endregion
