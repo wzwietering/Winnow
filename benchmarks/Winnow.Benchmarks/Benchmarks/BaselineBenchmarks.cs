@@ -51,25 +51,25 @@ public class BaselineInsertBenchmarks
     }
 
     [Benchmark]
-    public InsertBatchResult<int> LibraryDivideAndConquer()
+    public InsertResult<int> LibraryDivideAndConquer()
     {
         using var context = new BenchmarkDbContext(_options);
         var products = EntityGenerator.CreateProducts(BatchSize);
-        var saver = new BatchSaver<BenchmarkProduct, int>(context);
-        return saver.InsertBatch(
+        var saver = new Winnower<BenchmarkProduct, int>(context);
+        return saver.Insert(
             products,
-            new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
+            new InsertOptions { Strategy = BatchStrategy.DivideAndConquer });
     }
 
     [Benchmark]
-    public InsertBatchResult<int> LibraryOneByOne()
+    public InsertResult<int> LibraryOneByOne()
     {
         using var context = new BenchmarkDbContext(_options);
         var products = EntityGenerator.CreateProducts(BatchSize);
-        var saver = new BatchSaver<BenchmarkProduct, int>(context);
-        return saver.InsertBatch(
+        var saver = new Winnower<BenchmarkProduct, int>(context);
+        return saver.Insert(
             products,
-            new InsertBatchOptions { Strategy = BatchStrategy.OneByOne });
+            new InsertOptions { Strategy = BatchStrategy.OneByOne });
     }
 
     [GlobalCleanup]

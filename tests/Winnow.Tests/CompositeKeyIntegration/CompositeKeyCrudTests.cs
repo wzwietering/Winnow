@@ -7,7 +7,7 @@ namespace Winnow.Tests.CompositeKeyIntegration;
 public class CompositeKeyCrudTests : CompositeKeyTestBase
 {
     [Fact]
-    public void InsertBatch_TwoPartCompositeKey_Success()
+    public void Insert_TwoPartCompositeKey_Success()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -21,8 +21,8 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
             UnitPrice = 10.00m + i
         }).ToList();
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.InsertBatch(orderLines);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.Insert(orderLines);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -30,7 +30,7 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public void InsertBatch_ThreePartMixedTypeKey_Success()
+    public void Insert_ThreePartMixedTypeKey_Success()
     {
         using var context = CreateContext();
 
@@ -41,8 +41,8 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
             new InventoryLocation { WarehouseCode = "WH02", AisleNumber = 2, BinCode = "B01", Quantity = 75, LastUpdated = DateTime.UtcNow }
         };
 
-        var saver = new BatchSaver<InventoryLocation, CompositeKey>(context);
-        var result = saver.InsertBatch(locations);
+        var saver = new Winnower<InventoryLocation, CompositeKey>(context);
+        var result = saver.Insert(locations);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -54,7 +54,7 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public void UpdateBatch_CompositeKey_TracksSuccessfulIds()
+    public void Update_CompositeKey_TracksSuccessfulIds()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -66,8 +66,8 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
             line.Quantity += 1;
         }
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.UpdateBatch(orderLinesToUpdate);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.Update(orderLinesToUpdate);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -75,7 +75,7 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public void UpdateBatch_CompositeKey_PartialFailure_TracksFailedIds()
+    public void Update_CompositeKey_PartialFailure_TracksFailedIds()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -86,8 +86,8 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
         orderLinesToUpdate[1].Quantity = -5; // Invalid: will fail validation
         orderLinesToUpdate[2].Quantity = 15;
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.UpdateBatch(orderLinesToUpdate);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.Update(orderLinesToUpdate);
 
         result.IsPartialSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(2);
@@ -96,7 +96,7 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public void DeleteBatch_CompositeKey_Success()
+    public void Delete_CompositeKey_Success()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -105,8 +105,8 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
         var orderLinesToDelete = context.OrderLines.Where(ol => ol.OrderId == orderId).ToList();
         var expectedKeys = orderLinesToDelete.Select(ol => new CompositeKey(ol.OrderId, ol.LineNumber)).ToList();
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.DeleteBatch(orderLinesToDelete);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.Delete(orderLinesToDelete);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -120,15 +120,15 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public void DeleteBatch_ThreePartKey_Success()
+    public void Delete_ThreePartKey_Success()
     {
         using var context = CreateContext();
         InsertInventoryLocations(context, 3);
 
         var locationsToDelete = context.InventoryLocations.ToList();
 
-        var saver = new BatchSaver<InventoryLocation, CompositeKey>(context);
-        var result = saver.DeleteBatch(locationsToDelete);
+        var saver = new Winnower<InventoryLocation, CompositeKey>(context);
+        var result = saver.Delete(locationsToDelete);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -138,7 +138,7 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public void InsertBatch_DuplicateCompositeKey_TracksAsFailure()
+    public void Insert_DuplicateCompositeKey_TracksAsFailure()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -149,8 +149,8 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
             new OrderLine { OrderId = orderId, LineNumber = 1, ProductId = 2, Quantity = 3, UnitPrice = 15.00m } // Duplicate key
         };
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.InsertBatch(orderLines);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.Insert(orderLines);
 
         result.IsPartialSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(1);
@@ -158,7 +158,7 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public void InsertBatch_CompositeKey_LargeBatch_AllSucceed()
+    public void Insert_CompositeKey_LargeBatch_AllSucceed()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -172,8 +172,8 @@ public class CompositeKeyCrudTests : CompositeKeyTestBase
             UnitPrice = 10.00m
         }).ToList();
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.InsertBatch(orderLines);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.Insert(orderLines);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(50);

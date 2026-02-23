@@ -10,7 +10,7 @@ internal sealed class TraversalContext
     internal NavigationFilter? NavigationFilter { get; init; }
     internal CircularReferenceHandling CircularReferenceHandling { get; init; }
 
-    internal static TraversalContext FromOptions(GraphBatchOptionsBase options) => new()
+    internal static TraversalContext FromOptions(GraphOptionsBase options) => new()
     {
         MaxDepth = DepthConstants.ClampDepth(options.MaxDepth),
         NavigationFilter = options.NavigationFilter,

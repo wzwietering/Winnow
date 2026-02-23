@@ -6,17 +6,17 @@ namespace Winnow.Operations;
 /// Delete operation behavior for parent-only entity deletes.
 /// Sets entities to Deleted state and tracks results by entity ID.
 /// </summary>
-internal class DeleteOperation<TEntity, TKey> : IBatchOperation<TEntity, TKey>
+internal class DeleteOperation<TEntity, TKey> : IOperation<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    private readonly DeleteBatchOptions _options;
+    private readonly DeleteOptions _options;
     private readonly List<TKey> _successfulIds = [];
-    private readonly List<BatchFailure<TKey>> _failures = [];
+    private readonly List<WinnowFailure<TKey>> _failures = [];
 
-    internal DeleteOperation(DeleteBatchOptions options) => _options = options;
+    internal DeleteOperation(DeleteOptions options) => _options = options;
 
-    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
+    public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {
         if (!_options.ValidateNavigationProperties)
         {
@@ -29,24 +29,24 @@ internal class DeleteOperation<TEntity, TKey> : IBatchOperation<TEntity, TKey>
         }
     }
 
-    public void PrepareEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.AttachEntityAsDeleted(entity);
+    public void PrepareEntity(TEntity entity, StrategyContext<TEntity, TKey> context) => context.AttachEntityAsDeleted(entity);
 
-    public void RecordSuccess(TEntity entity, BatchStrategyContext<TEntity, TKey> context)
+    public void RecordSuccess(TEntity entity, StrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
         _successfulIds.Add(entityId);
     }
 
-    public void RecordFailure(TEntity entity, Exception ex, BatchStrategyContext<TEntity, TKey> context)
+    public void RecordFailure(TEntity entity, Exception ex, StrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
-        var failure = context.CreateBatchFailure(entityId, ex);
+        var failure = context.CreateWinnowFailure(entityId, ex);
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) => context.Context.Entry(entity).State = EntityState.Detached;
+    public void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context) => context.Context.Entry(entity).State = EntityState.Detached;
 
-    public BatchResult<TKey> CreateResult(bool wasCancelled = false) => new()
+    public WinnowResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {
         SuccessfulIds = _successfulIds,
         Failures = _failures,

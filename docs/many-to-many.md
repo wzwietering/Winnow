@@ -5,7 +5,7 @@ Graph operations support many-to-many relationships via skip navigations (EF Cor
 ## Basic Insert with Many-to-Many
 
 ```csharp
-var saver = new BatchSaver<Student, int>(context);
+var saver = new Winnower<Student, int>(context);
 
 var student = new Student
 {
@@ -13,7 +13,7 @@ var student = new Student
     Courses = existingCourses  // Courses already in database
 };
 
-var result = saver.InsertGraphBatch(new[] { student }, new InsertGraphBatchOptions
+var result = saver.InsertGraph(new[] { student }, new InsertGraphOptions
 {
     IncludeManyToMany = true  // Enable M2M handling
 });
@@ -33,7 +33,7 @@ var student = context.Students
 student.Courses.Remove(student.Courses.First());  // Drop a course
 student.Courses.Add(newCourse);  // Enroll in new course
 
-var result = saver.UpdateGraphBatch(new[] { student }, new GraphBatchOptions
+var result = saver.UpdateGraph(new[] { student }, new GraphOptions
 {
     IncludeManyToMany = true
 });
@@ -52,7 +52,7 @@ var studentsToDelete = context.Students
     .Where(s => s.GraduationYear < 2020)
     .ToList();
 
-var result = saver.DeleteGraphBatch(studentsToDelete, new DeleteGraphBatchOptions
+var result = saver.DeleteGraph(studentsToDelete, new DeleteGraphOptions
 {
     IncludeManyToMany = true  // Clean up join records
 });
@@ -76,7 +76,7 @@ var enrollment = new Enrollment
 
 student.Enrollments.Add(enrollment);
 
-var result = saver.UpdateGraphBatch(new[] { student }, new GraphBatchOptions
+var result = saver.UpdateGraph(new[] { student }, new GraphOptions
 {
     IncludeManyToMany = true
 });

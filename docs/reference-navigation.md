@@ -5,7 +5,7 @@ Graph operations can include reference navigations (many-to-one relationships) i
 ## Basic Usage
 
 ```csharp
-var saver = new BatchSaver<OrderItem, int>(context);
+var saver = new Winnower<OrderItem, int>(context);
 
 var items = context.OrderItems
     .Include(i => i.Product)  // Include the reference
@@ -15,7 +15,7 @@ var items = context.OrderItems
 items[0].Quantity = 5;
 items[0].Product.Price = 29.99m;
 
-var result = saver.UpdateGraphBatch(items, new GraphBatchOptions
+var result = saver.UpdateGraph(items, new GraphOptions
 {
     IncludeReferences = true,
     CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -37,7 +37,7 @@ var result = saver.UpdateGraphBatch(items, new GraphBatchOptions
 When entities reference each other (e.g., `Order` → `Customer` → `Orders`), you need to handle circular references:
 
 ```csharp
-var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+var result = saver.UpdateGraph(orders, new GraphOptions
 {
     IncludeReferences = true,
     CircularReferenceHandling = CircularReferenceHandling.Ignore

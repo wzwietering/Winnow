@@ -224,17 +224,17 @@ public class RetryBehaviorTests : IDisposable
         retryCount.ShouldBe(1);
     }
 
-    // === Integration through BatchSaver ===
+    // === Integration through Winnower ===
 
     [Fact]
-    public void InsertBatch_tracks_TotalRetries()
+    public void Insert_tracks_TotalRetries()
     {
         using var context = CreateFailingContext(2);
-        var saver = new BatchSaver<Product, int>(context);
+        var saver = new Winnower<Product, int>(context);
 
-        var result = saver.InsertBatch(
+        var result = saver.Insert(
             [new Product { Name = "P1", Price = 10, Stock = 1 }],
-            new InsertBatchOptions
+            new InsertOptions
             {
                 Retry = new RetryOptions { MaxRetries = 3, InitialDelay = TimeSpan.Zero }
             });
@@ -244,14 +244,14 @@ public class RetryBehaviorTests : IDisposable
     }
 
     [Fact]
-    public async Task InsertBatchAsync_tracks_TotalRetries()
+    public async Task InsertAsync_tracks_TotalRetries()
     {
         using var context = CreateFailingContext(1);
-        var saver = new BatchSaver<Product, int>(context);
+        var saver = new Winnower<Product, int>(context);
 
-        var result = await saver.InsertBatchAsync(
+        var result = await saver.InsertAsync(
             [new Product { Name = "P1", Price = 10, Stock = 1 }],
-            new InsertBatchOptions
+            new InsertOptions
             {
                 Retry = new RetryOptions { MaxRetries = 3, InitialDelay = TimeSpan.Zero }
             });
@@ -265,11 +265,11 @@ public class RetryBehaviorTests : IDisposable
     {
         using var context = CreateFailingContext(2);
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
 
-        saver.InsertBatch(
+        saver.Insert(
             [new Product { Name = "P1", Price = 10, Stock = 1 }],
-            new InsertBatchOptions
+            new InsertOptions
             {
                 Retry = new RetryOptions { MaxRetries = 3, InitialDelay = TimeSpan.Zero }
             });
@@ -284,7 +284,7 @@ public class RetryBehaviorTests : IDisposable
     }
 
     [Fact]
-    public void UpdateBatch_tracks_TotalRetries()
+    public void Update_tracks_TotalRetries()
     {
         using var context = CreateFailingContext(0);
         context.Products.Add(new Product { Name = "Seed", Price = 10, Stock = 1 });
@@ -298,10 +298,10 @@ public class RetryBehaviorTests : IDisposable
         // Set failures AFTER seed
         context.FailuresRemaining = 1;
 
-        var saver = new BatchSaver<Product, int>(context);
-        var result = saver.UpdateBatch(
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Update(
             [product],
-            new BatchOptions
+            new WinnowOptions
             {
                 Retry = new RetryOptions { MaxRetries = 3, InitialDelay = TimeSpan.Zero }
             });
@@ -311,14 +311,14 @@ public class RetryBehaviorTests : IDisposable
     }
 
     [Fact]
-    public void UpsertBatch_tracks_TotalRetries()
+    public void Upsert_tracks_TotalRetries()
     {
         using var context = CreateFailingContext(1);
-        var saver = new BatchSaver<Product, int>(context);
+        var saver = new Winnower<Product, int>(context);
 
-        var result = saver.UpsertBatch(
+        var result = saver.Upsert(
             [new Product { Name = "New", Price = 10, Stock = 1 }],
-            new UpsertBatchOptions
+            new UpsertOptions
             {
                 Retry = new RetryOptions { MaxRetries = 3, InitialDelay = TimeSpan.Zero }
             });
@@ -328,7 +328,7 @@ public class RetryBehaviorTests : IDisposable
     }
 
     [Fact]
-    public void DeleteBatch_tracks_TotalRetries()
+    public void Delete_tracks_TotalRetries()
     {
         using var context = CreateFailingContext(0);
         context.Products.Add(new Product { Name = "Seed", Price = 10, Stock = 1 });
@@ -341,10 +341,10 @@ public class RetryBehaviorTests : IDisposable
         // Set failures AFTER seed
         context.FailuresRemaining = 1;
 
-        var saver = new BatchSaver<Product, int>(context);
-        var result = saver.DeleteBatch(
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Delete(
             [product],
-            new DeleteBatchOptions
+            new DeleteOptions
             {
                 Retry = new RetryOptions { MaxRetries = 3, InitialDelay = TimeSpan.Zero }
             });
@@ -356,7 +356,7 @@ public class RetryBehaviorTests : IDisposable
     // === Parallel path ===
 
     [Fact]
-    public async Task ParallelInsertBatchAsync_tracks_TotalRetries()
+    public async Task ParallelInsertAsync_tracks_TotalRetries()
     {
         var dbPath = Path.Combine(Path.GetTempPath(), $"winnow_retry_{Guid.NewGuid():N}.db");
         try
@@ -364,12 +364,12 @@ public class RetryBehaviorTests : IDisposable
             CreateSchemaOnDisk(dbPath);
 
             Func<DbContext> factory = () => CreateFailingContextOnDisk(dbPath, 1);
-            var saver = new ParallelBatchSaver<Product, int>(factory, maxDegreeOfParallelism: 2);
+            var saver = new ParallelWinnower<Product, int>(factory, maxDegreeOfParallelism: 2);
             var products = Enumerable.Range(0, 4)
                 .Select(i => new Product { Name = $"P{i}", Price = 10 + i, Stock = 1 })
                 .ToList();
 
-            var result = await saver.InsertBatchAsync(products, new InsertBatchOptions
+            var result = await saver.InsertAsync(products, new InsertOptions
             {
                 Retry = new RetryOptions { MaxRetries = 3, InitialDelay = TimeSpan.Zero }
             });

@@ -2,9 +2,9 @@
 
 All batch options classes and their properties.
 
-## BatchOptions
+## WinnowOptions
 
-Used with `UpdateBatch`.
+Used with `Update`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -12,19 +12,19 @@ Used with `UpdateBatch`.
 | `ValidateNavigationProperties` | `bool` | `true` | When true, validates navigation properties are not modified |
 | `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff for transient failures |
 
-All options classes that inherit from `BatchOptions` also support `Strategy`, `ValidateNavigationProperties`, and `Retry`. All options classes that inherit from `GraphBatchOptionsBase` also support `Retry`.
+All options classes that inherit from `WinnowOptions` also support `Strategy`, `ValidateNavigationProperties`, and `Retry`. All options classes that inherit from `GraphOptionsBase` also support `Retry`.
 
-## InsertBatchOptions
+## InsertOptions
 
-Used with `InsertBatch`. Inherits from `BatchOptions`.
+Used with `Insert`. Inherits from `WinnowOptions`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 
-## InsertGraphBatchOptions
+## InsertGraphOptions
 
-Used with `InsertGraphBatch`.
+Used with `InsertGraph`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -40,9 +40,9 @@ Used with `InsertGraphBatch`.
 | `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
 | `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
 
-## GraphBatchOptions
+## GraphOptions
 
-Used with `UpdateGraphBatch`.
+Used with `UpdateGraph`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -56,17 +56,17 @@ Used with `UpdateGraphBatch`.
 | `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
 | `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
 
-## DeleteBatchOptions
+## DeleteOptions
 
-Used with `DeleteBatch`.
+Used with `Delete`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 
-## DeleteGraphBatchOptions
+## DeleteGraphOptions
 
-Used with `DeleteGraphBatch`.
+Used with `DeleteGraph`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -78,18 +78,18 @@ Used with `DeleteGraphBatch`.
 | `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
 | `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
 
-## UpsertBatchOptions
+## UpsertOptions
 
-Used with `UpsertBatch`.
+Used with `Upsert`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `DuplicateKeyStrategy` | `DuplicateKeyStrategy` | `Fail` | How to handle duplicate key errors during INSERT |
 
-## UpsertGraphBatchOptions
+## UpsertGraphOptions
 
-Used with `UpsertGraphBatch`.
+Used with `UpsertGraph`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -112,7 +112,7 @@ Used with `UpsertGraphBatch`.
 Configure automatic retry with exponential backoff for transient failures. Available on all batch operations via the `Retry` property.
 
 ```csharp
-var result = saver.UpdateBatch(entities, new BatchOptions
+var result = saver.Update(entities, new WinnowOptions
 {
     Retry = new RetryOptions
     {

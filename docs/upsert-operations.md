@@ -23,7 +23,7 @@ Upsert operations perform INSERT or UPDATE based on key detection:
 Handle race conditions automatically with `DuplicateKeyStrategy`:
 
 ```csharp
-var result = saver.UpsertBatch(products, new UpsertBatchOptions
+var result = saver.Upsert(products, new UpsertOptions
 {
     DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate
 });
@@ -38,7 +38,7 @@ var result = saver.UpsertBatch(products, new UpsertBatchOptions
 ## Basic Upsert
 
 ```csharp
-var saver = new BatchSaver<Product, int>(context);
+var saver = new Winnower<Product, int>(context);
 
 var products = new[]
 {
@@ -47,7 +47,7 @@ var products = new[]
     new Product { Id = 0, Name = "Another New", Price = 5.00m }     // INSERT (Id=0)
 };
 
-var result = saver.UpsertBatch(products);
+var result = saver.Upsert(products);
 
 Console.WriteLine($"Inserted: {result.InsertedCount}");  // 2
 Console.WriteLine($"Updated: {result.UpdatedCount}");    // 1
@@ -68,7 +68,7 @@ foreach (var entity in result.UpdatedEntities)
 Combine insert and update operations for parent-child hierarchies:
 
 ```csharp
-var saver = new BatchSaver<CustomerOrder, int>(context);
+var saver = new Winnower<CustomerOrder, int>(context);
 
 var orders = new[]
 {
@@ -84,7 +84,7 @@ var orders = new[]
     }
 };
 
-var result = saver.UpsertGraphBatch(orders, new UpsertGraphBatchOptions
+var result = saver.UpsertGraph(orders, new UpsertGraphOptions
 {
     OrphanedChildBehavior = OrphanBehavior.Delete  // Required for graph updates
 });
@@ -95,7 +95,7 @@ Console.WriteLine($"Updated: {result.UpdatedCount}");
 
 Graph upserts also support `NavigationFilter` to control which child collections are traversed. See [Navigation Filtering](graph-operations.md#navigation-filtering) for details.
 
-## UpsertBatchResult Properties
+## UpsertResult Properties
 
 ```csharp
 result.InsertedEntities   // List<UpsertedEntity<TKey>> with Id, OriginalIndex, Entity, Operation
@@ -105,7 +105,7 @@ result.UpdatedIds         // IReadOnlyList<TKey> - Just the updated IDs
 result.SuccessfulIds      // IReadOnlyList<TKey> - All successful IDs (inserted + updated)
 result.InsertedCount      // Count of inserts
 result.UpdatedCount       // Count of updates
-result.Failures           // List<UpsertBatchFailure<TKey>> with EntityIndex, AttemptedOperation
+result.Failures           // List<UpsertFailure<TKey>> with EntityIndex, AttemptedOperation
 result.GraphHierarchy     // For graph upserts: IReadOnlyList<GraphNode<TKey>>?
 result.TraversalInfo      // Graph traversal statistics
 ```
@@ -118,13 +118,13 @@ For custom retry logic:
 
 ```csharp
 const int maxRetries = 3;
-UpsertBatchResult<int>? result = null;
+UpsertResult<int>? result = null;
 
 for (int attempt = 1; attempt <= maxRetries; attempt++)
 {
     try
     {
-        result = saver.UpsertBatch(products);
+        result = saver.Upsert(products);
         break;  // Success
     }
     catch (DbUpdateException ex) when (attempt < maxRetries)

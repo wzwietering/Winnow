@@ -15,7 +15,7 @@ public class Category
 }
 
 // Insert complete hierarchy
-var saver = new BatchSaver<Category, int>(context);
+var saver = new Winnower<Category, int>(context);
 
 var electronics = new Category
 {
@@ -35,7 +35,7 @@ var electronics = new Category
     ]
 };
 
-var result = saver.InsertGraphBatch([electronics]);
+var result = saver.InsertGraph([electronics]);
 // All levels inserted with IDs populated
 ```
 
@@ -44,7 +44,7 @@ var result = saver.InsertGraphBatch([electronics]);
 For bidirectional navigations (both Parent->Child and Child->Parent loaded):
 
 ```csharp
-var result = saver.UpdateGraphBatch(categories, new GraphBatchOptions
+var result = saver.UpdateGraph(categories, new GraphOptions
 {
     CircularReferenceHandling = CircularReferenceHandling.Ignore
 });
@@ -61,7 +61,7 @@ var result = saver.UpdateGraphBatch(categories, new GraphBatchOptions
 For deep hierarchies, you may need to increase the maximum depth:
 
 ```csharp
-var result = saver.InsertGraphBatch(categories, new InsertGraphBatchOptions
+var result = saver.InsertGraph(categories, new InsertGraphOptions
 {
     MaxDepth = 20  // Default is 10
 });
@@ -75,7 +75,7 @@ You can use `NavigationFilter` to control which navigations are traversed for se
 var filter = NavigationFilter.Include()
     .Navigation<Category>(c => c.SubCategories);
 
-var result = saver.InsertGraphBatch([parent], new InsertGraphBatchOptions
+var result = saver.InsertGraph([parent], new InsertGraphOptions
 {
     NavigationFilter = filter,
     CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -98,7 +98,7 @@ var movedCategory = category.SubCategories.First();
 category.SubCategories.Remove(movedCategory);
 otherCategory.SubCategories.Add(movedCategory);
 
-var result = saver.UpdateGraphBatch([category, otherCategory], new GraphBatchOptions
+var result = saver.UpdateGraph([category, otherCategory], new GraphOptions
 {
     OrphanedChildBehavior = OrphanBehavior.Detach,  // Don't delete, just reassign
     CircularReferenceHandling = CircularReferenceHandling.Ignore

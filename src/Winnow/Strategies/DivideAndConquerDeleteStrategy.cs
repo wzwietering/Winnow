@@ -2,24 +2,24 @@ using Winnow.Operations;
 
 namespace Winnow.Strategies;
 
-internal class DivideAndConquerDeleteStrategy<TEntity, TKey> : IBatchDeleteStrategy<TEntity, TKey>
+internal class DivideAndConquerDeleteStrategy<TEntity, TKey> : IDeleteStrategy<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    public BatchResult<TKey> Execute(
+    public WinnowResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        DeleteBatchOptions options)
+        StrategyContext<TEntity, TKey> context,
+        DeleteOptions options)
     {
         var operation = new DeleteOperation<TEntity, TKey>(options);
         var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
 
-    public Task<BatchResult<TKey>> ExecuteAsync(
+    public Task<WinnowResult<TKey>> ExecuteAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        DeleteBatchOptions options,
+        StrategyContext<TEntity, TKey> context,
+        DeleteOptions options,
         CancellationToken cancellationToken)
     {
         var operation = new DeleteOperation<TEntity, TKey>(options);

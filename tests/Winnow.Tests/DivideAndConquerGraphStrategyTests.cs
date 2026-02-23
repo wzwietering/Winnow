@@ -7,13 +7,13 @@ namespace Winnow.Tests;
 
 public class DivideAndConquerGraphStrategyTests : TestBase
 {
-    private static readonly GraphBatchOptions DivideAndConquerOptions = new()
+    private static readonly GraphOptions DivideAndConquerOptions = new()
     {
         Strategy = BatchStrategy.DivideAndConquer
     };
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_AllSucceed_SingleRoundTrip()
+    public void UpdateGraph_DivideAndConquer_AllSucceed_SingleRoundTrip()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 5, itemsPerOrder: 3);
@@ -32,8 +32,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, DivideAndConquerOptions);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(5);
@@ -41,7 +41,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_SingleEntity()
+    public void UpdateGraph_DivideAndConquer_SingleEntity()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 1, itemsPerOrder: 3);
@@ -54,8 +54,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, DivideAndConquerOptions);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(1);
@@ -67,12 +67,12 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_EmptyList()
+    public void UpdateGraph_DivideAndConquer_EmptyList()
     {
         using var context = CreateContext();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([], DivideAndConquerOptions);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([], DivideAndConquerOptions);
 
         result.SuccessCount.ShouldBe(0);
         result.FailureCount.ShouldBe(0);
@@ -81,7 +81,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_ReturnsGraphHierarchy()
+    public void UpdateGraph_DivideAndConquer_ReturnsGraphHierarchy()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 3, itemsPerOrder: 3);
@@ -93,8 +93,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
             order.Status = CustomerOrderStatus.Completed;
         }
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, DivideAndConquerOptions);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.GraphHierarchy.ShouldNotBeNull();
@@ -108,7 +108,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_OneFailsOthersSucceed()
+    public void UpdateGraph_DivideAndConquer_OneFailsOthersSucceed()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 5, itemsPerOrder: 3);
@@ -123,8 +123,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, DivideAndConquerOptions);
 
         result.IsPartialSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(4);
@@ -137,7 +137,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_MultipleFailures_ScatteredPositions()
+    public void UpdateGraph_DivideAndConquer_MultipleFailures_ScatteredPositions()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 8, itemsPerOrder: 3);
@@ -150,8 +150,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, DivideAndConquerOptions);
 
         result.IsPartialSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(5);
@@ -164,7 +164,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_ParentFails_ChildNotSaved()
+    public void UpdateGraph_DivideAndConquer_ParentFails_ChildNotSaved()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 3, itemsPerOrder: 3);
@@ -177,8 +177,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, DivideAndConquerOptions);
 
         result.IsPartialSuccess.ShouldBeTrue();
         result.Failures.Count.ShouldBe(1);
@@ -190,7 +190,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_ChildFails_ParentNotSaved()
+    public void UpdateGraph_DivideAndConquer_ChildFails_ParentNotSaved()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 3, itemsPerOrder: 3);
@@ -203,8 +203,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, DivideAndConquerOptions);
 
         result.IsPartialSuccess.ShouldBeTrue();
         result.FailureCount.ShouldBe(1);
@@ -215,7 +215,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_AllFail()
+    public void UpdateGraph_DivideAndConquer_AllFail()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 4, itemsPerOrder: 3);
@@ -229,8 +229,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, DivideAndConquerOptions);
 
         result.IsCompleteFailure.ShouldBeTrue();
         result.FailureCount.ShouldBe(4);
@@ -240,7 +240,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     // ========== Orphan Handling Tests ==========
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_OrphanThrow_ThrowsUpfront()
+    public void UpdateGraph_DivideAndConquer_OrphanThrow_ThrowsUpfront()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 3, itemsPerOrder: 3);
@@ -250,16 +250,16 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         orders[0].OrderItems.Remove(orders[0].OrderItems.First());
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var saver = new Winnower<CustomerOrder, int>(context);
         var ex = Should.Throw<InvalidOperationException>(() =>
-            saver.UpdateGraphBatch(orders, DivideAndConquerOptions));
+            saver.UpdateGraph(orders, DivideAndConquerOptions));
 
         ex.Message.ShouldContain("orphaned");
         ex.Message.ShouldContain(removedItemId.ToString());
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_OrphanDelete_BatchSucceeds()
+    public void UpdateGraph_DivideAndConquer_OrphanDelete_BatchSucceeds()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 3, itemsPerOrder: 3);
@@ -270,8 +270,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
         orders[0].OrderItems.Remove(orders[0].OrderItems.First());
         orders[0].Status = CustomerOrderStatus.Processing;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, new GraphOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
             OrphanedChildBehavior = OrphanBehavior.Delete
@@ -287,7 +287,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_OrphanDelete_AfterSplit()
+    public void UpdateGraph_DivideAndConquer_OrphanDelete_AfterSplit()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 4, itemsPerOrder: 3);
@@ -299,8 +299,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
         orders[0].Status = CustomerOrderStatus.Processing;
         orders[1].TotalAmount = -100m;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, new GraphOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
             OrphanedChildBehavior = OrphanBehavior.Delete
@@ -315,7 +315,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_OrphanDelete_MultipleOrphansMultipleGraphs()
+    public void UpdateGraph_DivideAndConquer_OrphanDelete_MultipleOrphansMultipleGraphs()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 3, itemsPerOrder: 3);
@@ -327,8 +327,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
         orders[0].OrderItems.Remove(removedItem1);
         orders[1].OrderItems.Remove(removedItem2);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, new GraphOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
             OrphanedChildBehavior = OrphanBehavior.Delete
@@ -347,7 +347,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_OrphanDetach()
+    public void UpdateGraph_DivideAndConquer_OrphanDetach()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 3, itemsPerOrder: 3);
@@ -358,8 +358,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
         orders[0].OrderItems.Remove(orders[0].OrderItems.First());
         orders[0].Status = CustomerOrderStatus.Processing;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, new GraphOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
             OrphanedChildBehavior = OrphanBehavior.Detach
@@ -375,7 +375,7 @@ public class DivideAndConquerGraphStrategyTests : TestBase
     // ========== Large Batch Test ==========
 
     [Fact]
-    public void UpdateGraphBatch_DivideAndConquer_LargeBatch()
+    public void UpdateGraph_DivideAndConquer_LargeBatch()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 100, itemsPerOrder: 3);
@@ -394,8 +394,8 @@ public class DivideAndConquerGraphStrategyTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, DivideAndConquerOptions);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, DivideAndConquerOptions);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(100);

@@ -10,14 +10,14 @@ public class MultiLevelGraphTests : TestBase
     // ========== Multi-Level Insert Tests ==========
 
     [Fact]
-    public void InsertGraphBatch_ThreeLevelHierarchy_AllInsertedWithIds()
+    public void InsertGraph_ThreeLevelHierarchy_AllInsertedWithIds()
     {
         using var context = CreateContext();
 
         var order = CreateThreeLevelOrder("ORD-001", 2, 2);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(1);
@@ -30,14 +30,14 @@ public class MultiLevelGraphTests : TestBase
     }
 
     [Fact]
-    public void InsertGraphBatch_MaxDepthLimitsTraversal_GrandchildrenIgnored()
+    public void InsertGraph_MaxDepthLimitsTraversal_GrandchildrenIgnored()
     {
         using var context = CreateContext();
 
         var order = CreateThreeLevelOrder("ORD-001", 2, 2);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             MaxDepth = 1
         });
@@ -52,14 +52,14 @@ public class MultiLevelGraphTests : TestBase
     }
 
     [Fact]
-    public void InsertGraphBatch_GraphHierarchy_ReturnsThreeLevelTree()
+    public void InsertGraph_GraphHierarchy_ReturnsThreeLevelTree()
     {
         using var context = CreateContext();
 
         var order = CreateThreeLevelOrder("ORD-001", 2, 2);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order]);
 
         result.GraphHierarchy.ShouldNotBeNull();
         result.GraphHierarchy!.Count.ShouldBe(1);
@@ -85,14 +85,14 @@ public class MultiLevelGraphTests : TestBase
     }
 
     [Fact]
-    public void InsertGraphBatch_TraversalInfo_AccurateDepthAndCount()
+    public void InsertGraph_TraversalInfo_AccurateDepthAndCount()
     {
         using var context = CreateContext();
 
         var order = CreateThreeLevelOrder("ORD-001", 3, 2);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order]);
 
         var rootNode = result.GraphHierarchy!.First();
 
@@ -105,15 +105,15 @@ public class MultiLevelGraphTests : TestBase
     }
 
     [Fact]
-    public void InsertGraphBatch_GrandchildFails_EntireGraphFails()
+    public void InsertGraph_GrandchildFails_EntireGraphFails()
     {
         using var context = CreateContext();
 
         var order = CreateThreeLevelOrder("ORD-001", 2, 2);
         order.OrderItems.First().Reservations.First().ReservedQuantity = -1; // Invalid
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order]);
 
         result.IsCompleteFailure.ShouldBeTrue();
         result.FailureCount.ShouldBe(1);
@@ -122,7 +122,7 @@ public class MultiLevelGraphTests : TestBase
     // ========== Multi-Level Update Tests ==========
 
     [Fact]
-    public void UpdateGraphBatch_ModifyAtAllLevels_ChangesPersisted()
+    public void UpdateGraph_ModifyAtAllLevels_ChangesPersisted()
     {
         using var context = CreateContext();
         SeedThreeLevelOrders(context, 2, 2, 2);
@@ -142,8 +142,8 @@ public class MultiLevelGraphTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders);
 
         result.IsCompleteSuccess.ShouldBeTrue();
 
@@ -160,7 +160,7 @@ public class MultiLevelGraphTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_OrphanDetection_AtAllLevels()
+    public void UpdateGraph_OrphanDetection_AtAllLevels()
     {
         using var context = CreateContext();
         SeedThreeLevelOrders(context, 2, 2, 2);
@@ -174,16 +174,16 @@ public class MultiLevelGraphTests : TestBase
         var removedId = removedReservation.Id;
         orders[0].OrderItems.First().Reservations.Remove(removedReservation);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var saver = new Winnower<CustomerOrder, int>(context);
         var ex = Should.Throw<InvalidOperationException>(() =>
-            saver.UpdateGraphBatch(orders));
+            saver.UpdateGraph(orders));
 
         ex.Message.ShouldContain("orphaned");
         ex.Message.ShouldContain(removedId.ToString());
     }
 
     [Fact]
-    public void UpdateGraphBatch_OrphanDelete_CascadesToGrandchildren()
+    public void UpdateGraph_OrphanDelete_CascadesToGrandchildren()
     {
         using var context = CreateContext();
         SeedThreeLevelOrders(context, 2, 2, 2);
@@ -197,8 +197,8 @@ public class MultiLevelGraphTests : TestBase
         var removedId = removedReservation.Id;
         orders[0].OrderItems.First().Reservations.Remove(removedReservation);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Delete
         });
@@ -210,7 +210,7 @@ public class MultiLevelGraphTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_AddGrandchild_Inserted()
+    public void UpdateGraph_AddGrandchild_Inserted()
     {
         using var context = CreateContext();
         SeedThreeLevelOrders(context, 2, 2, 1);
@@ -236,7 +236,7 @@ public class MultiLevelGraphTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_MaxDepthZero_GraphHierarchyShowsOnlyRoot()
+    public void UpdateGraph_MaxDepthZero_GraphHierarchyShowsOnlyRoot()
     {
         using var context = CreateContext();
         SeedThreeLevelOrders(context, 2, 2, 2);
@@ -251,10 +251,10 @@ public class MultiLevelGraphTests : TestBase
 
         context.ChangeTracker.DetectChanges();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var saver = new Winnower<CustomerOrder, int>(context);
 
         // With MaxDepth=0, only root is included in graph hierarchy
-        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        var result = saver.UpdateGraph(orders, new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Detach,
             MaxDepth = 0
@@ -279,7 +279,7 @@ public class MultiLevelGraphTests : TestBase
     // ========== Multi-Level Delete Tests ==========
 
     [Fact]
-    public void DeleteGraphBatch_ThreeLevelCascade_AllDescendantsDeleted()
+    public void DeleteGraph_ThreeLevelCascade_AllDescendantsDeleted()
     {
         using var context = CreateContext();
         SeedThreeLevelOrders(context, 2, 2, 2);
@@ -295,8 +295,8 @@ public class MultiLevelGraphTests : TestBase
             .Select(r => r.Id).ToList();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.DeleteGraphBatch([orderWithGraph]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.DeleteGraph([orderWithGraph]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessfulIds.ShouldContain(orderId);
@@ -315,7 +315,7 @@ public class MultiLevelGraphTests : TestBase
     }
 
     [Fact]
-    public void DeleteGraphBatch_DeletesInCorrectOrder_DeepestFirst()
+    public void DeleteGraph_DeletesInCorrectOrder_DeepestFirst()
     {
         using var context = CreateContext();
         SeedThreeLevelOrders(context, 1, 2, 2);
@@ -327,15 +327,15 @@ public class MultiLevelGraphTests : TestBase
         context.ChangeTracker.Clear();
 
         // This test verifies FK constraints are respected (deepest first)
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.DeleteGraphBatch([orderWithGraph]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.DeleteGraph([orderWithGraph]);
 
         // If order is wrong, SQLite would throw FK constraint violation
         result.IsCompleteSuccess.ShouldBeTrue();
     }
 
     [Fact]
-    public void DeleteGraphBatch_MaxDepthLimitsGraphHierarchy()
+    public void DeleteGraph_MaxDepthLimitsGraphHierarchy()
     {
         using var context = CreateContext();
         SeedThreeLevelOrders(context, 2, 2, 2);
@@ -347,8 +347,8 @@ public class MultiLevelGraphTests : TestBase
         var orderId = orderWithGraph.Id;
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.DeleteGraphBatch([orderWithGraph], new DeleteGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.DeleteGraph([orderWithGraph], new DeleteGraphOptions
         {
             MaxDepth = 1
         });
@@ -374,7 +374,7 @@ public class MultiLevelGraphTests : TestBase
     }
 
     [Fact]
-    public void DeleteGraphBatch_PartialFailure_IsolatesGraphs()
+    public void DeleteGraph_PartialFailure_IsolatesGraphs()
     {
         using var context = CreateContext();
         SeedThreeLevelOrders(context, 3, 2, 2);
@@ -391,8 +391,8 @@ public class MultiLevelGraphTests : TestBase
         var secondOrderId = orders[1].Id;
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.DeleteGraphBatch(orders);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.DeleteGraph(orders);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -401,7 +401,7 @@ public class MultiLevelGraphTests : TestBase
     }
 
     [Fact]
-    public void DeleteGraphBatch_ThrowBehavior_ThrowsIfAnyLevelHasChildren()
+    public void DeleteGraph_ThrowBehavior_ThrowsIfAnyLevelHasChildren()
     {
         using var context = CreateContext();
         SeedThreeLevelOrders(context, 2, 2, 2);
@@ -412,14 +412,14 @@ public class MultiLevelGraphTests : TestBase
             .First();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var options = new DeleteGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var options = new DeleteGraphOptions
         {
             CascadeBehavior = DeleteCascadeBehavior.Throw
         };
 
         Should.Throw<InvalidOperationException>(() =>
-            saver.DeleteGraphBatch([orderWithGraph], options))
+            saver.DeleteGraph([orderWithGraph], options))
             .Message.ShouldContain("child(ren)");
     }
 
@@ -432,8 +432,8 @@ public class MultiLevelGraphTests : TestBase
 
         var order = CreateThreeLevelOrder("ORD-001", 2, 3);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order]);
 
         var rootNode = result.GraphHierarchy!.First();
 
@@ -453,8 +453,8 @@ public class MultiLevelGraphTests : TestBase
         // 1 order → 2 items → 3 reservations each = 2 + 6 = 8 descendants
         var order = CreateThreeLevelOrder("ORD-001", 2, 3);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order]);
 
         var rootNode = result.GraphHierarchy!.First();
         var allDescendants = rootNode.GetAllDescendantIds();
@@ -477,8 +477,8 @@ public class MultiLevelGraphTests : TestBase
 
         var order = CreateThreeLevelOrder("ORD-001", 1, 1);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order]);
 
         var rootNode = result.GraphHierarchy!.First();
         var itemNode = rootNode.Children.First();

@@ -10,7 +10,7 @@ public class CompositeKeyAutoDetectTests : CompositeKeyTestBase
     public void AutoDetect_SimpleKey_IsCompositeKeyFalse()
     {
         using var context = CreateContext();
-        var saver = new BatchSaver<Product>(context);
+        var saver = new Winnower<Product>(context);
 
         saver.IsCompositeKey.ShouldBeFalse();
     }
@@ -19,7 +19,7 @@ public class CompositeKeyAutoDetectTests : CompositeKeyTestBase
     public void AutoDetect_CompositeKey_IsCompositeKeyTrue()
     {
         using var context = CreateContext();
-        var saver = new BatchSaver<OrderLine>(context);
+        var saver = new Winnower<OrderLine>(context);
 
         saver.IsCompositeKey.ShouldBeTrue();
     }
@@ -37,8 +37,8 @@ public class CompositeKeyAutoDetectTests : CompositeKeyTestBase
             LastModified = DateTimeOffset.UtcNow
         };
 
-        var saver = new BatchSaver<Product>(context);
-        var result = saver.InsertBatch([product]);
+        var saver = new Winnower<Product>(context);
+        var result = saver.Insert([product]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedIds.Count.ShouldBe(1);
@@ -60,8 +60,8 @@ public class CompositeKeyAutoDetectTests : CompositeKeyTestBase
             UnitPrice = 10.00m
         };
 
-        var saver = new BatchSaver<OrderLine>(context);
-        var result = saver.InsertBatch([orderLine]);
+        var saver = new Winnower<OrderLine>(context);
+        var result = saver.Insert([orderLine]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedIds.Count.ShouldBe(1);

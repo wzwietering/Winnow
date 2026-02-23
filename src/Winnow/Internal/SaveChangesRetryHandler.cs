@@ -43,7 +43,7 @@ internal static class SaveChangesRetryHandler
             {
                 attempt++;
                 incrementRetry();
-                BatchLogger.LogRetryAttempt(logger, attempt, maxRetries, delay.TotalMilliseconds, ex.Message);
+                WinnowLogger.LogRetryAttempt(logger, attempt, maxRetries, delay.TotalMilliseconds, ex.Message);
                 await Task.Delay(delay, cancellationToken);
                 delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * backoffMultiplier);
             }
@@ -84,7 +84,7 @@ internal static class SaveChangesRetryHandler
             {
                 attempt++;
                 incrementRetry();
-                BatchLogger.LogRetryAttempt(logger, attempt, maxRetries, delay.TotalMilliseconds, ex.Message);
+                WinnowLogger.LogRetryAttempt(logger, attempt, maxRetries, delay.TotalMilliseconds, ex.Message);
                 Thread.Sleep(delay);
                 delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * backoffMultiplier);
             }

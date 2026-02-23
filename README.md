@@ -5,8 +5,8 @@
 Batch operations for Entity Framework Core with per-entity failure isolation.
 
 ```csharp
-var saver = new BatchSaver<Product, int>(context);
-var result = saver.InsertBatch(products);
+var saver = new Winnower<Product, int>(context);
+var result = saver.Insert(products);
 
 if (!result.IsCompleteSuccess)
 {
@@ -44,17 +44,17 @@ dotnet add package Winnow
 
 ```csharp
 // Create a saver for your entity type and key type
-var saver = new BatchSaver<Product, int>(context);
+var saver = new Winnower<Product, int>(context);
 
 // Insert new entities
-var insertResult = saver.InsertBatch(newProducts);
+var insertResult = saver.Insert(newProducts);
 Console.WriteLine($"Inserted: {insertResult.SuccessCount}, Failed: {insertResult.FailureCount}");
 
 // Update existing entities
-var updateResult = saver.UpdateBatch(existingProducts);
+var updateResult = saver.Update(existingProducts);
 
 // Delete entities
-var deleteResult = saver.DeleteBatch(productsToRemove);
+var deleteResult = saver.Delete(productsToRemove);
 
 // Always check for failures
 foreach (var failure in updateResult.Failures)
@@ -63,18 +63,18 @@ foreach (var failure in updateResult.Failures)
 }
 
 // All operations have async versions
-var asyncResult = await saver.InsertBatchAsync(newProducts, cancellationToken);
+var asyncResult = await saver.InsertAsync(newProducts, cancellationToken);
 ```
 
 ### Supported Key Types
 
-BatchSaver supports any key type that implements `IEquatable<TKey>`:
+Winnower supports any key type that implements `IEquatable<TKey>`:
 
 ```csharp
-var saver = new BatchSaver<Product, int>(context);      // Integer keys
-var saver = new BatchSaver<Order, long>(context);       // Long keys
-var saver = new BatchSaver<Document, Guid>(context);    // GUID keys
-var saver = new BatchSaver<Setting, string>(context);   // String keys
+var saver = new Winnower<Product, int>(context);      // Integer keys
+var saver = new Winnower<Order, long>(context);       // Long keys
+var saver = new Winnower<Document, Guid>(context);    // GUID keys
+var saver = new Winnower<Setting, string>(context);   // String keys
 ```
 
 For composite keys, see [Composite Keys](docs/composite-keys.md).
@@ -87,13 +87,13 @@ Register Winnow with your DI container:
 services.AddWinnow<AppDbContext>();
 ```
 
-Then inject `IBatchSaver<TEntity, TKey>` or `IBatchSaver<TEntity>`:
+Then inject `IWinnower<TEntity, TKey>` or `IWinnower<TEntity>`:
 
 ```csharp
-public class ProductService(IBatchSaver<Product, int> saver)
+public class ProductService(IWinnower<Product, int> saver)
 {
-    public BatchResult<int> ImportProducts(List<Product> products)
-        => saver.UpdateBatch(products);
+    public WinnowResult<int> ImportProducts(List<Product> products)
+        => saver.Update(products);
 }
 ```
 
@@ -101,14 +101,14 @@ public class ProductService(IBatchSaver<Product, int> saver)
 
 ```
 What do you need to do?
-├── Insert new entities only ──────────────────→ InsertBatch / InsertGraphBatch
-├── Update existing entities only ─────────────→ UpdateBatch / UpdateGraphBatch
-├── Delete entities ───────────────────────────→ DeleteBatch / DeleteGraphBatch
-└── Insert OR update (based on key) ───────────→ UpsertBatch / UpsertGraphBatch
+├── Insert new entities only ──────────────────→ Insert / InsertGraph
+├── Update existing entities only ─────────────→ Update / UpdateGraph
+├── Delete entities ───────────────────────────→ Delete / DeleteGraph
+└── Insert OR update (based on key) ───────────→ Upsert / UpsertGraph
 
 Do your entities have children (navigation properties)?
-├── No  → Use the non-graph method (InsertBatch, UpdateBatch, etc.)
-└── Yes → Use the graph method (InsertGraphBatch, UpdateGraphBatch, etc.)
+├── No  → Use the non-graph method (Insert, Update, etc.)
+└── Yes → Use the graph method (InsertGraph, UpdateGraph, etc.)
 ```
 
 ## Basic Operations
@@ -116,7 +116,7 @@ Do your entities have children (navigation properties)?
 ### Insert
 
 ```csharp
-var result = saver.InsertBatch(products, new InsertBatchOptions
+var result = saver.Insert(products, new InsertOptions
 {
     Strategy = BatchStrategy.DivideAndConquer
 });
@@ -131,7 +131,7 @@ foreach (var inserted in result.InsertedEntities)
 ### Update
 
 ```csharp
-var result = saver.UpdateBatch(products);
+var result = saver.Update(products);
 
 Console.WriteLine($"Updated: {result.SuccessCount}");
 ```
@@ -139,7 +139,7 @@ Console.WriteLine($"Updated: {result.SuccessCount}");
 ### Delete
 
 ```csharp
-var result = saver.DeleteBatch(productsToRemove);
+var result = saver.Delete(productsToRemove);
 ```
 
 ### Upsert
@@ -155,7 +155,7 @@ var products = new[]
     new Product { Id = 42, Name = "Updated" } // UPDATE
 };
 
-var result = saver.UpsertBatch(products, new UpsertBatchOptions
+var result = saver.Upsert(products, new UpsertOptions
 {
     DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate  // Handle race conditions
 });
@@ -179,10 +179,10 @@ var orders = new List<CustomerOrder>
     }
 };
 
-var result = saver.InsertGraphBatch(orders);
+var result = saver.InsertGraph(orders);
 
 // For updates, specify orphan behavior
-var updateResult = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+var updateResult = saver.UpdateGraph(orders, new GraphOptions
 {
     OrphanedChildBehavior = OrphanBehavior.Delete
 });
@@ -191,7 +191,7 @@ var updateResult = saver.UpdateGraphBatch(orders, new GraphBatchOptions
 var filter = NavigationFilter.Include()
     .Navigation<CustomerOrder>(o => o.OrderItems);
 
-var filteredResult = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
+var filteredResult = saver.InsertGraph(orders, new InsertGraphOptions
 {
     NavigationFilter = filter  // Only traverses OrderItems, skips deeper levels
 });
@@ -244,7 +244,7 @@ For full results, see [SQLite](docs/benchmarks/sqlite.md), [PostgreSQL](docs/ben
 Every batch operation winnows out the failures, giving you detailed results for each entity:
 
 ```csharp
-var result = saver.UpdateBatch(products);
+var result = saver.Update(products);
 
 // Check overall status
 if (result.IsCompleteSuccess) { /* all succeeded */ }
@@ -274,12 +274,12 @@ For full result type documentation, see [Results Reference](docs/results-referen
 
 | Scenario | Method | Notes |
 |----------|--------|-------|
-| Insert new entities | `InsertBatch` | DivideAndConquer unless >5% failures |
-| Update existing entities | `UpdateBatch` | DivideAndConquer unless >5% failures |
-| Delete entities | `DeleteBatch` | DivideAndConquer unless >5% failures |
-| Insert parent + children | `InsertGraphBatch` | DivideAndConquer; 2-3x more memory |
-| Update parent + children | `UpdateGraphBatch` | Set `OrphanBehavior` explicitly |
-| Delete parent + children | `DeleteGraphBatch` | Set `CascadeBehavior` explicitly |
+| Insert new entities | `Insert` | DivideAndConquer unless >5% failures |
+| Update existing entities | `Update` | DivideAndConquer unless >5% failures |
+| Delete entities | `Delete` | DivideAndConquer unless >5% failures |
+| Insert parent + children | `InsertGraph` | DivideAndConquer; 2-3x more memory |
+| Update parent + children | `UpdateGraph` | Set `OrphanBehavior` explicitly |
+| Delete parent + children | `DeleteGraph` | Set `CascadeBehavior` explicitly |
 | Many-to-one references | `*GraphBatch` | Set `IncludeReferences = true` |
 | Many-to-many relationships | `*GraphBatch` | Set `IncludeManyToMany = true` |
 | High failure rate (>5%) | Any | Pre-validate, then DivideAndConquer |
@@ -297,33 +297,33 @@ Winnow is not the right choice for every scenario:
 
 ## Parallel Batch Processing
 
-`ParallelBatchSaver` distributes work across multiple `DbContext` instances:
+`ParallelWinnower` distributes work across multiple `DbContext` instances:
 
 ```csharp
 // Requires a factory that creates a new DbContext on each call
-var saver = new ParallelBatchSaver<Product, int>(
+var saver = new ParallelWinnower<Product, int>(
     () => new AppDbContext(options),
     maxDegreeOfParallelism: 4);
 
-var result = await saver.InsertBatchAsync(products, cancellationToken);
+var result = await saver.InsertAsync(products, cancellationToken);
 ```
 
 Or use `IDbContextFactory<TContext>`:
 
 ```csharp
-var saver = factory.CreateParallelBatchSaver<Product, int, AppDbContext>(maxDegreeOfParallelism: 4);
+var saver = factory.CreateParallelWinnower<Product, int, AppDbContext>(maxDegreeOfParallelism: 4);
 ```
 
-**Benchmark reality check:** In our benchmarks, ParallelBatchSaver showed **no consistent benefit** across any provider. SQLite uses file-level locking so parallel writes contend. PostgreSQL and SQL Server showed marginal improvements (10-23%) at DOP 4 for small batches, but the gains disappeared or reversed at larger sizes due to connection pool contention. **For most workloads, standard `BatchSaver` with DivideAndConquer is faster and simpler.** See the [benchmark docs](docs/benchmarks/postgresql.md) for details.
+**Benchmark reality check:** In our benchmarks, ParallelWinnower showed **no consistent benefit** across any provider. SQLite uses file-level locking so parallel writes contend. PostgreSQL and SQL Server showed marginal improvements (10-23%) at DOP 4 for small batches, but the gains disappeared or reversed at larger sizes due to connection pool contention. **For most workloads, standard `Winnower` with DivideAndConquer is faster and simpler.** See the [benchmark docs](docs/benchmarks/postgresql.md) for details.
 
-| | BatchSaver | ParallelBatchSaver |
+| | Winnower | ParallelWinnower |
 |---|---|---|
 | **Context** | Single shared context | New context per partition |
 | **Atomicity** | All-or-nothing per batch | Per-partition (non-atomic) |
 | **Async** | Sequential I/O | Parallel I/O |
 | **Sync methods** | Normal execution | Falls back to single context |
 
-ParallelBatchSaver may still help with high-latency remote databases (cloud SQL with cross-region latency) where the round-trip cost dominates — a scenario our local Docker benchmarks don't capture. If you use it, note that each partition commits independently: if one fails, others that already committed will NOT be rolled back.
+ParallelWinnower may still help with high-latency remote databases (cloud SQL with cross-region latency) where the round-trip cost dominates — a scenario our local Docker benchmarks don't capture. If you use it, note that each partition commits independently: if one fails, others that already committed will NOT be rolled back.
 
 ## Advanced Topics
 
@@ -347,10 +347,10 @@ Detailed documentation for complex scenarios:
 
 ```csharp
 // Wrong: Assuming success
-saver.InsertBatch(products);
+saver.Insert(products);
 
 // Correct: Always check results
-var result = saver.InsertBatch(products);
+var result = saver.Insert(products);
 if (!result.IsCompleteSuccess)
 {
     foreach (var f in result.Failures)
@@ -362,20 +362,20 @@ if (!result.IsCompleteSuccess)
 
 ```csharp
 // Unnecessary overhead
-saver.InsertGraphBatch(simpleProducts);
+saver.InsertGraph(simpleProducts);
 
 // Better: Use non-graph method
-saver.InsertBatch(simpleProducts);
+saver.Insert(simpleProducts);
 ```
 
 ### 3. Forgetting OrphanBehavior on Updates
 
 ```csharp
 // Throws exception if children were removed
-saver.UpdateGraphBatch(orders);
+saver.UpdateGraph(orders);
 
 // Explicit about what happens to removed children
-saver.UpdateGraphBatch(orders, new GraphBatchOptions
+saver.UpdateGraph(orders, new GraphOptions
 {
     OrphanedChildBehavior = OrphanBehavior.Delete
 });
@@ -385,7 +385,7 @@ saver.UpdateGraphBatch(orders, new GraphBatchOptions
 
 ```csharp
 // Race condition possible between key check and save
-saver.UpsertBatch(products);
+saver.Upsert(products);
 
 // Better: Add retry logic for high-concurrency scenarios
 // See docs/upsert-operations.md for details
@@ -395,13 +395,13 @@ saver.UpsertBatch(products);
 
 ```csharp
 // Slower than OneByOne when many failures expected
-saver.InsertBatch(untrustedData, new InsertBatchOptions
+saver.Insert(untrustedData, new InsertOptions
 {
     Strategy = BatchStrategy.DivideAndConquer
 });
 
 // Better: Use OneByOne for untrusted/validation-heavy data
-saver.InsertBatch(untrustedData, new InsertBatchOptions
+saver.Insert(untrustedData, new InsertOptions
 {
     Strategy = BatchStrategy.OneByOne
 });

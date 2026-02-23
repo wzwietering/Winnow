@@ -14,10 +14,10 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 {
     // === ASYNC METHODS ===
 
-    internal async Task<BatchResult<TKey>> ExecuteAsync(
+    internal async Task<WinnowResult<TKey>> ExecuteAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         operation.ValidateAll(entities, context);
@@ -28,40 +28,40 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         return operation.CreateResult(wasCancelled);
     }
 
-    internal async Task<InsertBatchResult<TKey>> ExecuteInsertAsync(
+    internal async Task<InsertResult<TKey>> ExecuteInsertAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
 
         var indexedEntities = entities.Select((e, i) => (Entity: e, Index: i)).ToList();
-        var wasCancelled = await ProcessInsertBatchAsync(indexedEntities, context, operation, cancellationToken);
+        var wasCancelled = await ProcessInsertAsync(indexedEntities, context, operation, cancellationToken);
 
         return operation.CreateResult(wasCancelled);
     }
 
-    internal async Task<UpsertBatchResult<TKey>> ExecuteUpsertAsync(
+    internal async Task<UpsertResult<TKey>> ExecuteUpsertAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
 
         var indexedEntities = entities.Select((e, i) => (Entity: e, Index: i)).ToList();
-        var wasCancelled = await ProcessUpsertBatchAsync(indexedEntities, context, operation, cancellationToken);
+        var wasCancelled = await ProcessUpsertAsync(indexedEntities, context, operation, cancellationToken);
 
         return operation.CreateResult(wasCancelled);
     }
 
     private async Task<bool> ProcessBatchAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         if (entities.Count == 0)
@@ -87,10 +87,10 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         return await SplitAndRecurseAsync(entities, context, operation, cancellationToken);
     }
 
-    private async Task<bool> ProcessInsertBatchAsync(
+    private async Task<bool> ProcessInsertAsync(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         if (indexedEntities.Count == 0)
@@ -117,10 +117,10 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         return await SplitAndRecurseInsertAsync(indexedEntities, context, operation, cancellationToken);
     }
 
-    private async Task<bool> ProcessUpsertBatchAsync(
+    private async Task<bool> ProcessUpsertAsync(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         if (indexedEntities.Count == 0)
@@ -149,8 +149,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static async Task<bool> ProcessSingleEntityAsync(
         TEntity entity,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         try
@@ -169,7 +169,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
-            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+            WinnowLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
                 context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, ex, context);
             return false;
@@ -183,8 +183,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
     private static async Task<bool> ProcessSingleInsertAsync(
         TEntity entity,
         int index,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         try
@@ -203,7 +203,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
-            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+            WinnowLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
                 context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
             return false;
@@ -217,8 +217,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
     private static async Task<bool> ProcessSingleUpsertAsync(
         TEntity entity,
         int index,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         try
@@ -248,7 +248,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
                 return false;
             }
 
-            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+            WinnowLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
                 context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
             return false;
@@ -261,8 +261,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static async Task<bool> TryBatchProcessAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         try
@@ -294,8 +294,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static async Task<bool> TryBatchInsertAsync(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         try
@@ -327,8 +327,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static async Task<bool> TryBatchUpsertAsync(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         try
@@ -361,14 +361,14 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private async Task<bool> SplitAndRecurseAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         var midpoint = entities.Count / 2;
         var firstHalf = entities.Take(midpoint).ToList();
         var secondHalf = entities.Skip(midpoint).ToList();
-        BatchLogger.LogDivideAndConquerSplit(context.Logger, entities.Count, firstHalf.Count, secondHalf.Count);
+        WinnowLogger.LogDivideAndConquerSplit(context.Logger, entities.Count, firstHalf.Count, secondHalf.Count);
 
         var firstCancelled = await ProcessBatchAsync(firstHalf, context, operation, cancellationToken);
         if (firstCancelled)
@@ -381,50 +381,50 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private async Task<bool> SplitAndRecurseInsertAsync(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         var midpoint = indexedEntities.Count / 2;
         var firstHalf = indexedEntities.Take(midpoint).ToList();
         var secondHalf = indexedEntities.Skip(midpoint).ToList();
-        BatchLogger.LogDivideAndConquerSplit(context.Logger, indexedEntities.Count, firstHalf.Count, secondHalf.Count);
+        WinnowLogger.LogDivideAndConquerSplit(context.Logger, indexedEntities.Count, firstHalf.Count, secondHalf.Count);
 
-        var firstCancelled = await ProcessInsertBatchAsync(firstHalf, context, operation, cancellationToken);
+        var firstCancelled = await ProcessInsertAsync(firstHalf, context, operation, cancellationToken);
         if (firstCancelled)
         {
             return true;
         }
 
-        return await ProcessInsertBatchAsync(secondHalf, context, operation, cancellationToken);
+        return await ProcessInsertAsync(secondHalf, context, operation, cancellationToken);
     }
 
     private async Task<bool> SplitAndRecurseUpsertAsync(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         var midpoint = indexedEntities.Count / 2;
         var firstHalf = indexedEntities.Take(midpoint).ToList();
         var secondHalf = indexedEntities.Skip(midpoint).ToList();
-        BatchLogger.LogDivideAndConquerSplit(context.Logger, indexedEntities.Count, firstHalf.Count, secondHalf.Count);
+        WinnowLogger.LogDivideAndConquerSplit(context.Logger, indexedEntities.Count, firstHalf.Count, secondHalf.Count);
 
-        var firstCancelled = await ProcessUpsertBatchAsync(firstHalf, context, operation, cancellationToken);
+        var firstCancelled = await ProcessUpsertAsync(firstHalf, context, operation, cancellationToken);
         if (firstCancelled)
         {
             return true;
         }
 
-        return await ProcessUpsertBatchAsync(secondHalf, context, operation, cancellationToken);
+        return await ProcessUpsertAsync(secondHalf, context, operation, cancellationToken);
     }
 
     // === SYNC METHODS ===
 
-    internal BatchResult<TKey> Execute(
+    internal WinnowResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
@@ -434,38 +434,38 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         return operation.CreateResult();
     }
 
-    internal InsertBatchResult<TKey> ExecuteInsert(
+    internal InsertResult<TKey> ExecuteInsert(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
 
         var indexedEntities = entities.Select((e, i) => (Entity: e, Index: i)).ToList();
-        ProcessInsertBatch(indexedEntities, context, operation);
+        ProcessInsert(indexedEntities, context, operation);
 
         return operation.CreateResult();
     }
 
-    internal UpsertBatchResult<TKey> ExecuteUpsert(
+    internal UpsertResult<TKey> ExecuteUpsert(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
 
         var indexedEntities = entities.Select((e, i) => (Entity: e, Index: i)).ToList();
-        ProcessUpsertBatch(indexedEntities, context, operation);
+        ProcessUpsert(indexedEntities, context, operation);
 
         return operation.CreateResult();
     }
 
     private void ProcessBatch(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation)
     {
         if (entities.Count == 0)
         {
@@ -486,10 +486,10 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         SplitAndRecurse(entities, context, operation);
     }
 
-    private void ProcessInsertBatch(
+    private void ProcessInsert(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation)
     {
         if (indexedEntities.Count == 0)
         {
@@ -511,10 +511,10 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         SplitAndRecurseInsert(indexedEntities, context, operation);
     }
 
-    private void ProcessUpsertBatch(
+    private void ProcessUpsert(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation)
     {
         if (indexedEntities.Count == 0)
         {
@@ -538,8 +538,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static void ProcessSingleEntity(
         TEntity entity,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -556,7 +556,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
-            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+            WinnowLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
                 context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, ex, context);
         }
@@ -569,8 +569,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
     private static void ProcessSingleInsert(
         TEntity entity,
         int index,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -587,7 +587,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
-            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+            WinnowLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
                 context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
         }
@@ -600,8 +600,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
     private static void ProcessSingleUpsert(
         TEntity entity,
         int index,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -628,7 +628,7 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
                 return;
             }
 
-            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+            WinnowLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
                 context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
         }
@@ -640,8 +640,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static bool TryBatchProcess(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -672,8 +672,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static bool TryBatchInsert(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -704,8 +704,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static bool TryBatchUpsert(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -736,8 +736,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static void RecordAllSuccesses(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation)
     {
         foreach (var entity in entities)
         {
@@ -748,8 +748,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static void RecordAllInsertSuccesses(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation)
     {
         foreach (var (entity, index) in indexedEntities)
         {
@@ -760,8 +760,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static void RecordAllUpsertSuccesses(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation)
     {
         foreach (var (entity, index) in indexedEntities)
         {
@@ -772,8 +772,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static void CleanupAllEntities(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation)
     {
         foreach (var entity in entities)
         {
@@ -783,8 +783,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static void CleanupAllInsertEntities(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation)
     {
         foreach (var (entity, _) in indexedEntities)
         {
@@ -794,8 +794,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private static void CleanupAllUpsertEntities(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation)
     {
         foreach (var (entity, _) in indexedEntities)
         {
@@ -805,13 +805,13 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private void SplitAndRecurse(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation)
     {
         var midpoint = entities.Count / 2;
         var firstHalf = entities.Take(midpoint).ToList();
         var secondHalf = entities.Skip(midpoint).ToList();
-        BatchLogger.LogDivideAndConquerSplit(context.Logger, entities.Count, firstHalf.Count, secondHalf.Count);
+        WinnowLogger.LogDivideAndConquerSplit(context.Logger, entities.Count, firstHalf.Count, secondHalf.Count);
 
         ProcessBatch(firstHalf, context, operation);
         ProcessBatch(secondHalf, context, operation);
@@ -819,29 +819,29 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
 
     private void SplitAndRecurseInsert(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation)
     {
         var midpoint = indexedEntities.Count / 2;
         var firstHalf = indexedEntities.Take(midpoint).ToList();
         var secondHalf = indexedEntities.Skip(midpoint).ToList();
-        BatchLogger.LogDivideAndConquerSplit(context.Logger, indexedEntities.Count, firstHalf.Count, secondHalf.Count);
+        WinnowLogger.LogDivideAndConquerSplit(context.Logger, indexedEntities.Count, firstHalf.Count, secondHalf.Count);
 
-        ProcessInsertBatch(firstHalf, context, operation);
-        ProcessInsertBatch(secondHalf, context, operation);
+        ProcessInsert(firstHalf, context, operation);
+        ProcessInsert(secondHalf, context, operation);
     }
 
     private void SplitAndRecurseUpsert(
         List<(TEntity Entity, int Index)> indexedEntities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation)
     {
         var midpoint = indexedEntities.Count / 2;
         var firstHalf = indexedEntities.Take(midpoint).ToList();
         var secondHalf = indexedEntities.Skip(midpoint).ToList();
-        BatchLogger.LogDivideAndConquerSplit(context.Logger, indexedEntities.Count, firstHalf.Count, secondHalf.Count);
+        WinnowLogger.LogDivideAndConquerSplit(context.Logger, indexedEntities.Count, firstHalf.Count, secondHalf.Count);
 
-        ProcessUpsertBatch(firstHalf, context, operation);
-        ProcessUpsertBatch(secondHalf, context, operation);
+        ProcessUpsert(firstHalf, context, operation);
+        ProcessUpsert(secondHalf, context, operation);
     }
 }

@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Winnow.Benchmarks.Benchmarks;
 
 /// <summary>
-/// Measures DeleteGraphBatch performance with a 3-level hierarchy.
+/// Measures DeleteGraph performance with a 3-level hierarchy.
 /// Seeds fresh order graphs each iteration, then deletes them.
 /// </summary>
 [MemoryDiagnoser]
@@ -62,12 +62,12 @@ public class DeleteGraphBenchmarks
     }
 
     [Benchmark]
-    public BatchResult<int> DeleteGraphBatch()
+    public WinnowResult<int> DeleteGraph()
     {
-        var saver = new BatchSaver<BenchmarkOrder, int>(_context);
-        return saver.DeleteGraphBatch(
+        var saver = new Winnower<BenchmarkOrder, int>(_context);
+        return saver.DeleteGraph(
             _orders,
-            new DeleteGraphBatchOptions { Strategy = Strategy });
+            new DeleteGraphOptions { Strategy = Strategy });
     }
 
     [IterationCleanup]

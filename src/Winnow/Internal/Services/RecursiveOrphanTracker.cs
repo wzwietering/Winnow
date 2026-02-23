@@ -300,7 +300,7 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
     }
 
     internal void ValidateNoOrphanedChildrenRecursive(
-        TEntity entity, TraversalContext tc, GraphBatchOptions options)
+        TEntity entity, TraversalContext tc, GraphOptions options)
     {
         if (options.OrphanedChildBehavior != OrphanBehavior.Throw)
         {
@@ -318,7 +318,7 @@ internal class RecursiveOrphanTracker<TEntity, TKey>
         throw new InvalidOperationException(
             $"Entity {typeof(TEntity).Name} (Id={entityId}) has {orphanedIds.Count} orphaned descendant(s): " +
             $"[{summary}]. " +
-            $"Set GraphBatchOptions.OrphanedChildBehavior to Delete or Detach to allow this.");
+            $"Set GraphOptions.OrphanedChildBehavior to Delete or Detach to allow this.");
     }
 
     internal void HandleOrphanedChildrenRecursive(

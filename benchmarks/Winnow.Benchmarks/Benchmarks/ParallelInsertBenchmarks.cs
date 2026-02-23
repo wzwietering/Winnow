@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Winnow.Benchmarks.Benchmarks;
 
 /// <summary>
-/// Measures ParallelBatchSaver async insert performance at different degrees of parallelism.
+/// Measures ParallelWinnower async insert performance at different degrees of parallelism.
 /// Uses DivideAndConquer strategy only (the superior strategy).
 /// </summary>
 [MemoryDiagnoser]
@@ -48,15 +48,15 @@ public class ParallelInsertBenchmarks
     }
 
     [Benchmark]
-    public async Task<InsertBatchResult<int>> ParallelInsertBatch()
+    public async Task<InsertResult<int>> ParallelInsert()
     {
-        var saver = new ParallelBatchSaver<BenchmarkProduct, int>(
+        var saver = new ParallelWinnower<BenchmarkProduct, int>(
             () => new BenchmarkDbContext(_options),
             DegreeOfParallelism);
 
-        return await saver.InsertBatchAsync(
+        return await saver.InsertAsync(
             _products,
-            new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
+            new InsertOptions { Strategy = BatchStrategy.DivideAndConquer });
     }
 
     [GlobalCleanup]

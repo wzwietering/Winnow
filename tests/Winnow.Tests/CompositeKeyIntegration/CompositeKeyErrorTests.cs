@@ -20,7 +20,7 @@ public class CompositeKeyErrorTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public void InsertBatch_ValidationError_CorrectIndices()
+    public void Insert_ValidationError_CorrectIndices()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -33,8 +33,8 @@ public class CompositeKeyErrorTests : CompositeKeyTestBase
             new OrderLine { OrderId = orderId, LineNumber = 4, ProductId = null, Quantity = -2, UnitPrice = 10.00m } // Invalid
         };
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.InsertBatch(orderLines);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.Insert(orderLines);
 
         result.IsPartialSuccess.ShouldBeTrue();
         result.FailureCount.ShouldBe(2);
@@ -44,7 +44,7 @@ public class CompositeKeyErrorTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public void DeleteBatch_VerifyDatabaseState()
+    public void Delete_VerifyDatabaseState()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -53,8 +53,8 @@ public class CompositeKeyErrorTests : CompositeKeyTestBase
         var linesToDelete = context.OrderLines.Where(ol => ol.OrderId == orderId).ToList();
         linesToDelete.Count.ShouldBe(2);
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.DeleteBatch(linesToDelete);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.Delete(linesToDelete);
 
         result.IsCompleteSuccess.ShouldBeTrue();
 

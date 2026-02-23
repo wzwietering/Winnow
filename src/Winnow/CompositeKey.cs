@@ -2,7 +2,7 @@ namespace Winnow;
 
 /// <summary>
 /// Represents a composite primary key with proper equality semantics.
-/// Used by BatchSaver when auto-detecting keys for entities with multiple key properties.
+/// Used by Winnower when auto-detecting keys for entities with multiple key properties.
 /// </summary>
 /// <remarks>
 /// Creates a composite key from multiple values.

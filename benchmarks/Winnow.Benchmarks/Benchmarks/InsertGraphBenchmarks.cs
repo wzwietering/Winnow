@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Winnow.Benchmarks.Benchmarks;
 
 /// <summary>
-/// Measures InsertGraphBatch performance with a 3-level hierarchy:
+/// Measures InsertGraph performance with a 3-level hierarchy:
 /// BenchmarkOrder → BenchmarkOrderItem → BenchmarkOrderReservation.
 /// Each root entity has 2 items, each item has 1 reservation (5 entities per root).
 /// </summary>
@@ -51,13 +51,13 @@ public class InsertGraphBenchmarks
     }
 
     [Benchmark]
-    public InsertBatchResult<int> InsertGraphBatch()
+    public InsertResult<int> InsertGraph()
     {
         using var context = new BenchmarkDbContext(_options);
-        var saver = new BatchSaver<BenchmarkOrder, int>(context);
-        return saver.InsertGraphBatch(
+        var saver = new Winnower<BenchmarkOrder, int>(context);
+        return saver.InsertGraph(
             _orders,
-            new InsertGraphBatchOptions { Strategy = Strategy });
+            new InsertGraphOptions { Strategy = Strategy });
     }
 
     [GlobalCleanup]

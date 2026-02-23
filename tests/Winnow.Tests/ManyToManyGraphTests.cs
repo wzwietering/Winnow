@@ -62,8 +62,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("Alice", newCourses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew
@@ -82,7 +82,7 @@ public class ManyToManyGraphTests : TestBase
     public void Baseline_ExplicitJoin_DirectEfCore_Works()
     {
         // Baseline test: Verifies EF Core handles explicit join entities correctly
-        // This tests the EF Core behavior, not BatchSaver's M2M handling
+        // This tests the EF Core behavior, not Winnower's M2M handling
         using var context = CreateContext();
         SeedCourses(context, 2);
         var courses = context.Courses.ToList();
@@ -121,8 +121,8 @@ public class ManyToManyGraphTests : TestBase
         };
         var student = CreateStudent("Charlie", newCourses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew
@@ -142,8 +142,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("Eve");
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true
         });
@@ -164,8 +164,8 @@ public class ManyToManyGraphTests : TestBase
 
         var students = new[] { student1, student2 };
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch(students, new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph(students, new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew
@@ -192,8 +192,8 @@ public class ManyToManyGraphTests : TestBase
         };
         var student = CreateStudent("Henry", courses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew
@@ -211,8 +211,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("Ivy");
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = false
         });
@@ -228,8 +228,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("Jack");
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true
         });
@@ -256,8 +256,8 @@ public class ManyToManyGraphTests : TestBase
         loaded.Name = "Jack Updated";
         loaded.Email = "jack.updated@test.com";
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             IncludeManyToMany = true
         });
@@ -275,7 +275,7 @@ public class ManyToManyGraphTests : TestBase
     public void Baseline_AddEnrollment_DirectEfCore_Works()
     {
         // Baseline test: Verifies EF Core direct enrollment creation works
-        // This is NOT testing BatchSaver - it establishes expected EF Core behavior
+        // This is NOT testing Winnower - it establishes expected EF Core behavior
         using var context = CreateContext();
         SeedCourses(context, 3);
         var courseId = context.Courses.First().Id;
@@ -358,8 +358,8 @@ public class ManyToManyGraphTests : TestBase
         var enrollmentToRemove = loaded.Enrollments.First();
         loaded.Enrollments.Remove(enrollmentToRemove);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             IncludeManyToMany = true,
             OrphanedChildBehavior = OrphanBehavior.Delete
@@ -397,8 +397,8 @@ public class ManyToManyGraphTests : TestBase
         var loaded = context.Students.Include(s => s.Enrollments).First(s => s.Id == studentId);
         loaded.Name = "Rose Updated";
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             IncludeManyToMany = true
         });
@@ -428,8 +428,8 @@ public class ManyToManyGraphTests : TestBase
             student.Name += " Updated";
         }
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch(loaded, new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph(loaded, new GraphOptions
         {
             IncludeManyToMany = true
         });
@@ -451,8 +451,8 @@ public class ManyToManyGraphTests : TestBase
         var loaded = context.Students.First();
         loaded.Name = "Peter Updated";
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             Strategy = BatchStrategy.OneByOne,
             IncludeManyToMany = true
@@ -474,8 +474,8 @@ public class ManyToManyGraphTests : TestBase
         var loaded = context.Students.First();
         loaded.Name = "Quinn Updated";
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
             IncludeManyToMany = true
@@ -504,8 +504,8 @@ public class ManyToManyGraphTests : TestBase
             loaded.Courses.Add(course);
         }
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             IncludeManyToMany = true
         });
@@ -538,8 +538,8 @@ public class ManyToManyGraphTests : TestBase
         var loaded = context.Students.First(s => s.Id == studentId);
         loaded.Name = "SkipNavTest Updated";
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             IncludeManyToMany = true
         });
@@ -572,8 +572,8 @@ public class ManyToManyGraphTests : TestBase
         var loaded = context.Students.First(s => s.Id == studentId);
         loaded.Name = "PreserveCoursesTest Updated";
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             IncludeManyToMany = true
         });
@@ -619,8 +619,8 @@ public class ManyToManyGraphTests : TestBase
             student.Name += " Updated";
         }
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch(loaded, new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph(loaded, new GraphOptions
         {
             IncludeManyToMany = true
         });
@@ -655,8 +655,8 @@ public class ManyToManyGraphTests : TestBase
         var loaded = context.Students.First(s => s.Id == studentId);
         loaded.Name = "PropertyOnlyTest Updated";
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             IncludeManyToMany = true
         });
@@ -688,8 +688,8 @@ public class ManyToManyGraphTests : TestBase
 
         var loaded = context.Students.First();
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             IncludeManyToMany = true
         });
@@ -723,8 +723,8 @@ public class ManyToManyGraphTests : TestBase
 
         var loaded = context.Students.Include(s => s.Enrollments).First(s => s.Id == studentId);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             IncludeManyToMany = true
         });
@@ -750,8 +750,8 @@ public class ManyToManyGraphTests : TestBase
 
         var loaded = context.Students.First();
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             IncludeManyToMany = true
         });
@@ -774,8 +774,8 @@ public class ManyToManyGraphTests : TestBase
 
         var loaded = context.Students.First();
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             IncludeManyToMany = false
         });
@@ -800,8 +800,8 @@ public class ManyToManyGraphTests : TestBase
 
         var loaded = context.Students.ToList();
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.DeleteGraphBatch(loaded, new DeleteGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.DeleteGraph(loaded, new DeleteGraphOptions
         {
             Strategy = BatchStrategy.OneByOne,
             IncludeManyToMany = true
@@ -837,8 +837,8 @@ public class ManyToManyGraphTests : TestBase
 
         var loaded = context.Students.Include(s => s.Enrollments).First(s => s.Id == studentId);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             IncludeManyToMany = true,
             CascadeBehavior = DeleteCascadeBehavior.Cascade
@@ -870,8 +870,8 @@ public class ManyToManyGraphTests : TestBase
             .Include(s => s.Enrollments)
             .First(s => s.Id == studentId);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             IncludeManyToMany = true,
             CascadeBehavior = DeleteCascadeBehavior.Cascade
@@ -909,8 +909,8 @@ public class ManyToManyGraphTests : TestBase
 
         var loaded = context.Students.Include(s => s.Enrollments).ToList();
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.DeleteGraphBatch(loaded, new DeleteGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.DeleteGraph(loaded, new DeleteGraphOptions
         {
             IncludeManyToMany = true,
             CascadeBehavior = DeleteCascadeBehavior.Cascade
@@ -936,8 +936,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("Adam");
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = false
         });
@@ -953,8 +953,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("Beth");
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             MaxDepth = 0
@@ -976,8 +976,8 @@ public class ManyToManyGraphTests : TestBase
             Courses = null!
         };
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true
         });
@@ -993,8 +993,8 @@ public class ManyToManyGraphTests : TestBase
         var student = CreateStudent("Diana");
         student.Enrollments = [];
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true
         });
@@ -1009,8 +1009,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("Eve");
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student]);
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.TraversalInfo!.JoinRecordsCreated.ShouldBe(0);
@@ -1023,8 +1023,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("Frank");
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true
         });
@@ -1044,8 +1044,8 @@ public class ManyToManyGraphTests : TestBase
         };
         var student = CreateStudent("Grace", courses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew
@@ -1069,8 +1069,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("LargeTest", courses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew
@@ -1109,12 +1109,12 @@ public class ManyToManyGraphTests : TestBase
         context.SaveChanges();
         context.ChangeTracker.Clear();
 
-        var saver = new BatchSaver<Student, int>(context);
+        var saver = new Winnower<Student, int>(context);
 
         // First update operation
         var loaded1 = context.Students.Include(s => s.Enrollments).First(s => s.Id == student1.Id);
         loaded1.Name = "Sequential1 Updated";
-        var result1 = saver.UpdateGraphBatch([loaded1], new GraphBatchOptions
+        var result1 = saver.UpdateGraph([loaded1], new GraphOptions
         {
             IncludeManyToMany = true
         });
@@ -1125,7 +1125,7 @@ public class ManyToManyGraphTests : TestBase
         // Second update operation on different student (state should be isolated)
         var loaded2 = context.Students.Include(s => s.Enrollments).First(s => s.Id == student2.Id);
         loaded2.Name = "Sequential2 Updated";
-        var result2 = saver.UpdateGraphBatch([loaded2], new GraphBatchOptions
+        var result2 = saver.UpdateGraph([loaded2], new GraphOptions
         {
             IncludeManyToMany = true
         });
@@ -1158,10 +1158,10 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("ValidationTest", [fakeCourse]);
 
-        var saver = new BatchSaver<Student, int>(context);
+        var saver = new Winnower<Student, int>(context);
 
         // Batch operations catch exceptions and record failures instead of throwing
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.AttachExisting,
@@ -1181,8 +1181,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("NoValidation", [CreateCourse("NEW001")]);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
@@ -1216,8 +1216,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("AttachTest", detachedCourses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.AttachExisting,
@@ -1260,8 +1260,8 @@ public class ManyToManyGraphTests : TestBase
         };
         var student = CreateStudent("MixedTest", courses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew
@@ -1293,8 +1293,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("AllExisting", detachedCourses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew
@@ -1320,8 +1320,8 @@ public class ManyToManyGraphTests : TestBase
         };
         var student = CreateStudent("NewWithAttach", newCourses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
@@ -1349,8 +1349,8 @@ public class ManyToManyGraphTests : TestBase
             .ToList();
         var student = CreateStudent("SizeLimit", courses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
@@ -1378,8 +1378,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("MultiMissing", fakeCourses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.AttachExisting,
@@ -1411,8 +1411,8 @@ public class ManyToManyGraphTests : TestBase
         var loaded = context.Students.First(s => s.Id == studentId);
         loaded.Courses = context.Courses.Take(15).ToList();
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             IncludeManyToMany = true,
             MaxManyToManyCollectionSize = 10
@@ -1431,8 +1431,8 @@ public class ManyToManyGraphTests : TestBase
 
         var student = CreateStudent("EmptyCollection", []);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             MaxManyToManyCollectionSize = 5

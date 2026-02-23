@@ -8,7 +8,7 @@ namespace Winnow.Tests;
 public class GenericKeyTypeTests : TestBase
 {
     [Fact]
-    public void InsertBatch_WithIntKey_GeneratesKeys()
+    public void Insert_WithIntKey_GeneratesKeys()
     {
         using var context = CreateContext();
 
@@ -20,8 +20,8 @@ public class GenericKeyTypeTests : TestBase
             LastModified = DateTimeOffset.UtcNow
         }).ToList();
 
-        var saver = new BatchSaver<Product, int>(context);
-        var result = saver.InsertBatch(products);
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Insert(products);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -29,7 +29,7 @@ public class GenericKeyTypeTests : TestBase
     }
 
     [Fact]
-    public void InsertBatch_WithLongKey_GeneratesKeys()
+    public void Insert_WithLongKey_GeneratesKeys()
     {
         using var context = CreateContext();
 
@@ -41,8 +41,8 @@ public class GenericKeyTypeTests : TestBase
             LastModified = DateTimeOffset.UtcNow
         }).ToList();
 
-        var saver = new BatchSaver<ProductLong, long>(context);
-        var result = saver.InsertBatch(products);
+        var saver = new Winnower<ProductLong, long>(context);
+        var result = saver.Insert(products);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -50,7 +50,7 @@ public class GenericKeyTypeTests : TestBase
     }
 
     [Fact]
-    public void InsertBatch_WithGuidKey_GeneratesKeys()
+    public void Insert_WithGuidKey_GeneratesKeys()
     {
         using var context = CreateContext();
 
@@ -63,8 +63,8 @@ public class GenericKeyTypeTests : TestBase
             LastModified = DateTimeOffset.UtcNow
         }).ToList();
 
-        var saver = new BatchSaver<ProductGuid, Guid>(context);
-        var result = saver.InsertBatch(products);
+        var saver = new Winnower<ProductGuid, Guid>(context);
+        var result = saver.Insert(products);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -72,7 +72,7 @@ public class GenericKeyTypeTests : TestBase
     }
 
     [Fact]
-    public void InsertBatch_WithStringKey_UsesProvidedKeys()
+    public void Insert_WithStringKey_UsesProvidedKeys()
     {
         using var context = CreateContext();
 
@@ -85,8 +85,8 @@ public class GenericKeyTypeTests : TestBase
             LastModified = DateTimeOffset.UtcNow
         }).ToList();
 
-        var saver = new BatchSaver<ProductString, string>(context);
-        var result = saver.InsertBatch(products);
+        var saver = new Winnower<ProductString, string>(context);
+        var result = saver.Insert(products);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -96,7 +96,7 @@ public class GenericKeyTypeTests : TestBase
     }
 
     [Fact]
-    public void UpdateBatch_WithGuidKey_TracksSuccessfulIds()
+    public void Update_WithGuidKey_TracksSuccessfulIds()
     {
         using var context = CreateContext();
 
@@ -122,8 +122,8 @@ public class GenericKeyTypeTests : TestBase
             product.Price += 5.00m;
         }
 
-        var saver = new BatchSaver<ProductGuid, Guid>(context);
-        var result = saver.UpdateBatch(productsToUpdate);
+        var saver = new Winnower<ProductGuid, Guid>(context);
+        var result = saver.Update(productsToUpdate);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -134,7 +134,7 @@ public class GenericKeyTypeTests : TestBase
     }
 
     [Fact]
-    public void DeleteBatch_WithLongKey_TracksDeletedIds()
+    public void Delete_WithLongKey_TracksDeletedIds()
     {
         using var context = CreateContext();
 
@@ -155,8 +155,8 @@ public class GenericKeyTypeTests : TestBase
         var productsToDelete = context.ProductLongs.ToList();
         var expectedIds = productsToDelete.Select(p => p.Id).ToList();
 
-        var saver = new BatchSaver<ProductLong, long>(context);
-        var result = saver.DeleteBatch(productsToDelete);
+        var saver = new Winnower<ProductLong, long>(context);
+        var result = saver.Delete(productsToDelete);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -171,7 +171,7 @@ public class GenericKeyTypeTests : TestBase
     }
 
     [Fact]
-    public void BatchSaver_WithWrongKeyType_ThrowsDescriptiveError()
+    public void Winnower_WithWrongKeyType_ThrowsDescriptiveError()
     {
         using var context = CreateContext();
 
@@ -190,9 +190,9 @@ public class GenericKeyTypeTests : TestBase
         var productToUpdate = context.Products.First();
         productToUpdate.Price += 5.00m;
 
-        // Try to use BatchSaver<Product, long> instead of BatchSaver<Product, int>
-        var saver = new BatchSaver<Product, long>(context);
-        var ex = Should.Throw<InvalidOperationException>(() => saver.UpdateBatch([productToUpdate]));
+        // Try to use Winnower<Product, long> instead of Winnower<Product, int>
+        var saver = new Winnower<Product, long>(context);
+        var ex = Should.Throw<InvalidOperationException>(() => saver.Update([productToUpdate]));
 
         ex.Message.ShouldContain("Primary key type mismatch");
         ex.Message.ShouldContain("Product");
@@ -203,7 +203,7 @@ public class GenericKeyTypeTests : TestBase
     #region Many-to-Many with Int Key
 
     [Fact]
-    public void InsertGraphBatch_IntKey_ManyToMany_ExtractsKeysCorrectly()
+    public void InsertGraph_IntKey_ManyToMany_ExtractsKeysCorrectly()
     {
         using var context = CreateContext();
 
@@ -221,8 +221,8 @@ public class GenericKeyTypeTests : TestBase
             Courses = courses
         };
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew
@@ -242,7 +242,7 @@ public class GenericKeyTypeTests : TestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_IntKey_ManyToMany_UpdatesCorrectly()
+    public void UpdateGraph_IntKey_ManyToMany_UpdatesCorrectly()
     {
         using var context = CreateContext();
 
@@ -270,8 +270,8 @@ public class GenericKeyTypeTests : TestBase
         loaded.Courses.Clear();
         loaded.Courses.Add(courseToAdd);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             IncludeManyToMany = true
         });
@@ -290,7 +290,7 @@ public class GenericKeyTypeTests : TestBase
     }
 
     [Fact]
-    public void DeleteGraphBatch_IntKey_ManyToMany_HandlesKeysCorrectly()
+    public void DeleteGraph_IntKey_ManyToMany_HandlesKeysCorrectly()
     {
         using var context = CreateContext();
 
@@ -325,8 +325,8 @@ public class GenericKeyTypeTests : TestBase
         // Delete student (should cascade delete enrollments)
         var loaded = context.Students.Include(s => s.Enrollments).First(s => s.Id == studentId);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             IncludeManyToMany = true
         });

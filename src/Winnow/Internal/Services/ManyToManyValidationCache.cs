@@ -12,7 +12,7 @@ namespace Winnow.Internal.Services;
 /// <para>
 /// <strong>Limitation:</strong> Many-to-many validation is currently not supported for entities
 /// with composite primary keys. When a related entity has a composite key, validation is skipped
-/// unless <see cref="InsertGraphBatchOptions.ThrowOnUnsupportedValidation"/> is set to true.
+/// unless <see cref="InsertGraphOptions.ThrowOnUnsupportedValidation"/> is set to true.
 /// </para>
 /// </remarks>
 internal class ManyToManyValidationCache<TEntity, TKey>
@@ -31,7 +31,7 @@ internal class ManyToManyValidationCache<TEntity, TKey>
     }
 
     internal void ValidateManyToManyEntitiesExistBatched(
-        List<TEntity> entities, InsertGraphBatchOptions options)
+        List<TEntity> entities, InsertGraphOptions options)
     {
         ArgumentNullException.ThrowIfNull(entities);
         ArgumentNullException.ThrowIfNull(options);
@@ -206,7 +206,7 @@ internal class ManyToManyValidationCache<TEntity, TKey>
                 $"Many-to-many validation for entities with composite keys is not yet supported. " +
                 $"Entity type '{clrType.Name}' has a composite primary key and {entityCount} related entity(ies) " +
                 $"could not be validated for existence. " +
-                $"Set InsertGraphBatchOptions.ThrowOnUnsupportedValidation=false to skip validation silently, " +
+                $"Set InsertGraphOptions.ThrowOnUnsupportedValidation=false to skip validation silently, " +
                 $"or set ValidateManyToManyEntitiesExist=false to disable validation entirely.");
         }
 

@@ -2,9 +2,9 @@
 
 All batch operations return detailed result objects with success/failure information.
 
-## BatchResult&lt;TKey&gt; (Update/Delete)
+## WinnowResult&lt;TKey&gt; (Update/Delete)
 
-Returned by `UpdateBatch`, `UpdateGraphBatch`, `DeleteBatch`, `DeleteGraphBatch`.
+Returned by `Update`, `UpdateGraph`, `Delete`, `DeleteGraph`.
 
 ```csharp
 // Success information
@@ -15,7 +15,7 @@ result.IsPartialSuccess   // Some succeeded, some failed
 result.IsCompleteFailure  // All failed
 
 // Failure information
-result.Failures           // IReadOnlyList<BatchFailure<TKey>>
+result.Failures           // IReadOnlyList<WinnowFailure<TKey>>
 result.FailureCount       // Number of failed entities
 result.FailedIds          // IReadOnlyList<TKey> - IDs that failed
 
@@ -34,7 +34,7 @@ result.DatabaseRoundTrips // Number of DB calls made
 result.Duration           // Total time elapsed
 ```
 
-### BatchFailure&lt;TKey&gt;
+### WinnowFailure&lt;TKey&gt;
 
 ```csharp
 failure.EntityId      // TKey - ID of the failed entity
@@ -54,9 +54,9 @@ failure.Exception     // Exception? - The original exception, if available
 | `Cancelled` | Operation was cancelled via CancellationToken |
 | `UnknownError` | Unclassified error |
 
-## InsertBatchResult&lt;TKey&gt;
+## InsertResult&lt;TKey&gt;
 
-Returned by `InsertBatch`, `InsertGraphBatch`.
+Returned by `Insert`, `InsertGraph`.
 
 ```csharp
 // Success information
@@ -66,7 +66,7 @@ result.SuccessCount       // Number of successful inserts
 result.IsCompleteSuccess  // All succeeded
 
 // Failure information
-result.Failures           // IReadOnlyList<InsertBatchFailure>
+result.Failures           // IReadOnlyList<InsertFailure>
 result.FailureCount       // Number of failed inserts
 
 // Graph operations (null for non-graph)
@@ -86,7 +86,7 @@ inserted.OriginalIndex // int - Position in original input list
 inserted.Entity        // TEntity - Reference to the entity
 ```
 
-### InsertBatchFailure
+### InsertFailure
 
 ```csharp
 failure.EntityIndex   // int - Position in original input list
@@ -95,9 +95,9 @@ failure.Reason        // FailureReason enum - Categorized failure type
 failure.Exception     // Exception? - The original exception, if available
 ```
 
-## UpsertBatchResult&lt;TKey&gt;
+## UpsertResult&lt;TKey&gt;
 
-Returned by `UpsertBatch`, `UpsertGraphBatch`.
+Returned by `Upsert`, `UpsertGraph`.
 
 ```csharp
 // Insert results
@@ -116,7 +116,7 @@ result.SuccessCount       // Total successful operations
 result.IsCompleteSuccess  // All succeeded
 
 // Failure information
-result.Failures           // IReadOnlyList<UpsertBatchFailure<TKey>>
+result.Failures           // IReadOnlyList<UpsertFailure<TKey>>
 result.FailureCount       // Number of failures
 
 // Graph operations (null for non-graph)
@@ -137,7 +137,7 @@ upserted.Entity        // TEntity - Reference to the entity
 upserted.Operation     // UpsertOperationType.Insert or UpsertOperationType.Update
 ```
 
-### UpsertBatchFailure&lt;TKey&gt;
+### UpsertFailure&lt;TKey&gt;
 
 ```csharp
 failure.EntityIndex        // int - Position in original input list
@@ -205,31 +205,31 @@ All batch operations have async counterparts that accept a `CancellationToken`:
 
 ```csharp
 // Sync
-var result = saver.InsertBatch(entities);
+var result = saver.Insert(entities);
 
 // Async
-var result = await saver.InsertBatchAsync(entities, cancellationToken);
+var result = await saver.InsertAsync(entities, cancellationToken);
 ```
 
 Available async methods:
-- `InsertBatchAsync`, `InsertGraphBatchAsync`
-- `UpdateBatchAsync`, `UpdateGraphBatchAsync`
-- `DeleteBatchAsync`, `DeleteGraphBatchAsync`
-- `UpsertBatchAsync`, `UpsertGraphBatchAsync`
+- `InsertAsync`, `InsertGraphAsync`
+- `UpdateAsync`, `UpdateGraphAsync`
+- `DeleteAsync`, `DeleteGraphAsync`
+- `UpsertAsync`, `UpsertGraphAsync`
 
 ## Graph Result Properties
 
 ### GraphHierarchy
 
-The `GraphHierarchy` property is populated only for graph operations (`InsertGraphBatch`, `UpdateGraphBatch`, etc.). It contains a list of root-level `GraphNode<TKey>` objects, each with recursive `Children`.
+The `GraphHierarchy` property is populated only for graph operations (`InsertGraph`, `UpdateGraph`, etc.). It contains a list of root-level `GraphNode<TKey>` objects, each with recursive `Children`.
 
 ```csharp
 // For non-graph operations, this is null
-var result = saver.InsertBatch(entities);
+var result = saver.Insert(entities);
 result.GraphHierarchy  // null
 
 // For graph operations, this contains the hierarchy
-var result = saver.InsertGraphBatch(orders);
+var result = saver.InsertGraph(orders);
 foreach (var node in result.GraphHierarchy ?? [])
 {
     Console.WriteLine($"Parent {node.EntityId} has children: {string.Join(", ", node.GetChildIds())}");

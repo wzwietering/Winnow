@@ -91,8 +91,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         var root = CreateTwoLevelHierarchy("Electronics", 3);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch([root]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph([root]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(1);
@@ -108,8 +108,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         var root = CreateThreeLevelHierarchy("Electronics");
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch([root]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph([root]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         root.Id.ShouldBeGreaterThan(0);
@@ -129,8 +129,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         var root = CreateDeepHierarchy("Deep", 6);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch([root], new InsertGraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph([root], new InsertGraphOptions
         {
             MaxDepth = 3
         });
@@ -155,8 +155,8 @@ public class SelfReferencingHierarchyTests : TestBase
             CreateTwoLevelHierarchy("Books", 1)
         };
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch(roots);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph(roots);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -178,8 +178,8 @@ public class SelfReferencingHierarchyTests : TestBase
         var root1 = new Category { Name = "Root1", SubCategories = [shared] };
         var root2 = new Category { Name = "Root2", SubCategories = [shared] };
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch([root1, root2], new InsertGraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph([root1, root2], new InsertGraphOptions
         {
             CircularReferenceHandling = CircularReferenceHandling.Ignore
         });
@@ -200,8 +200,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         var root = CreateBroadHierarchy("WideRoot", 50);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch([root]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph([root]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         root.SubCategories.Count.ShouldBe(50);
@@ -215,8 +215,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         var root = CreateThreeLevelHierarchy("Tracked");
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch([root]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph([root]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.TraversalInfo.ShouldNotBeNull();
@@ -230,8 +230,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         var root = CreateThreeLevelHierarchy("Counted");
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch([root]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph([root]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.TraversalInfo.ShouldNotBeNull();
@@ -258,8 +258,8 @@ public class SelfReferencingHierarchyTests : TestBase
         loaded.SubCategories.First().Name = "Updated-L1";
         loaded.SubCategories.First().SubCategories.First().Name = "Updated-L2";
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loaded]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loaded]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
 
@@ -308,8 +308,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         loaded.SubCategories.Remove(loaded.SubCategories.First());
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Detach
         });
@@ -347,8 +347,8 @@ public class SelfReferencingHierarchyTests : TestBase
         loadedParent2.SubCategories.Add(childToMove);
         childToMove.ParentCategoryId = loadedParent2.Id;
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loadedParent1, loadedParent2], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loadedParent1, loadedParent2], new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Detach
         });
@@ -378,8 +378,8 @@ public class SelfReferencingHierarchyTests : TestBase
         var newChild = new Category { Name = "MovedDeeper" };
         grandchild.SubCategories.Add(newChild);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loaded]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loaded]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.TraversalInfo!.MaxDepthReached.ShouldBeGreaterThanOrEqualTo(3);
@@ -403,11 +403,11 @@ public class SelfReferencingHierarchyTests : TestBase
         loadedA.SubCategories.Add(loadedB);
         loadedB.SubCategories.Add(loadedA);
 
-        var saver = new BatchSaver<Category, int>(context);
+        var saver = new Winnower<Category, int>(context);
 
         // With IncludeReferences = true and Throw, circular validation is triggered
         Should.Throw<InvalidOperationException>(() =>
-            saver.UpdateGraphBatch([loadedA], new GraphBatchOptions
+            saver.UpdateGraph([loadedA], new GraphOptions
             {
                 IncludeReferences = true,
                 CircularReferenceHandling = CircularReferenceHandling.Throw,
@@ -432,8 +432,8 @@ public class SelfReferencingHierarchyTests : TestBase
         loadedB.SubCategories.Add(loadedA);
         loadedA.Description = "Modified-A";
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loadedA], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loadedA], new GraphOptions
         {
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
             OrphanedChildBehavior = OrphanBehavior.Detach
@@ -458,11 +458,11 @@ public class SelfReferencingHierarchyTests : TestBase
         var loaded = context.Categories.Include(c => c.SubCategories).First(c => c.Id == category.Id);
         loaded.SubCategories.Add(loaded); // Direct self-ref via collection
 
-        var saver = new BatchSaver<Category, int>(context);
+        var saver = new Winnower<Category, int>(context);
 
         // With IncludeReferences = true and Throw, circular validation is triggered
         Should.Throw<InvalidOperationException>(() =>
-            saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+            saver.UpdateGraph([loaded], new GraphOptions
             {
                 IncludeReferences = true,
                 CircularReferenceHandling = CircularReferenceHandling.Throw,
@@ -494,8 +494,8 @@ public class SelfReferencingHierarchyTests : TestBase
             root.Description = "OneByOne";
         }
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch(loaded, new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph(loaded, new GraphOptions
         {
             Strategy = BatchStrategy.OneByOne
         });
@@ -526,8 +526,8 @@ public class SelfReferencingHierarchyTests : TestBase
             root.Description = "D&C";
         }
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch(loaded, new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph(loaded, new GraphOptions
         {
             Strategy = BatchStrategy.DivideAndConquer
         });
@@ -552,8 +552,8 @@ public class SelfReferencingHierarchyTests : TestBase
             .First(c => c.ParentCategoryId == root.Id);
         var childId = child.Id;
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.DeleteGraphBatch([child]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.DeleteGraph([child]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
 
@@ -574,8 +574,8 @@ public class SelfReferencingHierarchyTests : TestBase
             .First(c => c.Id == root.Id);
         var childIds = loaded.SubCategories.Select(c => c.Id).ToList();
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             CascadeBehavior = DeleteCascadeBehavior.Cascade
         });
@@ -602,8 +602,8 @@ public class SelfReferencingHierarchyTests : TestBase
             .ThenInclude(c => c.SubCategories)
             .First(c => c.Id == root.Id);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             CascadeBehavior = DeleteCascadeBehavior.Cascade
         });
@@ -625,8 +625,8 @@ public class SelfReferencingHierarchyTests : TestBase
             .Include(c => c.SubCategories)
             .First(c => c.Id == root.Id);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             CascadeBehavior = DeleteCascadeBehavior.Cascade
         });
@@ -652,8 +652,8 @@ public class SelfReferencingHierarchyTests : TestBase
             .Where(c => c.ParentCategoryId == null)
             .ToList();
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.DeleteGraphBatch(loaded, new DeleteGraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.DeleteGraph(loaded, new DeleteGraphOptions
         {
             CascadeBehavior = DeleteCascadeBehavior.Cascade
         });
@@ -674,8 +674,8 @@ public class SelfReferencingHierarchyTests : TestBase
             .ThenInclude(c => c.SubCategories)
             .First(c => c.Id == root.Id);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             CascadeBehavior = DeleteCascadeBehavior.Cascade,
             MaxDepth = 1
@@ -697,8 +697,8 @@ public class SelfReferencingHierarchyTests : TestBase
             .ThenInclude(c => c.SubCategories)
             .First(c => c.Id == root.Id);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             CascadeBehavior = DeleteCascadeBehavior.Cascade
         });
@@ -716,8 +716,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         var loaded = context.Categories.First(c => c.Id == root.Id);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             CascadeBehavior = DeleteCascadeBehavior.ParentOnly
         });
@@ -750,8 +750,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         loaded.SubCategories.Remove(loaded.SubCategories.First());
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Detach
         });
@@ -779,8 +779,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         loaded.SubCategories.Remove(loaded.SubCategories.First());
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Detach
         });
@@ -807,8 +807,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         loaded.SubCategories.Remove(loaded.SubCategories.First());
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Detach
         });
@@ -838,8 +838,8 @@ public class SelfReferencingHierarchyTests : TestBase
         var l2RemovedId = l1Child.SubCategories.First().Id;
         l1Child.SubCategories.Clear();
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Detach
         });
@@ -872,8 +872,8 @@ public class SelfReferencingHierarchyTests : TestBase
         loadedP2.SubCategories.Add(child);
         child.ParentCategoryId = parent2.Id;
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loadedP1, loadedP2], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loadedP1, loadedP2], new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Detach
         });
@@ -901,8 +901,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         loaded.SubCategories.Clear();
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Detach
         });
@@ -933,11 +933,11 @@ public class SelfReferencingHierarchyTests : TestBase
         var category = CreateCategory("SelfRef");
         category.ParentCategory = category;
 
-        var saver = new BatchSaver<Category, int>(context);
+        var saver = new Winnower<Category, int>(context);
 
         // Need IncludeReferences to traverse the ParentCategory reference navigation
         Should.Throw<InvalidOperationException>(() =>
-            saver.InsertGraphBatch([category], new InsertGraphBatchOptions
+            saver.InsertGraph([category], new InsertGraphOptions
             {
                 IncludeReferences = true,
                 CircularReferenceHandling = CircularReferenceHandling.Throw
@@ -953,10 +953,10 @@ public class SelfReferencingHierarchyTests : TestBase
         var category = CreateCategory("SelfRef");
         category.ParentCategory = category;
 
-        var saver = new BatchSaver<Category, int>(context);
+        var saver = new Winnower<Category, int>(context);
 
         Should.Throw<InvalidOperationException>(() =>
-            saver.InsertGraphBatch([category], new InsertGraphBatchOptions
+            saver.InsertGraph([category], new InsertGraphOptions
             {
                 IncludeReferences = true,
                 CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -973,11 +973,11 @@ public class SelfReferencingHierarchyTests : TestBase
         var category = CreateCategory("SelfRef");
         category.ParentCategory = category;
 
-        var saver = new BatchSaver<Category, int>(context);
+        var saver = new Winnower<Category, int>(context);
 
         // With IgnoreAll, no validation exception is thrown
         // (unlike Throw/Ignore which would throw InvalidOperationException)
-        var result = saver.InsertGraphBatch([category], new InsertGraphBatchOptions
+        var result = saver.InsertGraph([category], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.IgnoreAll
@@ -1005,8 +1005,8 @@ public class SelfReferencingHierarchyTests : TestBase
         loadedB.SubCategories.Add(loadedA);
         loadedA.Description = "IgnoreAll-A";
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loadedA], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loadedA], new GraphOptions
         {
             CircularReferenceHandling = CircularReferenceHandling.IgnoreAll,
             OrphanedChildBehavior = OrphanBehavior.Detach
@@ -1029,8 +1029,8 @@ public class SelfReferencingHierarchyTests : TestBase
         loaded.SubCategories.Add(loaded);
         loaded.Description = "SelfRefIgnoreAll";
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             CircularReferenceHandling = CircularReferenceHandling.IgnoreAll,
             OrphanedChildBehavior = OrphanBehavior.Detach
@@ -1054,8 +1054,8 @@ public class SelfReferencingHierarchyTests : TestBase
             .First(c => c.Id == root.Id);
         var childIds = loaded.SubCategories.Select(c => c.Id).ToList();
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             CircularReferenceHandling = CircularReferenceHandling.IgnoreAll,
             CascadeBehavior = DeleteCascadeBehavior.Cascade
@@ -1090,8 +1090,8 @@ public class SelfReferencingHierarchyTests : TestBase
         loadedA.Description = "ChainUpdated";
         loadedB.Description = "ChainUpdated";
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loadedA], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loadedA], new GraphOptions
         {
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
             OrphanedChildBehavior = OrphanBehavior.Detach
@@ -1111,8 +1111,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         var root = CreateDeepHierarchy("VeryDeep", 20);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch([root], new InsertGraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph([root], new InsertGraphOptions
         {
             MaxDepth = 5
         });
@@ -1146,8 +1146,8 @@ public class SelfReferencingHierarchyTests : TestBase
         loadedP2.SubCategories.Add(loadedShared);
         loadedShared.Description = "Updated";
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loadedP1, loadedP2], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loadedP1, loadedP2], new GraphOptions
         {
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
             OrphanedChildBehavior = OrphanBehavior.Detach
@@ -1187,8 +1187,8 @@ public class SelfReferencingHierarchyTests : TestBase
             .First(c => c.Id == category.Id);
         loaded.Description = "WithM2M";
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loaded]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loaded]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
 
@@ -1220,8 +1220,8 @@ public class SelfReferencingHierarchyTests : TestBase
             .First(p => p.Id == product.Id);
         loaded.Category!.Description = "ReferencedUpdated";
 
-        var saver = new BatchSaver<Product, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -1250,8 +1250,8 @@ public class SelfReferencingHierarchyTests : TestBase
         loaded.SubCategories.First().Description = "L1Updated";
         loaded.SubCategories.First().SubCategories.First().Description = "L2Updated";
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loaded]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loaded]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
 
@@ -1271,8 +1271,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         var root = CreateCategory("Root");
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch([root]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph([root]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         root.Id.ShouldBeGreaterThan(0);
@@ -1287,8 +1287,8 @@ public class SelfReferencingHierarchyTests : TestBase
         var root = CreateCategory("EmptyParent");
         root.SubCategories = [];
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch([root]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph([root]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.GraphHierarchy.ShouldNotBeNull();
@@ -1304,8 +1304,8 @@ public class SelfReferencingHierarchyTests : TestBase
             .Select(i => CreateTwoLevelHierarchy($"Root{i}", 5))
             .ToList();
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch(roots);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph(roots);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(100);
@@ -1321,8 +1321,8 @@ public class SelfReferencingHierarchyTests : TestBase
 
         var root = CreateTwoLevelHierarchy("Backward", 2);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch([root]);
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph([root]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(1);
