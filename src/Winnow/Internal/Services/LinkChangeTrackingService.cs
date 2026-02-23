@@ -35,7 +35,7 @@ internal class LinkChangeTrackingService<TEntity, TKey>
         }
     }
 
-    internal ManyToManyStatisticsTracker ApplyLinkChanges(TEntity entity, GraphBatchOptions options)
+    internal ManyToManyStatisticsTracker ApplyLinkChanges(TEntity entity, GraphOptions options)
     {
         ArgumentNullException.ThrowIfNull(entity);
         ArgumentNullException.ThrowIfNull(options);

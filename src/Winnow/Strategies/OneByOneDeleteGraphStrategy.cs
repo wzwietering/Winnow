@@ -2,24 +2,24 @@ using Winnow.Operations;
 
 namespace Winnow.Strategies;
 
-internal class OneByOneDeleteGraphStrategy<TEntity, TKey> : IBatchDeleteGraphStrategy<TEntity, TKey>
+internal class OneByOneDeleteGraphStrategy<TEntity, TKey> : IDeleteGraphStrategy<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    public BatchResult<TKey> Execute(
+    public WinnowResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        DeleteGraphBatchOptions options)
+        StrategyContext<TEntity, TKey> context,
+        DeleteGraphOptions options)
     {
         var operation = new DeleteGraphOperation<TEntity, TKey>(options);
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
 
-    public Task<BatchResult<TKey>> ExecuteAsync(
+    public Task<WinnowResult<TKey>> ExecuteAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        DeleteGraphBatchOptions options,
+        StrategyContext<TEntity, TKey> context,
+        DeleteGraphOptions options,
         CancellationToken cancellationToken)
     {
         var operation = new DeleteGraphOperation<TEntity, TKey>(options);

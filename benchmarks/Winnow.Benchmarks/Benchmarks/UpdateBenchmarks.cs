@@ -60,10 +60,10 @@ public class UpdateBenchmarks
     }
 
     [Benchmark]
-    public BatchResult<int> UpdateBatch()
+    public WinnowResult<int> Update()
     {
-        var saver = new BatchSaver<BenchmarkProduct, int>(_context);
-        return saver.UpdateBatch(_products, new BatchOptions { Strategy = Strategy });
+        var saver = new Winnower<BenchmarkProduct, int>(_context);
+        return saver.Update(_products, new WinnowOptions { Strategy = Strategy });
     }
 
     [IterationCleanup]

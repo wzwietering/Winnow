@@ -8,7 +8,7 @@ namespace Winnow.Tests.CompositeKeyIntegration;
 public class CompositeKeyAsyncTests : CompositeKeyTestBase
 {
     [Fact]
-    public async Task InsertBatchAsync_CompositeKey_Success()
+    public async Task InsertAsync_CompositeKey_Success()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -22,15 +22,15 @@ public class CompositeKeyAsyncTests : CompositeKeyTestBase
             UnitPrice = 10.00m + i
         }).ToList();
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = await saver.InsertBatchAsync(orderLines);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = await saver.InsertAsync(orderLines);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
     }
 
     [Fact]
-    public async Task UpdateBatchAsync_CompositeKey_Success()
+    public async Task UpdateAsync_CompositeKey_Success()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -42,15 +42,15 @@ public class CompositeKeyAsyncTests : CompositeKeyTestBase
             line.Quantity += 1;
         }
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = await saver.UpdateBatchAsync(orderLinesToUpdate);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = await saver.UpdateAsync(orderLinesToUpdate);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
     }
 
     [Fact]
-    public async Task DeleteBatchAsync_CompositeKey_Success()
+    public async Task DeleteAsync_CompositeKey_Success()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -58,8 +58,8 @@ public class CompositeKeyAsyncTests : CompositeKeyTestBase
 
         var orderLinesToDelete = context.OrderLines.Where(ol => ol.OrderId == orderId).ToList();
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = await saver.DeleteBatchAsync(orderLinesToDelete);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = await saver.DeleteAsync(orderLinesToDelete);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(3);
@@ -69,7 +69,7 @@ public class CompositeKeyAsyncTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public async Task InsertGraphBatchAsync_CompositeKey_Success()
+    public async Task InsertGraphAsync_CompositeKey_Success()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -88,8 +88,8 @@ public class CompositeKeyAsyncTests : CompositeKeyTestBase
             ]
         };
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = await saver.InsertGraphBatchAsync([orderLine]);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = await saver.InsertGraphAsync([orderLine]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
 
@@ -115,8 +115,8 @@ public class CompositeKeyAsyncTests : CompositeKeyTestBase
             UnitPrice = 10.00m
         };
 
-        var saver = new BatchSaver<OrderLine>(context);
-        var result = await saver.InsertBatchAsync([orderLine]);
+        var saver = new Winnower<OrderLine>(context);
+        var result = await saver.InsertAsync([orderLine]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedIds[0].GetValue<int>(0).ShouldBe(orderId);

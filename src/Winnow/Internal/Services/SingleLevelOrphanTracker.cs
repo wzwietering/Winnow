@@ -182,7 +182,7 @@ internal class SingleLevelOrphanTracker<TEntity, TKey>
         return originalChildIds.Where(id => !currentChildIds.Contains(id)).ToList();
     }
 
-    internal void ValidateNoOrphanedChildren(TEntity entity, GraphBatchOptions options)
+    internal void ValidateNoOrphanedChildren(TEntity entity, GraphOptions options)
     {
         if (options.OrphanedChildBehavior != OrphanBehavior.Throw)
         {
@@ -199,10 +199,10 @@ internal class SingleLevelOrphanTracker<TEntity, TKey>
         throw new InvalidOperationException(
             $"Entity {typeof(TEntity).Name} (Id={parentId}) has {orphanedIds.Count} orphaned child(ren) " +
             $"(IDs: {string.Join(", ", orphanedIds)}). " +
-            $"Set GraphBatchOptions.OrphanedChildBehavior to Delete or Detach to allow this.");
+            $"Set GraphOptions.OrphanedChildBehavior to Delete or Detach to allow this.");
     }
 
-    internal void HandleOrphanedChildren(TEntity entity, GraphBatchOptions options)
+    internal void HandleOrphanedChildren(TEntity entity, GraphOptions options)
     {
         if (options.OrphanedChildBehavior == OrphanBehavior.Detach)
         {

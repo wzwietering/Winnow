@@ -23,7 +23,7 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
     }
 
     internal ManyToManyStatisticsTracker ProcessManyToManyForInsert(
-        TEntity entity, InsertGraphBatchOptions options)
+        TEntity entity, InsertGraphOptions options)
     {
         ArgumentNullException.ThrowIfNull(entity);
         ArgumentNullException.ThrowIfNull(options);
@@ -43,7 +43,7 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
     }
 
     private void ProcessEntityManyToMany(
-        EntityEntry entry, InsertGraphBatchOptions options,
+        EntityEntry entry, InsertGraphOptions options,
         ManyToManyStatisticsTracker tracker, HashSet<object> visited,
         int currentDepth, int maxDepth, NavigationFilter? filter)
     {
@@ -66,7 +66,7 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
     }
 
     private void ProcessChildrenManyToMany(
-        EntityEntry entry, InsertGraphBatchOptions options,
+        EntityEntry entry, InsertGraphOptions options,
         ManyToManyStatisticsTracker tracker, HashSet<object> visited,
         int currentDepth, int maxDepth, NavigationFilter? filter)
     {
@@ -92,7 +92,7 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
 
     private void ProcessManyToManyNavigation(
         EntityEntry entry, NavigationEntry navigation,
-        InsertGraphBatchOptions options, ManyToManyStatisticsTracker tracker)
+        InsertGraphOptions options, ManyToManyStatisticsTracker tracker)
     {
         var entityTypeName = entry.Metadata.ClrType.Name;
         var navigationName = navigation.Metadata.Name;
@@ -229,17 +229,6 @@ internal class ManyToManyInsertProcessor<TEntity, TKey>
             return false;
         }
 
-        return keyProperties.All(p => IsDefaultValue(entry.Property(p.Name).CurrentValue, p.ClrType));
-    }
-
-    private static bool IsDefaultValue(object? value, Type clrType)
-    {
-        if (value == null)
-        {
-            return true;
-        }
-
-        var defaultValue = clrType.IsValueType ? Activator.CreateInstance(clrType) : null;
-        return value.Equals(defaultValue);
+        return keyProperties.All(p => DefaultValueHelper.IsDefault(entry.Property(p.Name).CurrentValue, p.ClrType));
     }
 }

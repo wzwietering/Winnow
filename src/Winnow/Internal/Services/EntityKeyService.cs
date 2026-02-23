@@ -76,7 +76,7 @@ internal class EntityKeyService<TEntity, TKey>
         throw new InvalidOperationException(
             $"Primary key type mismatch for entity {entry.Metadata.ClrType.Name}. " +
             $"Expected type {typeof(TKey).Name}, but entity has key type {keyProperty.ClrType.Name}. " +
-            $"Use BatchSaver<{entry.Metadata.ClrType.Name}, {keyProperty.ClrType.Name}> instead.");
+            $"Use Winnower<{entry.Metadata.ClrType.Name}, {keyProperty.ClrType.Name}> instead.");
     }
 
     private static TKey GetCompositeKey(EntityEntry entry, IReadOnlyList<IProperty> keyProperties)
@@ -92,9 +92,9 @@ internal class EntityKeyService<TEntity, TKey>
         var keyTypes = string.Join(", ", keyProperties.Select(p => $"{p.Name}: {p.ClrType.Name}"));
         throw new InvalidOperationException(
             $"Entity {entry.Metadata.ClrType.Name} has composite primary key ({keyTypes}), " +
-            $"but BatchSaver was configured with key type {typeof(TKey).Name}. " +
-            $"Use BatchSaver<{entry.Metadata.ClrType.Name}> for auto-detection, or " +
-            $"BatchSaver<{entry.Metadata.ClrType.Name}, CompositeKey> for explicit typing.");
+            $"but Winnower was configured with key type {typeof(TKey).Name}. " +
+            $"Use Winnower<{entry.Metadata.ClrType.Name}> for auto-detection, or " +
+            $"Winnower<{entry.Metadata.ClrType.Name}, CompositeKey> for explicit typing.");
     }
 
     private static TKey CreateCompositeKeyResult(EntityEntry entry, IReadOnlyList<IProperty> keyProperties)

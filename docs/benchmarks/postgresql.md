@@ -94,9 +94,9 @@ Graph D&C speedup (2.5-8.2x) is lower than flat operations (6-16x). Navigation p
 
 Graph operations use 2-3x more memory per entity than flat operations. UpsertGraph is the most expensive at ~29 KB/entity because it loads existing entities, tracks changes, and traverses navigations.
 
-## ParallelBatchSaver
+## ParallelWinnower
 
-Tests `ParallelBatchSaver` async insert with DivideAndConquer at varying degrees of parallelism (DOP).
+Tests `ParallelWinnower` async insert with DivideAndConquer at varying degrees of parallelism (DOP).
 
 | DOP | 1,000 entities | 5,000 entities |
 |-----|----------------|----------------|
@@ -109,7 +109,7 @@ Tests `ParallelBatchSaver` async insert with DivideAndConquer at varying degrees
 
 Memory is nearly identical across all DOP values (~10.4 MB @ 1K, ~49 MB @ 5K), confirming that partitioning does not affect total allocation.
 
-For PostgreSQL with small-to-medium batches, DOP 4 may provide a modest speedup. For large batches (5K+), stick with `BatchSaver` or DOP 1 to avoid contention overhead.
+For PostgreSQL with small-to-medium batches, DOP 4 may provide a modest speedup. For large batches (5K+), stick with `Winnower` or DOP 1 to avoid contention overhead.
 
 ## Failure Rate Impact
 
@@ -145,8 +145,8 @@ Memory follows the same pattern:
 | General use, low failure rate | `DivideAndConquer` |
 | Frequent validation failures (>10%) | Pre-validate, then `DivideAndConquer` |
 | Need per-entity error isolation | `OneByOne` |
-| Small-to-medium batches with DOP 4 | `ParallelBatchSaver` with `DivideAndConquer` |
-| Large batches (5K+) | `BatchSaver` with `DivideAndConquer` |
+| Small-to-medium batches with DOP 4 | `ParallelWinnower` with `DivideAndConquer` |
+| Large batches (5K+) | `Winnower` with `DivideAndConquer` |
 
 ## Running the Benchmarks
 

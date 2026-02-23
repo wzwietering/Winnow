@@ -2,6 +2,16 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Winnow.Internal;
 
+/// <summary>
+/// Classifies database exceptions by inspecting error messages via string matching.
+/// </summary>
+/// <remarks>
+/// <para><strong>Known limitation:</strong> Classification relies on substring matching
+/// against provider-specific error messages, which may not cover all database providers
+/// or localized error messages.</para>
+/// <para>For scenarios requiring precise control, use <see cref="RetryOptions.IsTransient"/>
+/// to supply a custom predicate that replaces the built-in transient detection.</para>
+/// </remarks>
 internal static class FailureClassifier
 {
     internal static FailureReason Classify(Exception ex) => ex switch

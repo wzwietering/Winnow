@@ -46,11 +46,11 @@ public class InsertBenchmarks
     }
 
     [Benchmark]
-    public InsertBatchResult<int> InsertBatch()
+    public InsertResult<int> Insert()
     {
         using var context = new BenchmarkDbContext(_options);
-        var saver = new BatchSaver<BenchmarkProduct, int>(context);
-        return saver.InsertBatch(_products, new InsertBatchOptions { Strategy = Strategy });
+        var saver = new Winnower<BenchmarkProduct, int>(context);
+        return saver.Insert(_products, new InsertOptions { Strategy = Strategy });
     }
 
     [GlobalCleanup]

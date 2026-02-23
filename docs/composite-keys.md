@@ -1,15 +1,15 @@
 # Composite Keys
 
-BatchSaver fully supports entities with composite primary keys.
+Winnower fully supports entities with composite primary keys.
 
 ## API Decision Tree
 
 ```
 Is your entity's primary key composite (multiple columns)?
-├── No  → Use BatchSaver<TEntity, TKey> with the key type (int, long, Guid, string)
+├── No  → Use Winnower<TEntity, TKey> with the key type (int, long, Guid, string)
 └── Yes → Choose one:
-          ├── Auto-detect: BatchSaver<TEntity>(context) - returns CompositeKey
-          └── Explicit:    BatchSaver<TEntity, CompositeKey>(context)
+          ├── Auto-detect: Winnower<TEntity>(context) - returns CompositeKey
+          └── Explicit:    Winnower<TEntity, CompositeKey>(context)
 ```
 
 ## CompositeKey Struct
@@ -47,19 +47,19 @@ var (warehouse, aisle, bin) = threePartKey;   // 3-part
 
 ## Auto-Detect API
 
-When you don't specify a key type, BatchSaver auto-detects composite keys:
+When you don't specify a key type, Winnower auto-detects composite keys:
 
 ```csharp
 // Simple key entity - works automatically
-var productSaver = new BatchSaver<Product>(context);
+var productSaver = new Winnower<Product>(context);
 productSaver.IsCompositeKey.ShouldBeFalse();
 
 // Composite key entity - detected automatically
-var orderLineSaver = new BatchSaver<OrderLine>(context);
+var orderLineSaver = new Winnower<OrderLine>(context);
 orderLineSaver.IsCompositeKey.ShouldBeTrue();
 
 // Insert and extract IDs
-var result = orderLineSaver.InsertBatch([orderLine]);
+var result = orderLineSaver.Insert([orderLine]);
 var insertedKey = result.InsertedIds[0];
 
 // Access components
@@ -72,7 +72,7 @@ int lineNumber = insertedKey.GetValue<int>(1);
 For explicit typing, specify `CompositeKey` as the key type:
 
 ```csharp
-var saver = new BatchSaver<OrderLine, CompositeKey>(context);
+var saver = new Winnower<OrderLine, CompositeKey>(context);
 
 var orderLines = new[]
 {
@@ -80,7 +80,7 @@ var orderLines = new[]
     new OrderLine { OrderId = 1, LineNumber = 2, Quantity = 3 }
 };
 
-var result = saver.InsertBatch(orderLines);
+var result = saver.Insert(orderLines);
 
 // Results use CompositeKey
 foreach (var key in result.InsertedIds)
@@ -101,8 +101,8 @@ public class InventoryLocation
     public int Quantity { get; set; }
 }
 
-var saver = new BatchSaver<InventoryLocation, CompositeKey>(context);
-var result = saver.InsertBatch(locations);
+var saver = new Winnower<InventoryLocation, CompositeKey>(context);
+var result = saver.Insert(locations);
 
 var firstKey = result.InsertedIds[0];
 var (warehouse, aisle, bin) = firstKey;  // Deconstruct
@@ -118,7 +118,7 @@ string binCode = firstKey.GetValue<string>(2);        // "BIN-A"
 All graph operations work with composite key parents:
 
 ```csharp
-var saver = new BatchSaver<OrderLine, CompositeKey>(context);
+var saver = new Winnower<OrderLine, CompositeKey>(context);
 
 // OrderLine (composite key) → OrderLineNote (simple key)
 var orderLine = new OrderLine
@@ -132,7 +132,7 @@ var orderLine = new OrderLine
     ]
 };
 
-var result = saver.InsertGraphBatch([orderLine]);
+var result = saver.InsertGraph([orderLine]);
 
 // Access hierarchy with composite parent key
 var parentKey = new CompositeKey(orderId, 1);

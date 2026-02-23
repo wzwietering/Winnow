@@ -40,26 +40,26 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
             _keyService.Value.Context?.Dispose();
     }
 
-    internal async Task<BatchResult<TKey>> ExecuteBatchAsync(
+    internal async Task<WinnowResult<TKey>> ExecuteBatchAsync(
         List<TEntity> entities,
-        Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<BatchResult<TKey>>> execute,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<WinnowResult<TKey>>> execute,
         CancellationToken cancellationToken)
     {
         var partitions = EntityPartitioner.Partition(entities, _maxDegreeOfParallelism);
         var stopwatch = Stopwatch.StartNew();
 
-        var results = await RunPartitionsAsync(partitions, execute, CreateBatchFailureResult, cancellationToken);
+        var results = await RunPartitionsAsync(partitions, execute, CreateWinnowFailureResult, cancellationToken);
 
         stopwatch.Stop();
         var totalRoundTrips = results.Sum(r => r.RoundTrips);
         var totalRetries = results.Sum(r => r.Retries);
-        return BatchResultMerger.MergeBatchResults(
+        return ResultMerger.MergeWinnowResults(
             results.Select(r => r.Result).ToList(), stopwatch.Elapsed, totalRoundTrips, totalRetries);
     }
 
-    internal async Task<InsertBatchResult<TKey>> ExecuteInsertAsync(
+    internal async Task<InsertResult<TKey>> ExecuteInsertAsync(
         List<TEntity> entities,
-        Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<InsertBatchResult<TKey>>> execute,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<InsertResult<TKey>>> execute,
         CancellationToken cancellationToken)
     {
         var partitions = EntityPartitioner.PartitionWithOffsets(entities, _maxDegreeOfParallelism);
@@ -72,12 +72,12 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         var totalRoundTrips = results.Sum(r => r.Result.RoundTrips);
         var totalRetries = results.Sum(r => r.Result.Retries);
         var merged = ZipWithOffsets(results, partitions);
-        return BatchResultMerger.MergeInsertResults(merged, stopwatch.Elapsed, totalRoundTrips, totalRetries);
+        return ResultMerger.MergeInsertResults(merged, stopwatch.Elapsed, totalRoundTrips, totalRetries);
     }
 
-    internal async Task<UpsertBatchResult<TKey>> ExecuteUpsertAsync(
+    internal async Task<UpsertResult<TKey>> ExecuteUpsertAsync(
         List<TEntity> entities,
-        Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<UpsertBatchResult<TKey>>> execute,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<UpsertResult<TKey>>> execute,
         CancellationToken cancellationToken)
     {
         var partitions = EntityPartitioner.PartitionWithOffsets(entities, _maxDegreeOfParallelism);
@@ -90,12 +90,12 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         var totalRoundTrips = results.Sum(r => r.Result.RoundTrips);
         var totalRetries = results.Sum(r => r.Result.Retries);
         var merged = ZipUpsertWithOffsets(results, partitions);
-        return BatchResultMerger.MergeUpsertResults(merged, stopwatch.Elapsed, totalRoundTrips, totalRetries);
+        return ResultMerger.MergeUpsertResults(merged, stopwatch.Elapsed, totalRoundTrips, totalRetries);
     }
 
     private async Task<List<PartitionResult<TResult>>> RunPartitionsAsync<TResult>(
         List<List<TEntity>> partitions,
-        Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
         CancellationToken cancellationToken)
     {
@@ -108,7 +108,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
 
     private async Task<List<(PartitionResult<TResult> Result, int Index)>> RunPartitionsWithOffsetsAsync<TResult>(
         List<(List<TEntity> Items, int Offset)> partitions,
-        Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
         CancellationToken cancellationToken)
     {
@@ -122,7 +122,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     private async Task<PartitionResult<TResult>> RunWithSemaphoreAsync<TResult>(
         SemaphoreSlim semaphore,
         List<TEntity> partition,
-        Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
         CancellationToken cancellationToken)
     {
@@ -149,7 +149,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         SemaphoreSlim semaphore,
         List<TEntity> partition,
         int index,
-        Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
         CancellationToken cancellationToken)
     {
@@ -159,7 +159,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
 
     private async Task<PartitionResult<TResult>> ExecutePartitionAsync<TResult>(
         List<TEntity> partition,
-        Func<List<TEntity>, BatchStrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
         CancellationToken cancellationToken)
     {
@@ -167,7 +167,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         try
         {
             context = _contextFactory();
-            var strategyContext = new BatchStrategyContext<TEntity, TKey>(context) { Logger = _logger, RetryOptions = _retryOptions };
+            var strategyContext = new StrategyContext<TEntity, TKey>(context) { Logger = _logger, RetryOptions = _retryOptions };
             var result = await execute(partition, strategyContext, cancellationToken);
             return new PartitionResult<TResult>(result, strategyContext.RoundTripCounter, strategyContext.RetryCounter);
         }
@@ -182,19 +182,19 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         }
     }
 
-    private BatchResult<TKey> CreateBatchFailureResult(List<TEntity> entities, Exception ex)
+    private WinnowResult<TKey> CreateWinnowFailureResult(List<TEntity> entities, Exception ex)
     {
         if (ex is OperationCanceledException)
-            return new BatchResult<TKey> { WasCancelled = true, SuccessfulIds = [], Failures = [] };
+            return new WinnowResult<TKey> { WasCancelled = true, SuccessfulIds = [], Failures = [] };
 
-        return new BatchResult<TKey>
+        return new WinnowResult<TKey>
         {
             SuccessfulIds = [],
-            Failures = ExtractBatchFailures(entities, ex)
+            Failures = ExtractWinnowFailures(entities, ex)
         };
     }
 
-    private List<BatchFailure<TKey>> ExtractBatchFailures(List<TEntity> entities, Exception ex)
+    private List<WinnowFailure<TKey>> ExtractWinnowFailures(List<TEntity> entities, Exception ex)
     {
         var reason = FailureClassifier.Classify(ex);
 
@@ -209,11 +209,11 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         }
     }
 
-    private List<BatchFailure<TKey>> CreateFailuresWithKeys(
+    private List<WinnowFailure<TKey>> CreateFailuresWithKeys(
         List<TEntity> entities, Exception ex, FailureReason reason)
     {
         var keyService = _keyService.Value.Service;
-        return entities.Select(e => new BatchFailure<TKey>
+        return entities.Select(e => new WinnowFailure<TKey>
         {
             EntityId = keyService.GetEntityId(e),
             ErrorMessage = ex.Message,
@@ -222,10 +222,10 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         }).ToList();
     }
 
-    private static List<BatchFailure<TKey>> CreateFailuresWithoutKeys(
+    private static List<WinnowFailure<TKey>> CreateFailuresWithoutKeys(
         List<TEntity> entities, Exception ex, FailureReason reason, string suffix = "")
     {
-        return entities.Select(_ => new BatchFailure<TKey>
+        return entities.Select(_ => new WinnowFailure<TKey>
         {
             ErrorMessage = ex.Message + suffix,
             Reason = reason,
@@ -233,13 +233,13 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         }).ToList();
     }
 
-    private static InsertBatchResult<TKey> CreateInsertFailureResult(List<TEntity> entities, Exception ex)
+    private static InsertResult<TKey> CreateInsertFailureResult(List<TEntity> entities, Exception ex)
     {
         if (ex is OperationCanceledException)
-            return new InsertBatchResult<TKey> { WasCancelled = true, InsertedEntities = [], Failures = [] };
+            return new InsertResult<TKey> { WasCancelled = true, InsertedEntities = [], Failures = [] };
 
         var reason = FailureClassifier.Classify(ex);
-        var failures = entities.Select((_, i) => new InsertBatchFailure
+        var failures = entities.Select((_, i) => new InsertFailure
         {
             EntityIndex = i,
             ErrorMessage = ex.Message,
@@ -247,19 +247,19 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
             Exception = ex
         }).ToList();
 
-        return new InsertBatchResult<TKey> { InsertedEntities = [], Failures = failures };
+        return new InsertResult<TKey> { InsertedEntities = [], Failures = failures };
     }
 
-    private static UpsertBatchResult<TKey> CreateUpsertFailureResult(List<TEntity> entities, Exception ex)
+    private static UpsertResult<TKey> CreateUpsertFailureResult(List<TEntity> entities, Exception ex)
     {
         if (ex is OperationCanceledException)
-            return new UpsertBatchResult<TKey>
+            return new UpsertResult<TKey>
             {
                 WasCancelled = true, InsertedEntities = [], UpdatedEntities = [], Failures = []
             };
 
         var reason = FailureClassifier.Classify(ex);
-        var failures = entities.Select((_, i) => new UpsertBatchFailure<TKey>
+        var failures = entities.Select((_, i) => new UpsertFailure<TKey>
         {
             EntityIndex = i,
             ErrorMessage = ex.Message,
@@ -267,11 +267,11 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
             Exception = ex
         }).ToList();
 
-        return new UpsertBatchResult<TKey> { InsertedEntities = [], UpdatedEntities = [], Failures = failures };
+        return new UpsertResult<TKey> { InsertedEntities = [], UpdatedEntities = [], Failures = failures };
     }
 
-    private static List<(InsertBatchResult<TKey> Result, int Offset)> ZipWithOffsets(
-        List<(PartitionResult<InsertBatchResult<TKey>> Result, int Index)> results,
+    private static List<(InsertResult<TKey> Result, int Offset)> ZipWithOffsets(
+        List<(PartitionResult<InsertResult<TKey>> Result, int Index)> results,
         List<(List<TEntity> Items, int Offset)> partitions)
     {
         return results
@@ -279,8 +279,8 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
             .ToList();
     }
 
-    private static List<(UpsertBatchResult<TKey> Result, int Offset)> ZipUpsertWithOffsets(
-        List<(PartitionResult<UpsertBatchResult<TKey>> Result, int Index)> results,
+    private static List<(UpsertResult<TKey> Result, int Offset)> ZipUpsertWithOffsets(
+        List<(PartitionResult<UpsertResult<TKey>> Result, int Index)> results,
         List<(List<TEntity> Items, int Offset)> partitions)
     {
         return results

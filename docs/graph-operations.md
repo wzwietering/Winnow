@@ -7,7 +7,7 @@ Graph operations handle parent entities together with their children in a single
 Insert parent entities with their child collections in a single operation:
 
 ```csharp
-var saver = new BatchSaver<CustomerOrder, int>(context);
+var saver = new Winnower<CustomerOrder, int>(context);
 
 var orders = new List<CustomerOrder>
 {
@@ -22,16 +22,16 @@ var orders = new List<CustomerOrder>
     }
 };
 
-var result = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
+var result = saver.InsertGraph(orders, new InsertGraphOptions
 {
     Strategy = BatchStrategy.DivideAndConquer
 });
 
 // Parent and child IDs are populated after insert
-foreach (var parentId in result.InsertedIds)
+foreach (var node in result.GraphHierarchy ?? [])
 {
-    var childIds = result.ChildIdsByParentId![parentId];
-    Console.WriteLine($"Order {parentId} has items: {string.Join(", ", childIds)}");
+    var childIds = node.GetChildIds();
+    Console.WriteLine($"Order {node.EntityId} has items: {string.Join(", ", childIds)}");
 }
 ```
 
@@ -40,7 +40,7 @@ foreach (var parentId in result.InsertedIds)
 Update parent entities and their children, with control over what happens to removed children:
 
 ```csharp
-var saver = new BatchSaver<CustomerOrder, int>(context);
+var saver = new Winnower<CustomerOrder, int>(context);
 
 var orders = context.CustomerOrders
     .Include(o => o.OrderItems)
@@ -52,7 +52,7 @@ orders[0].OrderItems[0].Quantity = 10;
 orders[0].OrderItems.Add(new OrderItem { ... });
 orders[0].OrderItems.Remove(orders[0].OrderItems.Last());
 
-var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+var result = saver.UpdateGraph(orders, new GraphOptions
 {
     OrphanedChildBehavior = OrphanBehavior.Delete
 });
@@ -73,14 +73,14 @@ When children are removed from a collection during updates:
 Delete parent entities with their children:
 
 ```csharp
-var saver = new BatchSaver<CustomerOrder, int>(context);
+var saver = new Winnower<CustomerOrder, int>(context);
 
 var orders = context.CustomerOrders
     .Include(o => o.OrderItems)
     .Where(o => o.Status == OrderStatus.Cancelled)
     .ToList();
 
-var result = saver.DeleteGraphBatch(orders, new DeleteGraphBatchOptions
+var result = saver.DeleteGraph(orders, new DeleteGraphOptions
 {
     Strategy = BatchStrategy.OneByOne,
     CascadeBehavior = DeleteCascadeBehavior.Cascade
@@ -102,7 +102,7 @@ When deleting parent entities with children:
 Combine insert and update operations in a single graph batch:
 
 ```csharp
-var saver = new BatchSaver<CustomerOrder, int>(context);
+var saver = new Winnower<CustomerOrder, int>(context);
 
 var orders = new[]
 {
@@ -118,7 +118,7 @@ var orders = new[]
     }
 };
 
-var result = saver.UpsertGraphBatch(orders, new UpsertGraphBatchOptions
+var result = saver.UpsertGraph(orders, new UpsertGraphOptions
 {
     OrphanedChildBehavior = OrphanBehavior.Delete  // Required for graph updates
 });
@@ -132,15 +132,14 @@ Console.WriteLine($"Updated: {result.UpdatedCount}");
 For graph operations, results include the full hierarchy:
 
 ```csharp
-// Access child IDs by parent ID
-var childIds = result.ChildIdsByParentId![parentId];
-
-// For upsert, get detailed hierarchy
-var graphNode = result.GraphHierarchy![parentId];
-Console.WriteLine($"Parent operation: {graphNode.Operation}");
-foreach (var child in graphNode.Children)
+// Access the entity hierarchy
+foreach (var node in result.GraphHierarchy ?? [])
 {
-    Console.WriteLine($"  Child {child.EntityId}: {child.Operation}");
+    Console.WriteLine($"Parent {node.EntityId} ({node.EntityType})");
+    foreach (var child in node.Children)
+    {
+        Console.WriteLine($"  Child {child.EntityId} ({child.EntityType})");
+    }
 }
 ```
 
@@ -157,7 +156,7 @@ Only explicitly listed navigations are traversed. Entity types without rules hav
 var filter = NavigationFilter.Include()
     .Navigation<CustomerOrder>(o => o.OrderItems);
 
-var result = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
+var result = saver.InsertGraph(orders, new InsertGraphOptions
 {
     NavigationFilter = filter
 });
@@ -173,7 +172,7 @@ Listed navigations are skipped, all others are traversed normally.
 var filter = NavigationFilter.Exclude()
     .Navigation<OrderItem>(i => i.Reservations);
 
-var result = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
+var result = saver.InsertGraph(orders, new InsertGraphOptions
 {
     NavigationFilter = filter
 });
@@ -191,7 +190,7 @@ var filter = NavigationFilter.Include()
 // Removing reservations won't trigger orphan detection since they're filtered out
 orders[0].OrderItems.First().Reservations.Clear();
 
-var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+var result = saver.UpdateGraph(orders, new GraphOptions
 {
     OrphanedChildBehavior = OrphanBehavior.Throw,
     NavigationFilter = filter
@@ -224,7 +223,7 @@ var filter = NavigationFilter.Include()
     .Navigation<CustomerOrder>(o => o.OrderItems)
     .Navigation<OrderItem>(i => i.Reservations);
 
-var result = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
+var result = saver.InsertGraph(orders, new InsertGraphOptions
 {
     NavigationFilter = filter,
     MaxDepth = 1  // Limits to depth 1, so reservations at depth 2 are not reached

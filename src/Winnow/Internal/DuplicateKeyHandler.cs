@@ -16,7 +16,7 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
     internal static bool ShouldHandle(
         Exception ex,
         int index,
-        IBatchUpsertOperation<TEntity, TKey> operation,
+        IUpsertOperation<TEntity, TKey> operation,
         out DuplicateKeyStrategy strategy)
     {
         strategy = operation.DuplicateKeyStrategy;
@@ -36,8 +36,8 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
     internal static void RetryAsUpdate(
         TEntity entity,
         int index,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -60,8 +60,8 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
     internal static async Task<bool> RetryAsUpdateAsync(
         TEntity entity,
         int index,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         try

@@ -20,27 +20,26 @@ namespace Winnow.Operations;
 /// <item>Add optimistic concurrency tokens to detect conflicts</item>
 /// </list>
 /// </remarks>
-internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, TKey>
+internal class UpsertGraphOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    private readonly UpsertGraphBatchOptions _options;
+    private readonly UpsertGraphOptions _options;
     private readonly TraversalContext _tc;
     private readonly List<UpsertedEntity<TKey>> _insertedEntities = [];
     private readonly List<UpsertedEntity<TKey>> _updatedEntities = [];
-    private readonly List<UpsertBatchFailure<TKey>> _failures = [];
+    private readonly List<UpsertFailure<TKey>> _failures = [];
     private readonly List<GraphNode<TKey>> _graphHierarchy = [];
     private readonly Dictionary<int, UpsertOperationType> _operationDecisions = [];
     private readonly GraphStatisticsTracker<TKey> _statsTracker = new();
 
-    internal UpsertGraphOperation(UpsertGraphBatchOptions options)
+    internal UpsertGraphOperation(UpsertGraphOptions options)
     {
         _options = options;
         _tc = TraversalContext.FromOptions(options);
     }
 
-    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context,
-        CancellationToken cancellationToken = default)
+    public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {
         NavigationFilterValidator.Validate(
             _tc.NavigationFilter, context.Context.Model, _options.IncludeReferences, _options.IncludeManyToMany);
@@ -57,7 +56,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         {
             if (!context.HasDefaultKeyValue(entity))
             {
-                context.ValidateNoOrphanedChildrenRecursive(entity, _tc, ToGraphBatchOptions());
+                context.ValidateNoOrphanedChildrenRecursive(entity, _tc, ToGraphOptions());
             }
 
             if (_options.IncludeReferences)
@@ -67,7 +66,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         }
     }
 
-    public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
+    public void PrepareEntity(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
         var isInsert = context.HasDefaultKeyValue(entity);
         _operationDecisions[index] = isInsert ? UpsertOperationType.Insert : UpsertOperationType.Update;
@@ -93,7 +92,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         }
     }
 
-    private void ProcessManyToMany(TEntity entity, bool isInsert, BatchStrategyContext<TEntity, TKey> context)
+    private void ProcessManyToMany(TEntity entity, bool isInsert, StrategyContext<TEntity, TKey> context)
     {
         if (isInsert)
         {
@@ -102,12 +101,12 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         }
         else
         {
-            var m2mResult = context.ApplyManyToManyChanges(entity, ToGraphBatchOptions());
+            var m2mResult = context.ApplyManyToManyChanges(entity, ToGraphOptions());
             _statsTracker.AggregateManyToManyStats(m2mResult);
         }
     }
 
-    public void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
+    public void RecordSuccess(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
         var operation = _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert);
@@ -136,7 +135,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         _statsTracker.AggregateStats(stats);
     }
 
-    public void RecordFailure(TEntity entity, int index, Exception ex, BatchStrategyContext<TEntity, TKey> context)
+    public void RecordFailure(TEntity entity, int index, Exception ex, StrategyContext<TEntity, TKey> context)
     {
         var operation = _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert);
         TKey? entityId = default;
@@ -146,7 +145,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
             entityId = context.GetEntityId(entity);
         }
 
-        var failure = new UpsertBatchFailure<TKey>
+        var failure = new UpsertFailure<TKey>
         {
             EntityIndex = index,
             EntityId = entityId,
@@ -159,10 +158,10 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) =>
+    public void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context) =>
         context.DetachEntityWithOrphansRecursive(entity, _tc);
 
-    public UpsertBatchResult<TKey> CreateResult(bool wasCancelled = false) => new()
+    public UpsertResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {
         InsertedEntities = _insertedEntities,
         UpdatedEntities = _updatedEntities,
@@ -172,7 +171,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         WasCancelled = wasCancelled
     };
 
-    private GraphBatchOptions ToGraphBatchOptions() => new()
+    private GraphOptions ToGraphOptions() => new()
     {
         MaxDepth = _options.MaxDepth,
         OrphanedChildBehavior = _options.OrphanedChildBehavior,
@@ -182,7 +181,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         NavigationFilter = _options.NavigationFilter
     };
 
-    private InsertGraphBatchOptions ToInsertGraphOptions() => new()
+    private InsertGraphOptions ToInsertGraphOptions() => new()
     {
         MaxDepth = _options.MaxDepth,
         IncludeReferences = _options.IncludeReferences,
@@ -200,7 +199,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
 
     public DuplicateKeyStrategy DuplicateKeyStrategy => _options.DuplicateKeyStrategy;
 
-    public void RecordSuccessAsUpdate(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
+    public void RecordSuccessAsUpdate(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
         _operationDecisions[index] = UpsertOperationType.Update;

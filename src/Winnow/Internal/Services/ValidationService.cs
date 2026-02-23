@@ -27,9 +27,9 @@ internal class ValidationService<TEntity, TKey>
             throw new InvalidOperationException(
                 $"Entity {typeof(TEntity).Name} (Id={entityId}) has modified navigation properties: " +
                 $"{string.Join(", ", modifiedNavigations)}. " +
-                $"BatchSaver<{typeof(TEntity).Name}, {typeof(TKey).Name}> only updates parent entities. " +
+                $"Winnower<{typeof(TEntity).Name}, {typeof(TKey).Name}> only updates parent entities. " +
                 $"To update entity graphs, use standard EF Core SaveChanges() or set " +
-                $"BatchOptions.ValidateNavigationProperties = false to suppress this check.");
+                $"WinnowOptions.ValidateNavigationProperties = false to suppress this check.");
         }
     }
 
@@ -96,7 +96,7 @@ internal class ValidationService<TEntity, TKey>
             throw new InvalidOperationException(
                 $"Entity {typeof(TEntity).Name} has populated navigation properties: " +
                 $"{string.Join(", ", populatedNavigations)}. " +
-                $"Use InsertGraphBatch to insert parent with children, or clear the navigations.");
+                $"Use InsertGraph to insert parent with children, or clear the navigations.");
         }
     }
 
@@ -111,7 +111,7 @@ internal class ValidationService<TEntity, TKey>
             throw new InvalidOperationException(
                 $"Entity {typeof(TEntity).Name} (Id={entityId}) has populated navigation properties: " +
                 $"{string.Join(", ", populatedNavigations)}. " +
-                $"Use DeleteGraphBatch to delete parent with children, or remove Include().");
+                $"Use DeleteGraph to delete parent with children, or remove Include().");
         }
     }
 
@@ -143,7 +143,7 @@ internal class ValidationService<TEntity, TKey>
         return populatedNavigations;
     }
 
-    internal void ValidateCascadeBehavior(TEntity entity, DeleteGraphBatchOptions options)
+    internal void ValidateCascadeBehavior(TEntity entity, DeleteGraphOptions options)
     {
         if (options.CascadeBehavior != DeleteCascadeBehavior.Throw)
         {
@@ -156,7 +156,7 @@ internal class ValidationService<TEntity, TKey>
     }
 
     internal void ValidateCascadeBehaviorRecursive(
-        TEntity entity, TraversalContext tc, DeleteGraphBatchOptions options)
+        TEntity entity, TraversalContext tc, DeleteGraphOptions options)
     {
         if (options.CascadeBehavior != DeleteCascadeBehavior.Throw)
         {
@@ -205,7 +205,7 @@ internal class ValidationService<TEntity, TKey>
                     throw new InvalidOperationException(
                         $"Entity {typeof(TEntity).Name} (Id={entityId}) has {childCount} child(ren) in " +
                         $"'{navigation.Metadata.Name}'. " +
-                        $"Set DeleteGraphBatchOptions.CascadeBehavior to Cascade or ParentOnly to proceed.");
+                        $"Set DeleteGraphOptions.CascadeBehavior to Cascade or ParentOnly to proceed.");
                 }
             }
         }
@@ -229,7 +229,7 @@ internal class ValidationService<TEntity, TKey>
                     throw new InvalidOperationException(
                         $"Entity {entry.Metadata.ClrType.Name} (Id={entityId}) at depth {depth} has " +
                         $"{childCount} child(ren) in '{navigation.Metadata.Name}'. " +
-                        $"Set DeleteGraphBatchOptions.CascadeBehavior to Cascade or ParentOnly to proceed.");
+                        $"Set DeleteGraphOptions.CascadeBehavior to Cascade or ParentOnly to proceed.");
                 }
             }
         }

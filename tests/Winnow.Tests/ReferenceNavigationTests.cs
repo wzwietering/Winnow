@@ -17,8 +17,8 @@ public class ReferenceNavigationTests : TestBase
         var product = CreateValidProduct("Widget");
         var order = CreateOrderWithProductReference("ORD-001", product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -43,8 +43,8 @@ public class ReferenceNavigationTests : TestBase
 
         var order = CreateValidOrderWithExistingProduct("ORD-001", 1, productId);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -62,8 +62,8 @@ public class ReferenceNavigationTests : TestBase
         var product = CreateValidProduct("Shared Widget");
         var order = CreateOrderWithMultipleItemsSameProduct("ORD-001", product, 3);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -88,8 +88,8 @@ public class ReferenceNavigationTests : TestBase
         product.Category = category;
         var order = CreateOrderWithProductReference("ORD-001", product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -117,8 +117,8 @@ public class ReferenceNavigationTests : TestBase
             return CreateOrderWithProductReference($"ORD-{i:D3}", product);
         }).ToList();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph(orders, new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -144,8 +144,8 @@ public class ReferenceNavigationTests : TestBase
 
         var order = CreateValidOrderWithExistingProduct("ORD-001", 2, productId);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -178,8 +178,8 @@ public class ReferenceNavigationTests : TestBase
             ]
         };
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -204,8 +204,8 @@ public class ReferenceNavigationTests : TestBase
 
         var order = CreateValidOrderWithExistingProduct("ORD-001", 1, productId);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.TraversalInfo!.UniqueReferencesProcessed.ShouldBe(0);
@@ -243,8 +243,8 @@ public class ReferenceNavigationTests : TestBase
         reloadedOrder.TotalAmount = 20.00m;
         reloadedOrder.OrderItems.First().Product!.Price = 20.00m;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([reloadedOrder], new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -286,8 +286,8 @@ public class ReferenceNavigationTests : TestBase
         reloadedOrder.TotalAmount = 50.00m;
         reloadedOrder.OrderItems.First().Product!.Price = -10.00m;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([reloadedOrder], new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -329,8 +329,8 @@ public class ReferenceNavigationTests : TestBase
             item.Product!.Price = 15.00m;
         }
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([reloadedOrder], new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -367,8 +367,8 @@ public class ReferenceNavigationTests : TestBase
 
         reloadedOrder.OrderItems.First().Product!.Price = 25.00m;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([reloadedOrder], new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -417,8 +417,8 @@ public class ReferenceNavigationTests : TestBase
         reloadedOrder.OrderItems.First().Product!.Stock = 50;
         reloadedOrder.OrderItems.First().Reservations.First().ReservedQuantity = 2;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([reloadedOrder], new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -460,9 +460,9 @@ public class ReferenceNavigationTests : TestBase
 
         reloadedOrder.OrderItems.First().Product!.Name = "Updated Widget";
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var saver = new Winnower<CustomerOrder, int>(context);
         Should.Throw<InvalidOperationException>(() =>
-            saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+            saver.UpdateGraph([reloadedOrder], new GraphOptions
             {
                 IncludeReferences = true,
                 CircularReferenceHandling = CircularReferenceHandling.Throw
@@ -495,8 +495,8 @@ public class ReferenceNavigationTests : TestBase
 
         reloadedOrder.OrderItems.First().Product!.Name = "Updated Widget";
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([reloadedOrder], new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -541,8 +541,8 @@ public class ReferenceNavigationTests : TestBase
             order.Status = CustomerOrderStatus.Processing;
         }
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(reloadedOrders, new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(reloadedOrders, new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -574,8 +574,8 @@ public class ReferenceNavigationTests : TestBase
 
         reloadedOrder.Status = CustomerOrderStatus.Completed;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([reloadedOrder], new GraphOptions
         {
             CircularReferenceHandling = CircularReferenceHandling.Ignore
         });
@@ -614,8 +614,8 @@ public class ReferenceNavigationTests : TestBase
             order.Status = CustomerOrderStatus.Processing;
         }
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(reloadedOrders, new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(reloadedOrders, new GraphOptions
         {
             Strategy = BatchStrategy.OneByOne,
             IncludeReferences = true,
@@ -654,8 +654,8 @@ public class ReferenceNavigationTests : TestBase
             order.Status = CustomerOrderStatus.Processing;
         }
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(reloadedOrders, new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(reloadedOrders, new GraphOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
             IncludeReferences = true,
@@ -692,8 +692,8 @@ public class ReferenceNavigationTests : TestBase
 
         reloadedOrder.Status = CustomerOrderStatus.Processing;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([reloadedOrder], new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -728,8 +728,8 @@ public class ReferenceNavigationTests : TestBase
             .Include(o => o.OrderItems)
             .First();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.DeleteGraphBatch([orderToDelete], new DeleteGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.DeleteGraph([orderToDelete], new DeleteGraphOptions
         {
             ValidateReferencedEntitiesExist = true
         });
@@ -761,8 +761,8 @@ public class ReferenceNavigationTests : TestBase
             .Include(o => o.OrderItems)
             .First();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.DeleteGraphBatch([orderToDelete], new DeleteGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.DeleteGraph([orderToDelete], new DeleteGraphOptions
         {
             ValidateReferencedEntitiesExist = true
         });
@@ -790,8 +790,8 @@ public class ReferenceNavigationTests : TestBase
             .Include(o => o.OrderItems)
             .First();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.DeleteGraphBatch([orderToDelete], new DeleteGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.DeleteGraph([orderToDelete], new DeleteGraphOptions
         {
             ValidateReferencedEntitiesExist = false
         });
@@ -820,8 +820,8 @@ public class ReferenceNavigationTests : TestBase
             .Include(o => o.OrderItems)
             .First();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.DeleteGraphBatch([orderToDelete]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.DeleteGraph([orderToDelete]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
 
@@ -853,8 +853,8 @@ public class ReferenceNavigationTests : TestBase
             .Include(o => o.OrderItems)
             .First();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.DeleteGraphBatch([orderToDelete], new DeleteGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.DeleteGraph([orderToDelete], new DeleteGraphOptions
         {
             ValidateReferencedEntitiesExist = true
         });
@@ -887,8 +887,8 @@ public class ReferenceNavigationTests : TestBase
             .Include(o => o.OrderItems)
             .First();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.DeleteGraphBatch([orderToDelete], new DeleteGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.DeleteGraph([orderToDelete], new DeleteGraphOptions
         {
             ValidateReferencedEntitiesExist = true
         });
@@ -909,8 +909,8 @@ public class ReferenceNavigationTests : TestBase
         var product = CreateValidProduct("Widget");
         var order = CreateOrderWithProductReference("ORD-001", product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
@@ -934,8 +934,8 @@ public class ReferenceNavigationTests : TestBase
 
         var order = CreateValidOrderWithExistingProduct("ORD-001", 1, productId);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
@@ -956,8 +956,8 @@ public class ReferenceNavigationTests : TestBase
         product.Category = category;
         var order = CreateOrderWithProductReference("ORD-001", product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
@@ -978,8 +978,8 @@ public class ReferenceNavigationTests : TestBase
         product.Category = category;
         var order = CreateOrderWithProductReference("ORD-001", product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
@@ -1017,8 +1017,8 @@ public class ReferenceNavigationTests : TestBase
 
         reloadedOrder.Status = CustomerOrderStatus.Processing;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([reloadedOrder], new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -1050,8 +1050,8 @@ public class ReferenceNavigationTests : TestBase
 
         reloadedOrder.Status = CustomerOrderStatus.Processing;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([reloadedOrder], new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -1070,8 +1070,8 @@ public class ReferenceNavigationTests : TestBase
         product.Category = category;
         var order = CreateOrderWithProductReference("ORD-001", product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
@@ -1098,8 +1098,8 @@ public class ReferenceNavigationTests : TestBase
         product.Category = category;
         var order = CreateOrderWithProductReference("ORD-001", product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -1118,8 +1118,8 @@ public class ReferenceNavigationTests : TestBase
         var product = CreateValidProduct("Shared Widget");
         var order = CreateOrderWithMultipleItemsSameProduct("ORD-001", product, 5);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -1142,8 +1142,8 @@ public class ReferenceNavigationTests : TestBase
 
         var order = CreateValidOrderWithExistingProduct("ORD-001", 1, productId);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = false
         });
@@ -1163,8 +1163,8 @@ public class ReferenceNavigationTests : TestBase
         product.Category = category;
         var order = CreateOrderWithProductReference("ORD-001", product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -1212,8 +1212,8 @@ public class ReferenceNavigationTests : TestBase
         }
         reloadedOrders[1].TotalAmount = -500m;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(reloadedOrders, new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(reloadedOrders, new GraphOptions
         {
             Strategy = BatchStrategy.OneByOne,
             IncludeReferences = true,
@@ -1257,8 +1257,8 @@ public class ReferenceNavigationTests : TestBase
             order.Status = CustomerOrderStatus.Processing;
         }
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(reloadedOrders, new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(reloadedOrders, new GraphOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
             IncludeReferences = true,
@@ -1288,8 +1288,8 @@ public class ReferenceNavigationTests : TestBase
             return CreateOrderWithProductReference($"ORD-{i:D4}", product);
         }).ToList();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch(orders, new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph(orders, new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
@@ -1317,8 +1317,8 @@ public class ReferenceNavigationTests : TestBase
 
         var order = CreateValidOrderWithExistingProduct("ORD-001", 1, productId);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.TraversalInfo!.UniqueReferencesProcessed.ShouldBe(0);
@@ -1347,8 +1347,8 @@ public class ReferenceNavigationTests : TestBase
 
         reloadedOrder.TotalAmount = -100m;
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([reloadedOrder], new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -1391,8 +1391,8 @@ public class ReferenceNavigationTests : TestBase
 
         reloadedOrder.OrderItems.First().Reservations.Clear();
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch([reloadedOrder], new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph([reloadedOrder], new GraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
@@ -1421,8 +1421,8 @@ public class ReferenceNavigationTests : TestBase
             OrderItems = []
         };
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -1439,8 +1439,8 @@ public class ReferenceNavigationTests : TestBase
         var product = CreateValidProduct("Widget");
         var order = CreateOrderWithProductReference("ORD-001", product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore

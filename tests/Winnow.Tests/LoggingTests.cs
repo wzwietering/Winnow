@@ -8,86 +8,86 @@ namespace Winnow.Tests;
 public class LoggingTests : TestBase
 {
     [Fact]
-    public void InsertBatch_logs_start_and_complete()
+    public void Insert_logs_start_and_complete()
     {
         using var context = CreateContext();
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
         var products = new List<Product>
         {
             new() { Name = "P1", Price = 10, Stock = 1 }
         };
 
-        saver.InsertBatch(products);
+        saver.Insert(products);
 
-        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("InsertBatch") && e.Message.Contains("starting"));
-        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("InsertBatch") && e.Message.Contains("completed"));
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("Insert") && e.Message.Contains("starting"));
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("Insert") && e.Message.Contains("completed"));
     }
 
     [Fact]
-    public void UpdateBatch_logs_start_and_complete()
+    public void Update_logs_start_and_complete()
     {
         using var context = CreateContext();
         SeedData(context, 2);
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
         var products = context.Products.ToList();
         products.ForEach(p => p.Price = 99.99m);
         context.ChangeTracker.Clear();
 
-        saver.UpdateBatch(products);
+        saver.Update(products);
 
-        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("UpdateBatch") && e.Message.Contains("starting"));
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("Update") && e.Message.Contains("starting"));
         logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("completed"));
     }
 
     [Fact]
-    public void DeleteBatch_logs_start_and_complete()
+    public void Delete_logs_start_and_complete()
     {
         using var context = CreateContext();
         SeedData(context, 2);
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
         var products = context.Products.ToList();
         context.ChangeTracker.Clear();
 
-        saver.DeleteBatch(products);
+        saver.Delete(products);
 
-        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("DeleteBatch") && e.Message.Contains("starting"));
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("Delete") && e.Message.Contains("starting"));
         logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("completed"));
     }
 
     [Fact]
-    public void UpsertBatch_logs_start_and_complete()
+    public void Upsert_logs_start_and_complete()
     {
         using var context = CreateContext();
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
         var products = new List<Product>
         {
             new() { Name = "New", Price = 10, Stock = 1 }
         };
 
-        saver.UpsertBatch(products);
+        saver.Upsert(products);
 
-        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("UpsertBatch") && e.Message.Contains("starting"));
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("Upsert") && e.Message.Contains("starting"));
         logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("completed"));
     }
 
     [Fact]
-    public async Task InsertBatchAsync_logs_start_and_complete()
+    public async Task InsertAsync_logs_start_and_complete()
     {
         using var context = CreateContext();
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
         var products = new List<Product>
         {
             new() { Name = "P1", Price = 10, Stock = 1 }
         };
 
-        await saver.InsertBatchAsync(products);
+        await saver.InsertAsync(products);
 
-        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("InsertBatch") && e.Message.Contains("starting"));
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("Insert") && e.Message.Contains("starting"));
         logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("completed"));
     }
 
@@ -96,14 +96,14 @@ public class LoggingTests : TestBase
     {
         using var context = CreateContext();
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
         var products = new List<Product>
         {
             new() { Name = "Good", Price = 10, Stock = 1 },
             new() { Name = "Bad", Price = -1, Stock = 0 }
         };
 
-        var result = saver.InsertBatch(products);
+        var result = saver.Insert(products);
 
         result.FailureCount.ShouldBe(1);
         logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("1 failed"));
@@ -115,7 +115,7 @@ public class LoggingTests : TestBase
     {
         using var context = CreateContext();
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
         var products = new List<Product>
         {
             new() { Name = "Good1", Price = 10, Stock = 1 },
@@ -124,22 +124,42 @@ public class LoggingTests : TestBase
             new() { Name = "Good3", Price = 30, Stock = 3 }
         };
 
-        saver.InsertBatch(products, new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
+        saver.Insert(products, new InsertOptions { Strategy = BatchStrategy.DivideAndConquer });
 
         logger.Entries.ShouldContain(e => e.Level == LogLevel.Debug && e.Message.Contains("splitting"));
+    }
+
+    [Fact]
+    public void DivideAndConquer_logs_entity_failure()
+    {
+        using var context = CreateContext();
+        var logger = new ListLogger();
+        var saver = new Winnower<Product, int>(context, logger);
+        var products = new List<Product>
+        {
+            new() { Name = "Bad", Price = -1, Stock = 0 }
+        };
+
+        var result = saver.Insert(products, new InsertOptions { Strategy = BatchStrategy.DivideAndConquer });
+
+        result.FailureCount.ShouldBe(1);
+        logger.Entries.ShouldContain(e =>
+            e.Level == LogLevel.Warning &&
+            e.Message.Contains("Product") &&
+            e.Message.Contains("failed"));
     }
 
     [Fact]
     public void No_exception_without_logger()
     {
         using var context = CreateContext();
-        var saver = new BatchSaver<Product, int>(context);
+        var saver = new Winnower<Product, int>(context);
         var products = new List<Product>
         {
             new() { Name = "P1", Price = 10, Stock = 1 }
         };
 
-        Should.NotThrow(() => saver.InsertBatch(products));
+        Should.NotThrow(() => saver.Insert(products));
     }
 
     [Fact]
@@ -147,14 +167,14 @@ public class LoggingTests : TestBase
     {
         using var context = CreateContext();
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
         var products = new List<Product>
         {
             new() { Name = "Good", Price = 10, Stock = 1 },
             new() { Name = "Bad", Price = -1, Stock = 0 }
         };
 
-        saver.InsertBatch(products);
+        saver.Insert(products);
 
         var completedLog = logger.Entries.First(e => e.Message.Contains("completed"));
         completedLog.Message.ShouldContain("1 succeeded");
@@ -166,14 +186,14 @@ public class LoggingTests : TestBase
     {
         using var context = CreateContext();
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
         var products = new List<Product>
         {
             new() { Name = "P1", Price = 10, Stock = 1 },
             new() { Name = "P2", Price = 20, Stock = 2 }
         };
 
-        saver.InsertBatch(products);
+        saver.Insert(products);
 
         var startLog = logger.Entries.First(e => e.Message.Contains("starting"));
         startLog.Message.ShouldContain("Product");
@@ -185,10 +205,10 @@ public class LoggingTests : TestBase
     {
         using var context = CreateContext();
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
         var products = new List<Product> { new() { Name = "P1", Price = 10, Stock = 1 } };
 
-        saver.InsertBatch(products, new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
+        saver.Insert(products, new InsertOptions { Strategy = BatchStrategy.DivideAndConquer });
 
         var startLog = logger.Entries.First(e => e.Message.Contains("starting"));
         startLog.Message.ShouldContain("DivideAndConquer");
@@ -199,14 +219,14 @@ public class LoggingTests : TestBase
     {
         using var context = CreateContext();
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
         var products = new List<Product>
         {
             new() { Name = "P1", Price = 10, Stock = 1 },
             new() { Name = "P2", Price = 20, Stock = 2 }
         };
 
-        saver.InsertBatch(products);
+        saver.Insert(products);
 
         var completedLog = logger.Entries.First(e => e.Message.Contains("completed"));
         completedLog.Message.ShouldContain("2 round trips");
@@ -217,9 +237,9 @@ public class LoggingTests : TestBase
     {
         using var context = CreateContext();
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
 
-        saver.InsertBatch(new List<Product>());
+        saver.Insert(new List<Product>());
 
         logger.Entries.ShouldBeEmpty();
     }
@@ -229,12 +249,12 @@ public class LoggingTests : TestBase
     {
         using var context = CreateContext();
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product>(context, logger);
+        var saver = new Winnower<Product>(context, logger);
         var products = new List<Product> { new() { Name = "P1", Price = 10, Stock = 1 } };
 
-        saver.InsertBatch(products);
+        saver.Insert(products);
 
-        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("InsertBatch"));
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("Insert"));
     }
 
     [Fact]
@@ -243,13 +263,13 @@ public class LoggingTests : TestBase
         using var context = CreateContext();
         SeedCustomerOrders(context, 1, 2);
         var logger = new ListLogger();
-        var saver = new BatchSaver<CustomerOrder, int>(context, logger);
+        var saver = new Winnower<CustomerOrder, int>(context, logger);
 
         var orders = context.CustomerOrders.ToList();
         context.ChangeTracker.Clear();
 
-        saver.DeleteGraphBatch(orders);
+        saver.DeleteGraph(orders);
 
-        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("DeleteGraphBatch"));
+        logger.Entries.ShouldContain(e => e.Level == LogLevel.Information && e.Message.Contains("DeleteGraph"));
     }
 }

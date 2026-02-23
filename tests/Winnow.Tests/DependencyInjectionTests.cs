@@ -19,27 +19,27 @@ public class DependencyInjectionTests
     }
 
     [Fact]
-    public void Resolves_typed_batch_saver()
+    public void Resolves_typed_winnower()
     {
         using var provider = BuildProvider();
         using var scope = provider.CreateScope();
 
-        var saver = scope.ServiceProvider.GetService<IBatchSaver<Product, int>>();
+        var saver = scope.ServiceProvider.GetService<IWinnower<Product, int>>();
 
         saver.ShouldNotBeNull();
-        saver.ShouldBeOfType<BatchSaver<Product, int>>();
+        saver.ShouldBeOfType<Winnower<Product, int>>();
     }
 
     [Fact]
-    public void Resolves_auto_detect_batch_saver()
+    public void Resolves_auto_detect_winnower()
     {
         using var provider = BuildProvider();
         using var scope = provider.CreateScope();
 
-        var saver = scope.ServiceProvider.GetService<IBatchSaver<Product>>();
+        var saver = scope.ServiceProvider.GetService<IWinnower<Product>>();
 
         saver.ShouldNotBeNull();
-        saver.ShouldBeOfType<BatchSaver<Product>>();
+        saver.ShouldBeOfType<Winnower<Product>>();
     }
 
     [Fact]
@@ -48,8 +48,8 @@ public class DependencyInjectionTests
         using var provider = BuildProvider();
         using var scope = provider.CreateScope();
 
-        var saver1 = scope.ServiceProvider.GetRequiredService<IBatchSaver<Product, int>>();
-        var saver2 = scope.ServiceProvider.GetRequiredService<IBatchSaver<Product, int>>();
+        var saver1 = scope.ServiceProvider.GetRequiredService<IWinnower<Product, int>>();
+        var saver2 = scope.ServiceProvider.GetRequiredService<IWinnower<Product, int>>();
 
         saver1.ShouldBeSameAs(saver2);
     }
@@ -59,17 +59,17 @@ public class DependencyInjectionTests
     {
         using var provider = BuildProvider();
 
-        IBatchSaver<Product, int> saver1;
-        IBatchSaver<Product, int> saver2;
+        IWinnower<Product, int> saver1;
+        IWinnower<Product, int> saver2;
 
         using (var scope1 = provider.CreateScope())
         {
-            saver1 = scope1.ServiceProvider.GetRequiredService<IBatchSaver<Product, int>>();
+            saver1 = scope1.ServiceProvider.GetRequiredService<IWinnower<Product, int>>();
         }
 
         using (var scope2 = provider.CreateScope())
         {
-            saver2 = scope2.ServiceProvider.GetRequiredService<IBatchSaver<Product, int>>();
+            saver2 = scope2.ServiceProvider.GetRequiredService<IWinnower<Product, int>>();
         }
 
         saver1.ShouldNotBeSameAs(saver2);
@@ -81,8 +81,8 @@ public class DependencyInjectionTests
         using var provider = BuildProvider();
         using var scope = provider.CreateScope();
 
-        var productSaver = scope.ServiceProvider.GetService<IBatchSaver<Product, int>>();
-        var orderSaver = scope.ServiceProvider.GetService<IBatchSaver<CustomerOrder, int>>();
+        var productSaver = scope.ServiceProvider.GetService<IWinnower<Product, int>>();
+        var orderSaver = scope.ServiceProvider.GetService<IWinnower<CustomerOrder, int>>();
 
         productSaver.ShouldNotBeNull();
         orderSaver.ShouldNotBeNull();
@@ -100,7 +100,7 @@ public class DependencyInjectionTests
         using var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
 
-        var saver = scope.ServiceProvider.GetService<IBatchSaver<Product, int>>();
+        var saver = scope.ServiceProvider.GetService<IWinnower<Product, int>>();
         saver.ShouldNotBeNull();
     }
 
@@ -114,7 +114,7 @@ public class DependencyInjectionTests
         context.Database.OpenConnection();
         context.Database.EnsureCreated();
 
-        var saver = scope.ServiceProvider.GetRequiredService<IBatchSaver<Product, int>>();
+        var saver = scope.ServiceProvider.GetRequiredService<IWinnower<Product, int>>();
 
         var products = new List<Product>
         {
@@ -122,7 +122,7 @@ public class DependencyInjectionTests
             new() { Name = "DI Product 2", Price = 20.00m, Stock = 10 }
         };
 
-        var result = saver.InsertBatch(products);
+        var result = saver.Insert(products);
 
         result.SuccessCount.ShouldBe(2);
         result.FailureCount.ShouldBe(0);
@@ -134,7 +134,7 @@ public class DependencyInjectionTests
         using var provider = BuildProvider();
         using var scope = provider.CreateScope();
 
-        var saver = scope.ServiceProvider.GetService<IBatchSaver<OrderLine>>();
+        var saver = scope.ServiceProvider.GetService<IWinnower<OrderLine>>();
 
         saver.ShouldNotBeNull();
         saver.IsCompositeKey.ShouldBeTrue();

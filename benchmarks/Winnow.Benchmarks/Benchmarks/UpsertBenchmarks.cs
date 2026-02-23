@@ -62,10 +62,10 @@ public class UpsertBenchmarks
     }
 
     [Benchmark]
-    public UpsertBatchResult<int> UpsertBatch()
+    public UpsertResult<int> Upsert()
     {
-        var saver = new BatchSaver<BenchmarkProduct, int>(_context);
-        return saver.UpsertBatch(_products, new UpsertBatchOptions { Strategy = Strategy });
+        var saver = new Winnower<BenchmarkProduct, int>(_context);
+        return saver.Upsert(_products, new UpsertOptions { Strategy = Strategy });
     }
 
     [IterationCleanup]

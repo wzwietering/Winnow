@@ -19,9 +19,9 @@ public abstract class ParallelTestBase : TestBase
         };
     }
 
-    protected ParallelBatchSaver<Product, int> CreateSaver(int maxDegreeOfParallelism = 2)
+    protected ParallelWinnower<Product, int> CreateSaver(int maxDegreeOfParallelism = 2)
     {
-        return new ParallelBatchSaver<Product, int>(CreateContextFactory(), maxDegreeOfParallelism);
+        return new ParallelWinnower<Product, int>(CreateContextFactory(), maxDegreeOfParallelism);
     }
 
     protected void EnsureDatabaseCreated()

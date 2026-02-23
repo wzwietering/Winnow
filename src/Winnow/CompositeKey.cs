@@ -2,7 +2,7 @@ namespace Winnow;
 
 /// <summary>
 /// Represents a composite primary key with proper equality semantics.
-/// Used by BatchSaver when auto-detecting keys for entities with multiple key properties.
+/// Used by Winnower when auto-detecting keys for entities with multiple key properties.
 /// </summary>
 /// <remarks>
 /// Creates a composite key from multiple values.
@@ -26,12 +26,12 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
     /// <summary>
     /// Gets the key values in order.
     /// </summary>
-    public IReadOnlyList<object> Values => _values;
+    public IReadOnlyList<object> Values => _values ?? [];
 
     /// <summary>
     /// Gets the number of key components.
     /// </summary>
-    public int Count => _values.Length;
+    public int Count => _values?.Length ?? 0;
 
     /// <summary>
     /// Gets a key component by index.
@@ -41,10 +41,10 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
     {
         get
         {
-            if (index < 0 || index >= _values.Length)
+            if (_values is null || index < 0 || index >= _values.Length)
             {
                 throw new ArgumentOutOfRangeException(nameof(index),
-                    $"Index {index} is out of range. CompositeKey has {_values.Length} component(s).");
+                    $"Index {index} is out of range. CompositeKey has {_values?.Length ?? 0} component(s).");
             }
 
             return _values[index];
@@ -72,7 +72,7 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
     /// <summary>
     /// Returns true if this is a single-component key.
     /// </summary>
-    public bool IsSingle => _values.Length == 1;
+    public bool IsSingle => _values?.Length == 1;
 
     /// <summary>
     /// Gets the single key value as the specified type.
@@ -82,10 +82,10 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
     /// <exception cref="InvalidCastException">Thrown when value cannot be converted to T.</exception>
     public T AsSingle<T>()
     {
-        if (_values.Length != 1)
+        if ((_values?.Length ?? 0) != 1)
         {
             throw new InvalidOperationException(
-                $"Cannot use AsSingle() on composite key with {_values.Length} components. " +
+                $"Cannot use AsSingle() on composite key with {_values?.Length ?? 0} components. " +
                 "Use GetValue<T>(index) to access individual components.");
         }
 
@@ -100,6 +100,8 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
     /// </remarks>
     public bool IsAllDefaults()
     {
+        if (_values is null) return true;
+
         foreach (var value in _values)
         {
             if (!IsDefaultValue(value))
@@ -145,11 +147,12 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
     public bool Equals(CompositeKey other)
     {
         if (_hashCode != other._hashCode) return false;
-        if (_values.Length != other._values.Length) return false;
+        if ((_values?.Length ?? 0) != (other._values?.Length ?? 0)) return false;
+        if (_values is null) return true;
 
         for (var i = 0; i < _values.Length; i++)
         {
-            if (!_values[i].Equals(other._values[i])) return false;
+            if (!_values[i].Equals(other._values![i])) return false;
         }
         return true;
     }
@@ -161,7 +164,7 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
     public override int GetHashCode() => _hashCode;
 
     /// <inheritdoc />
-    public override string ToString() => $"({string.Join(", ", _values)})";
+    public override string ToString() => _values is null ? "()" : $"({string.Join(", ", _values)})";
 
     /// <summary>
     /// Determines whether two composite keys are equal.
@@ -211,11 +214,11 @@ public readonly struct CompositeKey : IEquatable<CompositeKey>
 
     private void ValidateDeconstructCount(int expectedCount)
     {
-        if (_values.Length != expectedCount)
+        if ((_values?.Length ?? 0) != expectedCount)
         {
             throw new InvalidOperationException(
                 $"Cannot deconstruct into {expectedCount} components. " +
-                $"CompositeKey has {_values.Length} component(s).");
+                $"CompositeKey has {_values?.Length ?? 0} component(s).");
         }
     }
 

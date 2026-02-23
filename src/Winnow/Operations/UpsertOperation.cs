@@ -21,20 +21,19 @@ namespace Winnow.Operations;
 /// <item>Add optimistic concurrency tokens to detect conflicts</item>
 /// </list>
 /// </remarks>
-internal class UpsertOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, TKey>
+internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    private readonly UpsertBatchOptions _options;
+    private readonly UpsertOptions _options;
     private readonly List<UpsertedEntity<TKey>> _insertedEntities = [];
     private readonly List<UpsertedEntity<TKey>> _updatedEntities = [];
-    private readonly List<UpsertBatchFailure<TKey>> _failures = [];
+    private readonly List<UpsertFailure<TKey>> _failures = [];
     private readonly Dictionary<int, UpsertOperationType> _operationDecisions = [];
 
-    internal UpsertOperation(UpsertBatchOptions options) => _options = options;
+    internal UpsertOperation(UpsertOptions options) => _options = options;
 
-    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context,
-        CancellationToken cancellationToken = default)
+    public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {
         if (!_options.ValidateNavigationProperties)
         {
@@ -47,7 +46,7 @@ internal class UpsertOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, T
         }
     }
 
-    public void PrepareEntity(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
+    public void PrepareEntity(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
         var isInsert = context.HasDefaultKeyValue(entity);
         _operationDecisions[index] = isInsert ? UpsertOperationType.Insert : UpsertOperationType.Update;
@@ -55,7 +54,7 @@ internal class UpsertOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, T
         context.Context.Entry(entity).State = isInsert ? EntityState.Added : EntityState.Modified;
     }
 
-    public void RecordSuccess(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
+    public void RecordSuccess(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
         var operation = _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert);
@@ -78,7 +77,7 @@ internal class UpsertOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, T
         }
     }
 
-    public void RecordFailure(TEntity entity, int index, Exception ex, BatchStrategyContext<TEntity, TKey> context)
+    public void RecordFailure(TEntity entity, int index, Exception ex, StrategyContext<TEntity, TKey> context)
     {
         var operation = _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert);
         TKey? entityId = default;
@@ -88,7 +87,7 @@ internal class UpsertOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, T
             entityId = context.GetEntityId(entity);
         }
 
-        var failure = new UpsertBatchFailure<TKey>
+        var failure = new UpsertFailure<TKey>
         {
             EntityIndex = index,
             EntityId = entityId,
@@ -101,10 +100,10 @@ internal class UpsertOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, T
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, BatchStrategyContext<TEntity, TKey> context) =>
+    public void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context) =>
         context.Context.Entry(entity).State = EntityState.Detached;
 
-    public UpsertBatchResult<TKey> CreateResult(bool wasCancelled = false) => new()
+    public UpsertResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {
         InsertedEntities = _insertedEntities,
         UpdatedEntities = _updatedEntities,
@@ -117,7 +116,7 @@ internal class UpsertOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, T
 
     public DuplicateKeyStrategy DuplicateKeyStrategy => _options.DuplicateKeyStrategy;
 
-    public void RecordSuccessAsUpdate(TEntity entity, int index, BatchStrategyContext<TEntity, TKey> context)
+    public void RecordSuccessAsUpdate(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
         _operationDecisions[index] = UpsertOperationType.Update;

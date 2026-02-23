@@ -19,8 +19,8 @@ public class CompositeKeyStrategyTests : CompositeKeyTestBase
             new OrderLine { OrderId = orderId, LineNumber = 3, ProductId = null, Quantity = 3, UnitPrice = 10.00m }
         };
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.InsertBatch(orderLines, new InsertBatchOptions { Strategy = BatchStrategy.OneByOne });
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.Insert(orderLines, new InsertOptions { Strategy = BatchStrategy.OneByOne });
 
         result.IsPartialSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(2);
@@ -44,8 +44,8 @@ public class CompositeKeyStrategyTests : CompositeKeyTestBase
             UnitPrice = 10.00m
         }).ToList();
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.InsertBatch(orderLines, new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.Insert(orderLines, new InsertOptions { Strategy = BatchStrategy.DivideAndConquer });
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(10);
@@ -70,15 +70,15 @@ public class CompositeKeyStrategyTests : CompositeKeyTestBase
             UnitPrice = 10.00m
         }).ToList();
 
-        var oneByOneSaver = new BatchSaver<OrderLine, CompositeKey>(context1);
-        var oneByOneResult = oneByOneSaver.InsertBatch(
+        var oneByOneSaver = new Winnower<OrderLine, CompositeKey>(context1);
+        var oneByOneResult = oneByOneSaver.Insert(
             createLines(orderId1, 5),
-            new InsertBatchOptions { Strategy = BatchStrategy.OneByOne });
+            new InsertOptions { Strategy = BatchStrategy.OneByOne });
 
-        var divideAndConquerSaver = new BatchSaver<OrderLine, CompositeKey>(context2);
-        var divideAndConquerResult = divideAndConquerSaver.InsertBatch(
+        var divideAndConquerSaver = new Winnower<OrderLine, CompositeKey>(context2);
+        var divideAndConquerResult = divideAndConquerSaver.Insert(
             createLines(orderId2, 5),
-            new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
+            new InsertOptions { Strategy = BatchStrategy.DivideAndConquer });
 
         oneByOneResult.SuccessCount.ShouldBe(divideAndConquerResult.SuccessCount);
         oneByOneResult.FailureCount.ShouldBe(divideAndConquerResult.FailureCount);
@@ -101,8 +101,8 @@ public class CompositeKeyStrategyTests : CompositeKeyTestBase
             UnitPrice = 10.00m
         }).ToList();
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.InsertBatch(orderLines, new InsertBatchOptions { Strategy = BatchStrategy.DivideAndConquer });
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.Insert(orderLines, new InsertOptions { Strategy = BatchStrategy.DivideAndConquer });
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.DatabaseRoundTrips.ShouldBe(1); // All succeed in one batch

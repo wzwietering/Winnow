@@ -49,7 +49,10 @@ internal static class NavigationPropertyHelper
     /// Counts the number of items in a navigation collection without materializing a list.
     /// </summary>
     internal static int GetCollectionItemCount(NavigationEntry navigation) =>
-        navigation.CurrentValue is System.Collections.IEnumerable enumerable
-            ? enumerable.Cast<object>().Count()
-            : 0;
+        navigation.CurrentValue switch
+        {
+            System.Collections.ICollection collection => collection.Count,
+            System.Collections.IEnumerable enumerable => enumerable.Cast<object>().Count(),
+            _ => 0
+        };
 }

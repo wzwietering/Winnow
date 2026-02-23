@@ -52,13 +52,13 @@ public class FailureRateBenchmarks
     }
 
     [Benchmark]
-    public InsertBatchResult<int> InsertWithFailures()
+    public InsertResult<int> InsertWithFailures()
     {
         using var context = new BenchmarkDbContext(_options);
-        var saver = new BatchSaver<BenchmarkProduct, int>(context);
-        return saver.InsertBatch(
+        var saver = new Winnower<BenchmarkProduct, int>(context);
+        return saver.Insert(
             _products,
-            new InsertBatchOptions { Strategy = Strategy });
+            new InsertOptions { Strategy = Strategy });
     }
 
     [GlobalCleanup]

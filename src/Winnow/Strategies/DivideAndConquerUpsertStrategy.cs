@@ -2,24 +2,24 @@ using Winnow.Operations;
 
 namespace Winnow.Strategies;
 
-internal class DivideAndConquerUpsertStrategy<TEntity, TKey> : IBatchUpsertStrategy<TEntity, TKey>
+internal class DivideAndConquerUpsertStrategy<TEntity, TKey> : IUpsertStrategy<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    public UpsertBatchResult<TKey> Execute(
+    public UpsertResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        UpsertBatchOptions options)
+        StrategyContext<TEntity, TKey> context,
+        UpsertOptions options)
     {
         var operation = new UpsertOperation<TEntity, TKey>(options);
         var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
         return strategy.ExecuteUpsert(entities, context, operation);
     }
 
-    public Task<UpsertBatchResult<TKey>> ExecuteAsync(
+    public Task<UpsertResult<TKey>> ExecuteAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        UpsertBatchOptions options,
+        StrategyContext<TEntity, TKey> context,
+        UpsertOptions options,
         CancellationToken cancellationToken)
     {
         var operation = new UpsertOperation<TEntity, TKey>(options);

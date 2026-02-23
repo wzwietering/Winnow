@@ -2,26 +2,29 @@
 
 All batch options classes and their properties.
 
-## BatchOptions
+## WinnowOptions
 
-Used with `UpdateBatch`.
+Used with `Update`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `ValidateNavigationProperties` | `bool` | `true` | When true, validates navigation properties are not modified |
+| `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff for transient failures |
 
-## InsertBatchOptions
+All options classes that inherit from `WinnowOptions` also support `Strategy`, `ValidateNavigationProperties`, and `Retry`. All options classes that inherit from `GraphOptionsBase` also support `Retry`.
 
-Used with `InsertBatch`.
+## InsertOptions
+
+Used with `Insert`. Inherits from `WinnowOptions`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 
-## InsertGraphBatchOptions
+## InsertGraphOptions
 
-Used with `InsertGraphBatch`.
+Used with `InsertGraph`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -33,10 +36,13 @@ Used with `InsertGraphBatch`.
 | `ManyToManyInsertBehavior` | `ManyToManyInsertBehavior` | `AttachExisting` | How to handle M2M related entities |
 | `ValidateManyToManyEntitiesExist` | `bool` | `true` | Validate M2M entities exist |
 | `CircularReferenceHandling` | `CircularReferenceHandling` | `Throw` | How to handle circular references |
+| `ThrowOnUnsupportedValidation` | `bool` | `false` | Throws if M2M validation can't be performed for composite key entities |
+| `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
+| `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
 
-## GraphBatchOptions
+## GraphOptions
 
-Used with `UpdateGraphBatch`.
+Used with `UpdateGraph`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -47,18 +53,20 @@ Used with `UpdateGraphBatch`.
 | `IncludeReferences` | `bool` | `false` | Include many-to-one references |
 | `IncludeManyToMany` | `bool` | `false` | Include many-to-many navigations |
 | `CircularReferenceHandling` | `CircularReferenceHandling` | `Throw` | How to handle circular references |
+| `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
+| `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
 
-## DeleteBatchOptions
+## DeleteOptions
 
-Used with `DeleteBatch`.
+Used with `Delete`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 
-## DeleteGraphBatchOptions
+## DeleteGraphOptions
 
-Used with `DeleteGraphBatch`.
+Used with `DeleteGraph`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -67,19 +75,21 @@ Used with `DeleteGraphBatch`.
 | `NavigationFilter` | `NavigationFilter?` | `null` | Filter which navigations are traversed |
 | `CascadeBehavior` | `DeleteCascadeBehavior` | `Cascade` | How to handle children on delete |
 | `IncludeManyToMany` | `bool` | `false` | Clean up M2M join records |
+| `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
+| `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
 
-## UpsertBatchOptions
+## UpsertOptions
 
-Used with `UpsertBatch`.
+Used with `Upsert`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `DuplicateKeyStrategy` | `DuplicateKeyStrategy` | `Fail` | How to handle duplicate key errors during INSERT |
 
-## UpsertGraphBatchOptions
+## UpsertGraphOptions
 
-Used with `UpsertGraphBatch`.
+Used with `UpsertGraph`.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
@@ -93,6 +103,33 @@ Used with `UpsertGraphBatch`.
 | `ValidateManyToManyEntitiesExist` | `bool` | `true` | Validate M2M entities exist |
 | `CircularReferenceHandling` | `CircularReferenceHandling` | `Throw` | How to handle circular references |
 | `DuplicateKeyStrategy` | `DuplicateKeyStrategy` | `Fail` | How to handle duplicate key errors during INSERT |
+| `ThrowOnUnsupportedValidation` | `bool` | `false` | Throws if M2M validation can't be performed for composite key entities |
+| `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
+| `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
+
+## RetryOptions
+
+Configure automatic retry with exponential backoff for transient failures. Available on all batch operations via the `Retry` property.
+
+```csharp
+var result = saver.Update(entities, new WinnowOptions
+{
+    Retry = new RetryOptions
+    {
+        MaxRetries = 5,
+        InitialDelay = TimeSpan.FromMilliseconds(200)
+    }
+});
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `MaxRetries` | `int` | `3` | Maximum retry attempts. Must be non-negative. |
+| `InitialDelay` | `TimeSpan` | `100ms` | Delay before first retry. Subsequent retries use exponential backoff. |
+| `BackoffMultiplier` | `double` | `2.0` | Multiplier applied to delay between retries. Must be positive. |
+| `IsTransient` | `Func<Exception, bool>?` | `null` | Custom predicate for transient exception detection. When null, uses built-in classifier. |
+
+> **Note:** The retry handler re-invokes `SaveChanges` on the same `DbContext`. For providers that do not automatically recover entity state after transient failures, consider using the provider's built-in retry strategy (e.g., `EnableRetryOnFailure`) instead.
 
 ## Enums
 

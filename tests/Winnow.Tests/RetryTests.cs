@@ -128,19 +128,19 @@ public class RetryTests : TestBase
         context.Products.Count().ShouldBe(1);
     }
 
-    // === Integration through BatchSaver ===
+    // === Integration through Winnower ===
 
     [Fact]
     public void Insert_without_retry_options_works()
     {
         using var context = CreateContext();
-        var saver = new BatchSaver<Product, int>(context);
+        var saver = new Winnower<Product, int>(context);
         var products = new List<Product>
         {
             new() { Name = "P1", Price = 10, Stock = 1 }
         };
 
-        var result = saver.InsertBatch(products);
+        var result = saver.Insert(products);
 
         result.SuccessCount.ShouldBe(1);
         result.TotalRetries.ShouldBe(0);
@@ -150,12 +150,12 @@ public class RetryTests : TestBase
     public void Insert_with_retry_options_no_failures_reports_zero_retries()
     {
         using var context = CreateContext();
-        var saver = new BatchSaver<Product, int>(context);
+        var saver = new Winnower<Product, int>(context);
         var products = new List<Product>
         {
             new() { Name = "P1", Price = 10, Stock = 1 }
         };
-        var options = new InsertBatchOptions
+        var options = new InsertOptions
         {
             Retry = new RetryOptions
             {
@@ -164,7 +164,7 @@ public class RetryTests : TestBase
             }
         };
 
-        var result = saver.InsertBatch(products, options);
+        var result = saver.Insert(products, options);
 
         result.SuccessCount.ShouldBe(1);
         result.TotalRetries.ShouldBe(0);
@@ -175,17 +175,17 @@ public class RetryTests : TestBase
     {
         using var context = CreateContext();
         SeedData(context, 1);
-        var saver = new BatchSaver<Product, int>(context);
+        var saver = new Winnower<Product, int>(context);
         var product = context.Products.First();
         product.Price = 99.99m;
         context.ChangeTracker.Clear();
 
-        var options = new BatchOptions
+        var options = new WinnowOptions
         {
             Retry = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
         };
 
-        var result = saver.UpdateBatch(new[] { product }, options);
+        var result = saver.Update(new[] { product }, options);
         result.SuccessCount.ShouldBe(1);
         result.TotalRetries.ShouldBe(0);
     }
@@ -194,36 +194,36 @@ public class RetryTests : TestBase
     public void Upsert_with_retry_options_works()
     {
         using var context = CreateContext();
-        var saver = new BatchSaver<Product, int>(context);
+        var saver = new Winnower<Product, int>(context);
         var products = new List<Product>
         {
             new() { Name = "New", Price = 10, Stock = 1 }
         };
-        var options = new UpsertBatchOptions
+        var options = new UpsertOptions
         {
             Retry = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
         };
 
-        var result = saver.UpsertBatch(products, options);
+        var result = saver.Upsert(products, options);
         result.SuccessCount.ShouldBe(1);
         result.TotalRetries.ShouldBe(0);
     }
 
     [Fact]
-    public async Task InsertBatchAsync_with_retry_options_works()
+    public async Task InsertAsync_with_retry_options_works()
     {
         using var context = CreateContext();
-        var saver = new BatchSaver<Product, int>(context);
+        var saver = new Winnower<Product, int>(context);
         var products = new List<Product>
         {
             new() { Name = "P1", Price = 10, Stock = 1 }
         };
-        var options = new InsertBatchOptions
+        var options = new InsertOptions
         {
             Retry = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
         };
 
-        var result = await saver.InsertBatchAsync(products, options);
+        var result = await saver.InsertAsync(products, options);
         result.SuccessCount.ShouldBe(1);
         result.TotalRetries.ShouldBe(0);
     }
@@ -264,13 +264,13 @@ public class RetryTests : TestBase
     public void Custom_IsTransient_predicate_is_used()
     {
         using var context = CreateContext();
-        var saver = new BatchSaver<Product, int>(context);
+        var saver = new Winnower<Product, int>(context);
         var products = new List<Product>
         {
             new() { Name = "P1", Price = 10, Stock = 1 }
         };
         var customCalled = false;
-        var options = new InsertBatchOptions
+        var options = new InsertOptions
         {
             Retry = new RetryOptions
             {
@@ -285,7 +285,7 @@ public class RetryTests : TestBase
         };
 
         // This should succeed without retry, custom predicate not called on success
-        var result = saver.InsertBatch(products, options);
+        var result = saver.Insert(products, options);
         result.SuccessCount.ShouldBe(1);
         customCalled.ShouldBeFalse();
     }
@@ -295,17 +295,17 @@ public class RetryTests : TestBase
     {
         using var context = CreateContext();
         var logger = new ListLogger();
-        var saver = new BatchSaver<Product, int>(context, logger);
+        var saver = new Winnower<Product, int>(context, logger);
         var products = new List<Product>
         {
             new() { Name = "Good", Price = 10, Stock = 1 }
         };
-        var options = new InsertBatchOptions
+        var options = new InsertOptions
         {
             Retry = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
         };
 
-        var result = saver.InsertBatch(products, options);
+        var result = saver.Insert(products, options);
 
         // No failures means no retry logs
         result.SuccessCount.ShouldBe(1);
@@ -316,19 +316,19 @@ public class RetryTests : TestBase
     public void DivideAndConquer_with_retry_options_works()
     {
         using var context = CreateContext();
-        var saver = new BatchSaver<Product, int>(context);
+        var saver = new Winnower<Product, int>(context);
         var products = new List<Product>
         {
             new() { Name = "P1", Price = 10, Stock = 1 },
             new() { Name = "P2", Price = 20, Stock = 2 }
         };
-        var options = new InsertBatchOptions
+        var options = new InsertOptions
         {
             Strategy = BatchStrategy.DivideAndConquer,
             Retry = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
         };
 
-        var result = saver.InsertBatch(products, options);
+        var result = saver.Insert(products, options);
         result.SuccessCount.ShouldBe(2);
         result.TotalRetries.ShouldBe(0);
     }
@@ -337,7 +337,7 @@ public class RetryTests : TestBase
     public void Graph_insert_with_retry_options_works()
     {
         using var context = CreateContext();
-        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var saver = new Winnower<CustomerOrder, int>(context);
         var order = new CustomerOrder
         {
             OrderNumber = "RTO-001",
@@ -354,12 +354,12 @@ public class RetryTests : TestBase
                 }
             }
         };
-        var options = new InsertGraphBatchOptions
+        var options = new InsertGraphOptions
         {
             Retry = new RetryOptions { MaxRetries = 2, InitialDelay = TimeSpan.FromMilliseconds(1) }
         };
 
-        var result = saver.InsertGraphBatch(new[] { order }, options);
+        var result = saver.InsertGraph(new[] { order }, options);
         result.SuccessCount.ShouldBe(1);
         result.TotalRetries.ShouldBe(0);
     }

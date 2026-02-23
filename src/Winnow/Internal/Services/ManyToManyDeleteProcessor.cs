@@ -58,7 +58,12 @@ internal class ManyToManyDeleteProcessor<TEntity, TKey>
         if (navigation.CurrentValue is System.Collections.IList list)
         {
             list.Clear();
+            return;
         }
+
+        // HashSet<T> doesn't implement IList; fall back to reflection
+        var clearMethod = navigation.CurrentValue?.GetType().GetMethod("Clear", Type.EmptyTypes);
+        clearMethod?.Invoke(navigation.CurrentValue, null);
     }
 
     private void MarkExplicitJoinEntitiesAsDeleted(NavigationEntry navigation)

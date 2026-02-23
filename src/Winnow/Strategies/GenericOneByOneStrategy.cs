@@ -14,10 +14,10 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
 {
     // === ASYNC METHODS ===
 
-    internal async Task<BatchResult<TKey>> ExecuteAsync(
+    internal async Task<WinnowResult<TKey>> ExecuteAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         operation.ValidateAll(entities, context);
@@ -38,10 +38,10 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         return operation.CreateResult(wasCancelled);
     }
 
-    internal async Task<InsertBatchResult<TKey>> ExecuteInsertAsync(
+    internal async Task<InsertResult<TKey>> ExecuteInsertAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         operation.ValidateAll(entities, context);
@@ -62,13 +62,13 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         return operation.CreateResult(wasCancelled);
     }
 
-    internal async Task<UpsertBatchResult<TKey>> ExecuteUpsertAsync(
+    internal async Task<UpsertResult<TKey>> ExecuteUpsertAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
-        operation.ValidateAll(entities, context, cancellationToken);
+        operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
 
         var wasCancelled = false;
@@ -88,8 +88,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
 
     private static async Task ProcessSingleEntityAsync(
         TEntity entity,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         try
@@ -107,7 +107,7 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
-            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+            WinnowLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
                 context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, ex, context);
         }
@@ -120,8 +120,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
     private static async Task ProcessSingleInsertAsync(
         TEntity entity,
         int index,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         try
@@ -139,7 +139,7 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
-            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+            WinnowLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
                 context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
         }
@@ -152,8 +152,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
     private static async Task ProcessSingleUpsertAsync(
         TEntity entity,
         int index,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation,
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
         try
@@ -174,16 +174,19 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
 
             if (DuplicateKeyHandler<TEntity, TKey>.ShouldHandle(ex, index, operation, out var strategy))
             {
-                operation.CleanupEntity(entity, context);
                 if (strategy == DuplicateKeyStrategy.RetryAsUpdate)
                 {
-                    await DuplicateKeyHandler<TEntity, TKey>.RetryAsUpdateAsync(
+                    var wasCancelled = await DuplicateKeyHandler<TEntity, TKey>.RetryAsUpdateAsync(
                         entity, index, context, operation, cancellationToken);
+                    if (wasCancelled)
+                    {
+                        throw new OperationCanceledException(cancellationToken);
+                    }
                 }
                 return;
             }
 
-            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+            WinnowLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
                 context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
         }
@@ -195,10 +198,10 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
 
     // === SYNC METHODS ===
 
-    internal BatchResult<TKey> Execute(
+    internal WinnowResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
@@ -211,10 +214,10 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         return operation.CreateResult();
     }
 
-    internal InsertBatchResult<TKey> ExecuteInsert(
+    internal InsertResult<TKey> ExecuteInsert(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
@@ -227,10 +230,10 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         return operation.CreateResult();
     }
 
-    internal UpsertBatchResult<TKey> ExecuteUpsert(
+    internal UpsertResult<TKey> ExecuteUpsert(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
@@ -245,8 +248,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
 
     private static void ProcessSingleEntity(
         TEntity entity,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -263,7 +266,7 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
-            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+            WinnowLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
                 context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, ex, context);
         }
@@ -276,8 +279,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
     private static void ProcessSingleInsert(
         TEntity entity,
         int index,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchInsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IInsertOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -294,7 +297,7 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         catch (Exception ex)
         {
             context.IncrementRoundTrip();
-            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+            WinnowLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
                 context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
         }
@@ -307,8 +310,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
     private static void ProcessSingleUpsert(
         TEntity entity,
         int index,
-        BatchStrategyContext<TEntity, TKey> context,
-        IBatchUpsertOperation<TEntity, TKey> operation)
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation)
     {
         try
         {
@@ -328,7 +331,6 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
 
             if (DuplicateKeyHandler<TEntity, TKey>.ShouldHandle(ex, index, operation, out var strategy))
             {
-                operation.CleanupEntity(entity, context);
                 if (strategy == DuplicateKeyStrategy.RetryAsUpdate)
                 {
                     DuplicateKeyHandler<TEntity, TKey>.RetryAsUpdate(entity, index, context, operation);
@@ -336,7 +338,7 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
                 return;
             }
 
-            BatchLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
+            WinnowLogger.LogEntityFailed(context.Logger, typeof(TEntity).Name,
                 context.GetEntityIdString(entity), FailureClassifier.Classify(ex).ToString());
             operation.RecordFailure(entity, index, ex, context);
         }

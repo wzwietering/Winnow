@@ -94,9 +94,9 @@ Graph D&C speedup (13-77x) is lower than flat operations (46-659x). Navigation p
 
 Graph operations use 2-3x more memory per entity than flat operations. UpsertGraph is the most expensive at ~31 KB/entity because it loads existing entities, tracks changes, and traverses navigations. Plan memory capacity accordingly for large graph batches.
 
-## ParallelBatchSaver
+## ParallelWinnower
 
-Tests `ParallelBatchSaver` async insert with DivideAndConquer at varying degrees of parallelism (DOP).
+Tests `ParallelWinnower` async insert with DivideAndConquer at varying degrees of parallelism (DOP).
 
 | DOP | 1,000 entities | 5,000 entities |
 |-----|----------------|----------------|
@@ -109,7 +109,7 @@ Tests `ParallelBatchSaver` async insert with DivideAndConquer at varying degrees
 
 Memory is nearly identical across all DOP values (~11.5 MB @ 1K, ~55 MB @ 5K), confirming that partitioning does not affect total allocation.
 
-ParallelBatchSaver is designed for network databases (PostgreSQL, SQL Server) where concurrent connections can execute truly parallel I/O. For SQLite, use `BatchSaver` with DivideAndConquer instead.
+ParallelWinnower is designed for network databases (PostgreSQL, SQL Server) where concurrent connections can execute truly parallel I/O. For SQLite, use `Winnower` with DivideAndConquer instead.
 
 ## Failure Rate Impact
 
@@ -145,8 +145,8 @@ Memory follows the same pattern:
 | General use, low failure rate | `DivideAndConquer` |
 | Frequent validation failures (>10%) | Pre-validate, then `DivideAndConquer` |
 | Need per-entity error isolation | `OneByOne` |
-| SQLite | `BatchSaver` with `DivideAndConquer` |
-| PostgreSQL / SQL Server with large batches | `ParallelBatchSaver` with `DivideAndConquer` |
+| SQLite | `Winnower` with `DivideAndConquer` |
+| PostgreSQL / SQL Server with large batches | `ParallelWinnower` with `DivideAndConquer` |
 
 ## Running the Benchmarks
 

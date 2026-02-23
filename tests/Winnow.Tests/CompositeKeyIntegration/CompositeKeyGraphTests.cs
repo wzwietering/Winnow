@@ -8,7 +8,7 @@ namespace Winnow.Tests.CompositeKeyIntegration;
 public class CompositeKeyGraphTests : CompositeKeyTestBase
 {
     [Fact]
-    public void InsertGraphBatch_CompositeParent_WithChildren_Success()
+    public void InsertGraph_CompositeParent_WithChildren_Success()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -27,8 +27,8 @@ public class CompositeKeyGraphTests : CompositeKeyTestBase
             ]
         };
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.InsertGraphBatch([orderLine]);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.InsertGraph([orderLine]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.SuccessCount.ShouldBe(1);
@@ -41,7 +41,7 @@ public class CompositeKeyGraphTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_CompositeKey_ModifyChild_Success()
+    public void UpdateGraph_CompositeKey_ModifyChild_Success()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -54,8 +54,8 @@ public class CompositeKeyGraphTests : CompositeKeyTestBase
         var noteToModify = loaded.Notes.First();
         noteToModify.Note = "Modified Note";
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.UpdateGraphBatch([loaded]);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.UpdateGraph([loaded]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
 
@@ -67,7 +67,7 @@ public class CompositeKeyGraphTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public void UpdateGraphBatch_CompositeKey_OrphanDetection_Works()
+    public void UpdateGraph_CompositeKey_OrphanDetection_Works()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -80,8 +80,8 @@ public class CompositeKeyGraphTests : CompositeKeyTestBase
         var noteToRemove = loaded.Notes.First();
         loaded.Notes.Remove(noteToRemove);
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Delete
         });
@@ -96,7 +96,7 @@ public class CompositeKeyGraphTests : CompositeKeyTestBase
     }
 
     [Fact]
-    public void DeleteGraphBatch_CompositeKey_CascadeDeletes()
+    public void DeleteGraph_CompositeKey_CascadeDeletes()
     {
         using var context = CreateContext();
         var orderId = CreateCustomerOrder(context);
@@ -107,8 +107,8 @@ public class CompositeKeyGraphTests : CompositeKeyTestBase
             .Include(ol => ol.Notes)
             .First(ol => ol.OrderId == orderId && ol.LineNumber == 1);
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.DeleteGraphBatch([loaded]);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.DeleteGraph([loaded]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
 
@@ -137,8 +137,8 @@ public class CompositeKeyGraphTests : CompositeKeyTestBase
             ]
         };
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.InsertGraphBatch([orderLine]);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.InsertGraph([orderLine]);
 
         result.GraphHierarchy.ShouldNotBeNull();
         result.GraphHierarchy!.Count.ShouldBe(1);
@@ -167,8 +167,8 @@ public class CompositeKeyGraphTests : CompositeKeyTestBase
             ]
         };
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.InsertGraphBatch([orderLine], new InsertGraphBatchOptions
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.InsertGraph([orderLine], new InsertGraphOptions
         {
             MaxDepth = 0 // Only insert parent, not children
         });
@@ -213,8 +213,8 @@ public class CompositeKeyGraphTests : CompositeKeyTestBase
             ]
         };
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.InsertGraphBatch([orderLine]);
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.InsertGraph([orderLine]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
 

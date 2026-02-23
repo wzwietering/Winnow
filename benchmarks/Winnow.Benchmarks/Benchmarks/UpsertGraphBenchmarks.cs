@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Winnow.Benchmarks.Benchmarks;
 
 /// <summary>
-/// Measures UpsertGraphBatch performance with a 3-level hierarchy.
+/// Measures UpsertGraph performance with a 3-level hierarchy.
 /// Half the batch are existing orders (updates), half are new (inserts).
 /// </summary>
 [MemoryDiagnoser]
@@ -50,12 +50,12 @@ public class UpsertGraphBenchmarks
     }
 
     [Benchmark]
-    public UpsertBatchResult<int> UpsertGraphBatch()
+    public UpsertResult<int> UpsertGraph()
     {
-        var saver = new BatchSaver<BenchmarkOrder, int>(_context);
-        return saver.UpsertGraphBatch(
+        var saver = new Winnower<BenchmarkOrder, int>(_context);
+        return saver.UpsertGraph(
             _orders,
-            new UpsertGraphBatchOptions { Strategy = Strategy });
+            new UpsertGraphOptions { Strategy = Strategy });
     }
 
     [IterationCleanup]

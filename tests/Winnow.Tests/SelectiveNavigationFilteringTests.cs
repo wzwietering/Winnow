@@ -8,7 +8,7 @@ namespace Winnow.Tests;
 
 public class SelectiveNavigationFilteringTests : TestBase
 {
-    // ========== InsertGraphBatch Tests ==========
+    // ========== InsertGraph Tests ==========
 
     [Fact]
     public void InsertGraph_IncludeOnlyOrderItems_ReservationsNotInserted()
@@ -19,8 +19,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<CustomerOrder>(o => o.OrderItems);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             NavigationFilter = filter
         });
@@ -43,8 +43,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Exclude()
             .Navigation<OrderItem>(i => i.Reservations);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             NavigationFilter = filter
         });
@@ -65,8 +65,8 @@ public class SelectiveNavigationFilteringTests : TestBase
 
         var order = CreateThreeLevelOrder("ORD-001", 2, 2);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order]);
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order]);
 
         result.IsCompleteSuccess.ShouldBeTrue();
         order.Id.ShouldBeGreaterThan(0);
@@ -84,8 +84,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<CustomerOrder>(o => o.OrderItems);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             NavigationFilter = filter
         });
@@ -98,7 +98,7 @@ public class SelectiveNavigationFilteringTests : TestBase
         rootNode.Children.ShouldAllBe(c => c.Children.Count == 0);
     }
 
-    // ========== UpdateGraphBatch Tests ==========
+    // ========== UpdateGraph Tests ==========
 
     [Fact]
     public void UpdateGraph_IncludeOrderItems_OnlyItemsUpdated()
@@ -118,8 +118,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<CustomerOrder>(o => o.OrderItems);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Detach,
             NavigationFilter = filter
@@ -152,10 +152,10 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<CustomerOrder>(o => o.OrderItems);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var saver = new Winnower<CustomerOrder, int>(context);
 
         // Should NOT throw orphan detection for filtered-out reservations
-        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        var result = saver.UpdateGraph(orders, new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Throw,
             NavigationFilter = filter
@@ -183,8 +183,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<CustomerOrder>(o => o.OrderItems);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpdateGraphBatch(orders, new GraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpdateGraph(orders, new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Delete,
             NavigationFilter = filter
@@ -196,7 +196,7 @@ public class SelectiveNavigationFilteringTests : TestBase
         context.OrderItems.Find(removedItemId).ShouldBeNull();
     }
 
-    // ========== DeleteGraphBatch Tests ==========
+    // ========== DeleteGraph Tests ==========
 
     [Fact]
     public void DeleteGraph_IncludeOrderItems_DeletesParentAndItems()
@@ -215,8 +215,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<CustomerOrder>(o => o.OrderItems);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.DeleteGraphBatch(orders, new DeleteGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.DeleteGraph(orders, new DeleteGraphOptions
         {
             CascadeBehavior = DeleteCascadeBehavior.Cascade,
             NavigationFilter = filter
@@ -232,7 +232,7 @@ public class SelectiveNavigationFilteringTests : TestBase
         }
     }
 
-    // ========== UpsertGraphBatch Tests ==========
+    // ========== UpsertGraph Tests ==========
 
     [Fact]
     public void UpsertGraph_IncludeOrderItems_UpsertsOnlyItems()
@@ -244,8 +244,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<CustomerOrder>(o => o.OrderItems);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.UpsertGraphBatch([order], new UpsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.UpsertGraph([order], new UpsertGraphOptions
         {
             NavigationFilter = filter
         });
@@ -274,8 +274,8 @@ public class SelectiveNavigationFilteringTests : TestBase
             .Navigation<CustomerOrder>(o => o.OrderItems)
             .Navigation<OrderItem>(i => i.Reservations);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             NavigationFilter = filter,
             MaxDepth = 1
@@ -303,9 +303,9 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<OrderItem>(i => i.Product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var saver = new Winnower<CustomerOrder, int>(context);
         var ex = Should.Throw<InvalidOperationException>(() =>
-            saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+            saver.InsertGraph([order], new InsertGraphOptions
             {
                 NavigationFilter = filter,
                 IncludeReferences = false
@@ -325,9 +325,9 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<Student>(s => s.Courses);
 
-        var saver = new BatchSaver<Student, int>(context);
+        var saver = new Winnower<Student, int>(context);
         var ex = Should.Throw<InvalidOperationException>(() =>
-            saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+            saver.InsertGraph([student], new InsertGraphOptions
             {
                 NavigationFilter = filter,
                 IncludeManyToMany = false
@@ -357,8 +357,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<Category>(c => c.SubCategories);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.InsertGraphBatch([parent], new InsertGraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.InsertGraph([parent], new InsertGraphOptions
         {
             NavigationFilter = filter,
             CircularReferenceHandling = CircularReferenceHandling.Ignore
@@ -386,8 +386,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<Student>(s => s.Courses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
@@ -416,8 +416,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Exclude()
             .Navigation<Student>(s => s.Courses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
@@ -452,8 +452,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<Student>(s => s.Enrollments);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             NavigationFilter = filter
         });
@@ -479,8 +479,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<Student>(s => s.Courses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ValidateManyToManyEntitiesExist = false,
@@ -506,8 +506,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<Student>(s => s.Courses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.InsertGraphBatch([student], new InsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph([student], new InsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
@@ -532,8 +532,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<Student>(s => s.Courses);
 
-        var saver = new BatchSaver<Student, int>(context);
-        var result = saver.UpsertGraphBatch([student], new UpsertGraphBatchOptions
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.UpsertGraph([student], new UpsertGraphOptions
         {
             IncludeManyToMany = true,
             ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
@@ -579,8 +579,8 @@ public class SelectiveNavigationFilteringTests : TestBase
             .Navigations<CustomerOrder>(o => o.OrderItems)
             .Navigation<OrderItem>(i => i.Product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
@@ -619,8 +619,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Exclude()
             .Navigation<OrderItem>(i => i.Product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
@@ -659,8 +659,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Exclude()
             .Navigation<OrderItem>(i => i.Product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
@@ -687,8 +687,8 @@ public class SelectiveNavigationFilteringTests : TestBase
         var filter = NavigationFilter.Include()
             .Navigation<Category>(c => c.SubCategories);
 
-        var saver = new BatchSaver<Category, int>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<Category, int>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
             NavigationFilter = filter
@@ -714,10 +714,10 @@ public class SelectiveNavigationFilteringTests : TestBase
             .Navigation<CustomerOrder>(o => o.OrderItems)
             .Navigation<OrderItem>(i => i.Product);
 
-        var saver = new BatchSaver<CustomerOrder, int>(context);
+        var saver = new Winnower<CustomerOrder, int>(context);
 
         // Include filter with a reference navigation works when IncludeReferences is true
-        var result = saver.InsertGraphBatch([order], new InsertGraphBatchOptions
+        var result = saver.InsertGraph([order], new InsertGraphOptions
         {
             IncludeReferences = true,
             CircularReferenceHandling = CircularReferenceHandling.Ignore,
@@ -788,12 +788,12 @@ public class SelectiveNavigationFilteringTests : TestBase
 public class SelectiveNavigationFilteringParallelTests : ParallelTestBase
 {
     [Fact]
-    public async Task InsertGraphBatchAsync_ParallelWithFilter_FilterAppliedAcrossPartitions()
+    public async Task InsertGraphAsync_ParallelWithFilter_FilterAppliedAcrossPartitions()
     {
         EnsureDatabaseCreated();
 
         var factory = CreateContextFactory();
-        var saver = new ParallelBatchSaver<CustomerOrder, int>(factory, maxDegreeOfParallelism: 2);
+        var saver = new ParallelWinnower<CustomerOrder, int>(factory, maxDegreeOfParallelism: 2);
 
         var orders = Enumerable.Range(1, 10).Select(i => new CustomerOrder
         {
@@ -815,7 +815,7 @@ public class SelectiveNavigationFilteringParallelTests : ParallelTestBase
         var filter = NavigationFilter.Include()
             .Navigation<CustomerOrder>(o => o.OrderItems);
 
-        var result = await saver.InsertGraphBatchAsync(orders, new InsertGraphBatchOptions
+        var result = await saver.InsertGraphAsync(orders, new InsertGraphOptions
         {
             NavigationFilter = filter
         });
@@ -828,13 +828,13 @@ public class SelectiveNavigationFilteringParallelTests : ParallelTestBase
     }
 
     [Fact]
-    public async Task DeleteGraphBatchAsync_ParallelWithFilter_CascadeRespected()
+    public async Task DeleteGraphAsync_ParallelWithFilter_CascadeRespected()
     {
         EnsureDatabaseCreated();
         SeedWithFactory(ctx => SeedCustomerOrders(ctx, 4, itemsPerOrder: 2));
 
         var factory = CreateContextFactory();
-        var saver = new ParallelBatchSaver<CustomerOrder, int>(factory, maxDegreeOfParallelism: 2);
+        var saver = new ParallelWinnower<CustomerOrder, int>(factory, maxDegreeOfParallelism: 2);
 
         var orders = QueryWithFactory(ctx =>
             ctx.CustomerOrders.Include(o => o.OrderItems).ToList());
@@ -842,7 +842,7 @@ public class SelectiveNavigationFilteringParallelTests : ParallelTestBase
         var filter = NavigationFilter.Include()
             .Navigation<CustomerOrder>(o => o.OrderItems);
 
-        var result = await saver.DeleteGraphBatchAsync(orders, new DeleteGraphBatchOptions
+        var result = await saver.DeleteGraphAsync(orders, new DeleteGraphOptions
         {
             CascadeBehavior = DeleteCascadeBehavior.Cascade,
             NavigationFilter = filter
@@ -855,12 +855,12 @@ public class SelectiveNavigationFilteringParallelTests : ParallelTestBase
     }
 
     [Fact]
-    public async Task UpsertGraphBatchAsync_ParallelWithFilter_InsertsAndUpdates()
+    public async Task UpsertGraphAsync_ParallelWithFilter_InsertsAndUpdates()
     {
         EnsureDatabaseCreated();
 
         var factory = CreateContextFactory();
-        var saver = new ParallelBatchSaver<CustomerOrder, int>(factory, maxDegreeOfParallelism: 2);
+        var saver = new ParallelWinnower<CustomerOrder, int>(factory, maxDegreeOfParallelism: 2);
 
         var orders = Enumerable.Range(1, 4).Select(i => new CustomerOrder
         {
@@ -882,7 +882,7 @@ public class SelectiveNavigationFilteringParallelTests : ParallelTestBase
         var filter = NavigationFilter.Include()
             .Navigation<CustomerOrder>(o => o.OrderItems);
 
-        var result = await saver.UpsertGraphBatchAsync(orders, new UpsertGraphBatchOptions
+        var result = await saver.UpsertGraphAsync(orders, new UpsertGraphOptions
         {
             NavigationFilter = filter
         });
@@ -894,12 +894,12 @@ public class SelectiveNavigationFilteringParallelTests : ParallelTestBase
     }
 
     [Fact]
-    public async Task InsertGraphBatchAsync_ParallelExcludeFilter_FilterApplied()
+    public async Task InsertGraphAsync_ParallelExcludeFilter_FilterApplied()
     {
         EnsureDatabaseCreated();
 
         var factory = CreateContextFactory();
-        var saver = new ParallelBatchSaver<CustomerOrder, int>(factory, maxDegreeOfParallelism: 2);
+        var saver = new ParallelWinnower<CustomerOrder, int>(factory, maxDegreeOfParallelism: 2);
 
         var orders = Enumerable.Range(1, 6).Select(i => new CustomerOrder
         {
@@ -921,7 +921,7 @@ public class SelectiveNavigationFilteringParallelTests : ParallelTestBase
         var filter = NavigationFilter.Exclude()
             .Navigation<OrderItem>(i => i.Reservations);
 
-        var result = await saver.InsertGraphBatchAsync(orders, new InsertGraphBatchOptions
+        var result = await saver.InsertGraphAsync(orders, new InsertGraphOptions
         {
             NavigationFilter = filter
         });
@@ -956,8 +956,8 @@ public class SelectiveNavigationFilteringCompositeKeyTests : CompositeKeyTestBas
         var filter = NavigationFilter.Exclude()
             .Navigation<OrderLine>(ol => ol.Notes);
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.InsertGraphBatch([orderLine], new InsertGraphBatchOptions
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.InsertGraph([orderLine], new InsertGraphOptions
         {
             NavigationFilter = filter
         });
@@ -984,8 +984,8 @@ public class SelectiveNavigationFilteringCompositeKeyTests : CompositeKeyTestBas
         var filter = NavigationFilter.Exclude()
             .Navigation<OrderLine>(ol => ol.Notes);
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.UpdateGraphBatch([loaded], new GraphBatchOptions
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.UpdateGraph([loaded], new GraphOptions
         {
             OrphanedChildBehavior = OrphanBehavior.Throw,
             NavigationFilter = filter
@@ -1008,8 +1008,8 @@ public class SelectiveNavigationFilteringCompositeKeyTests : CompositeKeyTestBas
         var filter = NavigationFilter.Include()
             .Navigation<OrderLine>(ol => ol.Notes);
 
-        var saver = new BatchSaver<OrderLine, CompositeKey>(context);
-        var result = saver.DeleteGraphBatch([loaded], new DeleteGraphBatchOptions
+        var saver = new Winnower<OrderLine, CompositeKey>(context);
+        var result = saver.DeleteGraph([loaded], new DeleteGraphOptions
         {
             CascadeBehavior = DeleteCascadeBehavior.Cascade,
             NavigationFilter = filter

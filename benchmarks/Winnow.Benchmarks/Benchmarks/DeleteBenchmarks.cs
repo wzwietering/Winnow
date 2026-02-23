@@ -52,10 +52,10 @@ public class DeleteBenchmarks
     }
 
     [Benchmark]
-    public BatchResult<int> DeleteBatch()
+    public WinnowResult<int> Delete()
     {
-        var saver = new BatchSaver<BenchmarkProduct, int>(_context);
-        return saver.DeleteBatch(_products, new DeleteBatchOptions { Strategy = Strategy });
+        var saver = new Winnower<BenchmarkProduct, int>(_context);
+        return saver.Delete(_products, new DeleteOptions { Strategy = Strategy });
     }
 
     [IterationCleanup]

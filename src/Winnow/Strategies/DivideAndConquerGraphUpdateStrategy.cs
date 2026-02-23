@@ -2,24 +2,24 @@ using Winnow.Operations;
 
 namespace Winnow.Strategies;
 
-internal class DivideAndConquerGraphUpdateStrategy<TEntity, TKey> : IBatchGraphUpdateStrategy<TEntity, TKey>
+internal class DivideAndConquerGraphUpdateStrategy<TEntity, TKey> : IGraphUpdateStrategy<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    public BatchResult<TKey> Execute(
+    public WinnowResult<TKey> Execute(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        GraphBatchOptions options)
+        StrategyContext<TEntity, TKey> context,
+        GraphOptions options)
     {
         var operation = new UpdateGraphOperation<TEntity, TKey>(options);
         var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
 
-    public Task<BatchResult<TKey>> ExecuteAsync(
+    public Task<WinnowResult<TKey>> ExecuteAsync(
         List<TEntity> entities,
-        BatchStrategyContext<TEntity, TKey> context,
-        GraphBatchOptions options,
+        StrategyContext<TEntity, TKey> context,
+        GraphOptions options,
         CancellationToken cancellationToken)
     {
         var operation = new UpdateGraphOperation<TEntity, TKey>(options);

@@ -40,10 +40,10 @@ internal class OrphanTrackingService<TEntity, TKey>
     internal List<TKey> GetOrphanedChildIds(TEntity entity) =>
         _singleLevelTracker.GetOrphanedChildIds(entity);
 
-    internal void ValidateNoOrphanedChildren(TEntity entity, GraphBatchOptions options) =>
+    internal void ValidateNoOrphanedChildren(TEntity entity, GraphOptions options) =>
         _singleLevelTracker.ValidateNoOrphanedChildren(entity, options);
 
-    internal void HandleOrphanedChildren(TEntity entity, GraphBatchOptions options) =>
+    internal void HandleOrphanedChildren(TEntity entity, GraphOptions options) =>
         _singleLevelTracker.HandleOrphanedChildren(entity, options);
 
     internal void DetachEntityWithOrphans(
@@ -55,7 +55,7 @@ internal class OrphanTrackingService<TEntity, TKey>
         _recursiveTracker.CaptureAllOriginalChildIdsRecursive(entities, tc);
 
     internal void ValidateNoOrphanedChildrenRecursive(
-        TEntity entity, TraversalContext tc, GraphBatchOptions options) =>
+        TEntity entity, TraversalContext tc, GraphOptions options) =>
         _recursiveTracker.ValidateNoOrphanedChildrenRecursive(entity, tc, options);
 
     internal void HandleOrphanedChildrenRecursive(
