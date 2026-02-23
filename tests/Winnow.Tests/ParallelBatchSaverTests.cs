@@ -37,8 +37,8 @@ public class ParallelBatchSaverTests : ParallelTestBase
 
         var result = await saver.UpdateBatchAsync(products);
 
-        result.SuccessCount.ShouldBeGreaterThan(0);
-        result.FailureCount.ShouldBeGreaterThan(0);
+        result.SuccessCount.ShouldBe(5);
+        result.FailureCount.ShouldBe(1);
     }
 
     [Fact]
@@ -186,5 +186,68 @@ public class ParallelBatchSaverTests : ParallelTestBase
         var result = await saver.UpdateBatchAsync(products);
 
         result.Duration.ShouldBeGreaterThan(TimeSpan.Zero);
+    }
+
+    // === Sync method tests ===
+
+    [Fact]
+    public void UpdateBatch_Sync_AllSucceed()
+    {
+        EnsureDatabaseCreated();
+        SeedWithFactory(ctx => SeedData(ctx, 4));
+
+        var saver = CreateSaver(maxDegreeOfParallelism: 2);
+        var products = QueryWithFactory(ctx => ctx.Products.ToList());
+        foreach (var p in products) p.Price += 5;
+
+        var result = saver.UpdateBatch(products);
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.SuccessCount.ShouldBe(4);
+    }
+
+    [Fact]
+    public void InsertBatch_Sync_AllSucceed()
+    {
+        EnsureDatabaseCreated();
+
+        var saver = CreateSaver(maxDegreeOfParallelism: 2);
+        var products = new TestDataBuilder().CreateValidProducts(4);
+        foreach (var p in products) p.Id = 0;
+
+        var result = saver.InsertBatch(products);
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.SuccessCount.ShouldBe(4);
+    }
+
+    [Fact]
+    public void DeleteBatch_Sync_AllSucceed()
+    {
+        EnsureDatabaseCreated();
+        SeedWithFactory(ctx => SeedData(ctx, 4));
+
+        var saver = CreateSaver(maxDegreeOfParallelism: 2);
+        var products = QueryWithFactory(ctx => ctx.Products.ToList());
+
+        var result = saver.DeleteBatch(products);
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.SuccessCount.ShouldBe(4);
+    }
+
+    [Fact]
+    public void UpsertBatch_Sync_AllSucceed()
+    {
+        EnsureDatabaseCreated();
+
+        var saver = CreateSaver(maxDegreeOfParallelism: 2);
+        var products = new TestDataBuilder().CreateValidProducts(4);
+        foreach (var p in products) p.Id = 0;
+
+        var result = saver.UpsertBatch(products);
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.SuccessCount.ShouldBe(4);
     }
 }

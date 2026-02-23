@@ -68,7 +68,7 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         IBatchUpsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
-        operation.ValidateAll(entities, context, cancellationToken);
+        operation.ValidateAll(entities, context);
         context.DetachAllEntities(entities);
 
         var wasCancelled = false;

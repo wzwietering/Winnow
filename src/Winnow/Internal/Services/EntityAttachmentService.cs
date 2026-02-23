@@ -264,7 +264,7 @@ internal class EntityAttachmentService<TEntity, TKey>
                 .ToArray();
             return $"({string.Join(", ", values)})";
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
             return "unknown";
         }

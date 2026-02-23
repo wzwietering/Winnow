@@ -122,7 +122,7 @@ public class BatchSaverInsertTests : TestBase
     }
 
     [Fact]
-    public void InsertBatch_LargeBatch_PerformanceTest()
+    public void InsertBatch_LargeDataSet_AllSucceed()
     {
         using var context = CreateContext();
 

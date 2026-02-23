@@ -129,6 +129,28 @@ public class RetryBehaviorTests : IDisposable
         retryCount.ShouldBe(0);
     }
 
+    [Fact]
+    public void Sync_retry_does_not_retry_OperationCanceledException()
+    {
+        using var context = CreateFailingContext(0);
+        context.Products.Add(new Product { Name = "Test", Price = 10, Stock = 1 });
+        var retryCount = 0;
+
+        Should.Throw<OperationCanceledException>(() =>
+            SaveChangesRetryHandler.SaveWithRetry(
+                new CancellingDbContext(context),
+                new RetryOptions
+                {
+                    MaxRetries = 3,
+                    InitialDelay = TimeSpan.Zero,
+                    IsTransient = _ => true // Everything is transient, but OCE should still propagate
+                },
+                null,
+                () => retryCount++));
+
+        retryCount.ShouldBe(0);
+    }
+
     // === Custom IsTransient predicate tests ===
 
     [Fact]
@@ -443,5 +465,17 @@ public class RetryBehaviorTests : IDisposable
 
             return base.SaveChangesAsync(cancellationToken);
         }
+    }
+
+    /// <summary>
+    /// Wraps a DbContext so that SaveChanges throws OperationCanceledException.
+    /// Uses delegation since we need the underlying connection from the real context.
+    /// </summary>
+    private class CancellingDbContext(DbContext inner) : DbContext
+    {
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+            optionsBuilder.UseSqlite(inner.Database.GetConnectionString());
+
+        public override int SaveChanges() => throw new OperationCanceledException();
     }
 }

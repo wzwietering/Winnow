@@ -33,8 +33,7 @@ internal class UpsertOperation<TEntity, TKey> : IBatchUpsertOperation<TEntity, T
 
     internal UpsertOperation(UpsertBatchOptions options) => _options = options;
 
-    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context,
-        CancellationToken cancellationToken = default)
+    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
         if (!_options.ValidateNavigationProperties)
         {

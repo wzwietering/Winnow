@@ -196,6 +196,113 @@ public class CompositeKeyHelperTests : TestBase
         key.IsAllDefaults().ShouldBeFalse();
     }
 
+    [Fact]
+    public void DefaultStruct_Count_ReturnsZero()
+    {
+        var key = default(CompositeKey);
+        key.Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public void DefaultStruct_Values_ReturnsEmpty()
+    {
+        var key = default(CompositeKey);
+        key.Values.Count.ShouldBe(0);
+    }
+
+    [Fact]
+    public void DefaultStruct_IsAllDefaults_ReturnsTrue()
+    {
+        var key = default(CompositeKey);
+        key.IsAllDefaults().ShouldBeTrue();
+    }
+
+    [Fact]
+    public void DefaultStruct_IsSingle_ReturnsFalse()
+    {
+        var key = default(CompositeKey);
+        key.IsSingle.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void DefaultStruct_ToString_ReturnsEmptyParens()
+    {
+        var key = default(CompositeKey);
+        key.ToString().ShouldBe("()");
+    }
+
+    [Fact]
+    public void DefaultStruct_Equals_DefaultStruct_ReturnsTrue()
+    {
+        var a = default(CompositeKey);
+        var b = default(CompositeKey);
+        a.Equals(b).ShouldBeTrue();
+        (a == b).ShouldBeTrue();
+    }
+
+    [Fact]
+    public void DefaultStruct_GetHashCode_DoesNotThrow()
+    {
+        var key = default(CompositeKey);
+        Should.NotThrow(() => key.GetHashCode());
+    }
+
+    [Fact]
+    public void DefaultStruct_Indexer_Throws()
+    {
+        var key = default(CompositeKey);
+        Should.Throw<ArgumentOutOfRangeException>(() => _ = key[0]);
+    }
+
+    [Fact]
+    public void DefaultStruct_AsSingle_Throws()
+    {
+        var key = default(CompositeKey);
+        Should.Throw<InvalidOperationException>(() => key.AsSingle<int>());
+    }
+
+    [Fact]
+    public void DefaultStruct_Deconstruct2_Throws()
+    {
+        var key = default(CompositeKey);
+        Should.Throw<InvalidOperationException>(() => key.Deconstruct(out _, out _));
+    }
+
+    [Fact]
+    public void Deconstruct3_ValidKey_ReturnsComponents()
+    {
+        var key = new CompositeKey("A", 2, "C");
+        key.Deconstruct(out var first, out var second, out var third);
+        first.ShouldBe("A");
+        second.ShouldBe(2);
+        third.ShouldBe("C");
+    }
+
+    [Fact]
+    public void Deconstruct4_ValidKey_ReturnsComponents()
+    {
+        var key = new CompositeKey(1, 2, 3, 4);
+        key.Deconstruct(out var a, out var b, out var c, out var d);
+        a.ShouldBe(1);
+        b.ShouldBe(2);
+        c.ShouldBe(3);
+        d.ShouldBe(4);
+    }
+
+    [Fact]
+    public void Deconstruct3_WrongCount_Throws()
+    {
+        var key = new CompositeKey(1, 2);
+        Should.Throw<InvalidOperationException>(() => key.Deconstruct(out _, out _, out _));
+    }
+
+    [Fact]
+    public void Deconstruct4_WrongCount_Throws()
+    {
+        var key = new CompositeKey(1, 2, 3);
+        Should.Throw<InvalidOperationException>(() => key.Deconstruct(out _, out _, out _, out _));
+    }
+
     #endregion
 
     #region IsCompatibleKeyType Tests

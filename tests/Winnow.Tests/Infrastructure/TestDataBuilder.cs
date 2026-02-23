@@ -60,24 +60,6 @@ public class TestDataBuilder
 
     public List<Product> CreateMixedValidityProducts(int totalCount, int invalidCount) => CreateProductsWithInvalidPrices(totalCount, invalidCount);
 
-    public List<Product> CreateProductsForConcurrencyTest(int count)
-    {
-        var products = new List<Product>();
-        for (int i = 1; i <= count; i++)
-        {
-            products.Add(new Product
-            {
-                Id = i,
-                Name = $"Product {i}",
-                Price = 10.00m + i,
-                Stock = 100 + i,
-                LastModified = DateTimeOffset.UtcNow,
-                Version = new byte[8]
-            });
-        }
-        return products;
-    }
-
     public void SeedDatabase(TestDbContext context, int productCount)
     {
         var products = CreateValidProducts(productCount);

@@ -76,6 +76,10 @@ internal static class SaveChangesRetryHandler
                 context.SaveChanges();
                 return;
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex) when (attempt < maxRetries && ShouldRetry(ex, isTransient))
             {
                 attempt++;

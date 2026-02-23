@@ -39,8 +39,7 @@ internal class UpsertGraphOperation<TEntity, TKey> : IBatchUpsertOperation<TEnti
         _tc = TraversalContext.FromOptions(options);
     }
 
-    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context,
-        CancellationToken cancellationToken = default)
+    public void ValidateAll(List<TEntity> entities, BatchStrategyContext<TEntity, TKey> context)
     {
         NavigationFilterValidator.Validate(
             _tc.NavigationFilter, context.Context.Model, _options.IncludeReferences, _options.IncludeManyToMany);

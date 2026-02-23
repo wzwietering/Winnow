@@ -273,13 +273,6 @@ public class BatchSaverGraphTests : TestBase
             OrphanedChildBehavior = OrphanBehavior.Delete
         });
 
-        // Debug: check failures
-        if (result.Failures.Any())
-        {
-            var failureMessages = string.Join("; ", result.Failures.Select(f => $"Id={f.EntityId}: {f.ErrorMessage} ({f.Reason})"));
-            throw new Exception($"Unexpected failures: {failureMessages}");
-        }
-
         result.IsCompleteSuccess.ShouldBeTrue();
 
         // Verify child was deleted from database

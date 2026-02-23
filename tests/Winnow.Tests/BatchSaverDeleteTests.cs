@@ -201,7 +201,7 @@ public class BatchSaverDeleteTests : TestBase
     }
 
     [Fact]
-    public void DeleteBatch_LargeBatch_PerformanceTest()
+    public void DeleteBatch_LargeDataSet_AllSucceed()
     {
         using var context = CreateContext();
         SeedData(context, 100);

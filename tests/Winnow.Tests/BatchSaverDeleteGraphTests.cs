@@ -228,7 +228,7 @@ public class BatchSaverDeleteGraphTests : TestBase
     }
 
     [Fact]
-    public void DeleteGraphBatch_LargeBatch_PerformanceTest()
+    public void DeleteGraphBatch_LargeDataSet_AllSucceed()
     {
         using var context = CreateContext();
         SeedCustomerOrders(context, 50, 2);

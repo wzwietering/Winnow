@@ -28,11 +28,14 @@ public class GraphNode<TKey> where TKey : notnull, IEquatable<TKey>
 
     /// <summary>
     /// Returns all descendant IDs by flattening the tree recursively.
+    /// Includes cycle protection to handle graphs with back-references.
     /// </summary>
     public IReadOnlyList<TKey> GetAllDescendantIds()
     {
         var result = new List<TKey>();
-        CollectDescendantIds(this, result);
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+        visited.Add(this);
+        CollectDescendantIds(this, result, visited);
         return result;
     }
 
@@ -41,12 +44,14 @@ public class GraphNode<TKey> where TKey : notnull, IEquatable<TKey>
     /// </summary>
     public IReadOnlyList<TKey> GetChildIds() => Children.Select(c => c.EntityId).ToList();
 
-    private static void CollectDescendantIds(GraphNode<TKey> node, List<TKey> result)
+    private static void CollectDescendantIds(GraphNode<TKey> node, List<TKey> result, HashSet<object> visited)
     {
         foreach (var child in node.Children)
         {
+            if (!visited.Add(child)) continue;
+
             result.Add(child.EntityId);
-            CollectDescendantIds(child, result);
+            CollectDescendantIds(child, result, visited);
         }
     }
 }
