@@ -1,5 +1,9 @@
 # Winnow
 
+[![NuGet](https://img.shields.io/nuget/v/Winnow.svg)](https://www.nuget.org/packages/Winnow)
+[![Build](https://github.com/wzwietering/Winnow/actions/workflows/dotnet.yml/badge.svg)](https://github.com/wzwietering/Winnow/actions/workflows/dotnet.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/wzwietering/Winnow/blob/master/LICENSE)
+
 *Separate the good saves from the bad.*
 
 Batch operations for Entity Framework Core with per-entity failure isolation.
@@ -25,7 +29,7 @@ Entity Framework Core's `SaveChanges()` operates atomically: a single invalid en
 dotnet add package Winnow
 ```
 
-**Requirements:** .NET 10.0+, Entity Framework Core 10.0+
+**Requirements:** .NET 8.0+, Entity Framework Core 8.0+
 
 ## Table of Contents
 
@@ -208,18 +212,18 @@ See [Graph Operations](docs/graph-operations.md) for full documentation.
 
 ### Benchmarked Performance
 
-DivideAndConquer adds minimal overhead vs raw `SaveChanges()` (2-9%) while providing error isolation. On SQL Server at 5K+ entities, it's actually **faster** than raw EF Core.
+DivideAndConquer adds minimal overhead vs raw `SaveChanges()` (within measurement noise at most batch sizes) while providing error isolation.
 
 **Flat insert, DivideAndConquer (milliseconds):**
 
 | Entities | SQLite | PostgreSQL | SQL Server |
 |----------|--------|------------|------------|
-| 100 | 17 ms | 12 ms | 20 ms |
-| 1,000 | 78 ms | 76 ms | 95 ms |
-| 5,000 | 119 ms | 242 ms | 253 ms |
-| 10,000 | 197 ms | 429 ms | 401 ms |
+| 100 | 42 ms | 10 ms | 18 ms |
+| 1,000 | 77 ms | 59 ms | 111 ms |
+| 5,000 | 146 ms | 231 ms | 234 ms |
+| 10,000 | 215 ms | 421 ms | 388 ms |
 
-OneByOne is **6-659x slower** depending on provider and batch size. The gap widens at scale because DivideAndConquer scales sub-linearly while OneByOne scales linearly.
+OneByOne is **5-530x slower** depending on provider and batch size. The gap widens at scale because DivideAndConquer scales sub-linearly while OneByOne scales linearly.
 
 ### Failure Rates Change Everything
 
@@ -227,15 +231,15 @@ DivideAndConquer's advantage erodes sharply when entities fail validation:
 
 | Failure Rate | SQLite D&C | SQL Server D&C | PostgreSQL D&C |
 |--------------|------------|----------------|----------------|
-| 0% | 76 ms (125x faster) | 85 ms (75x) | 71 ms (8x) |
-| 10% | 2,411 ms (3.4x) | 1,869 ms (3.0x) | 357 ms (1.5x) |
-| 25% | 3,388 ms (1.9x) | 2,726 ms (1.8x) | 394 ms (1.1x) |
+| 0% | 60 ms (151x faster) | 96 ms (63x) | 76 ms (7x) |
+| 10% | 2,643 ms (2.9x) | 1,750 ms (3.4x) | 333 ms (1.5x) |
+| 25% | 3,794 ms (1.8x) | 2,299 ms (1.9x) | 381 ms (1.1x) |
 
 At 25% failures, the strategies perform nearly the same. **Pre-validate your entities** if you expect failures above ~5% — this preserves DivideAndConquer's speed advantage.
 
 ### Graph and Memory
 
-Graph operations (parent + children) use 2-3x more memory per entity (~20-31 KB vs ~9-11 KB for flat). UpsertGraph is the most expensive due to loading existing entities and tracking changes. DivideAndConquer speedups are compressed but still significant (3-77x depending on provider).
+Graph operations (parent + children) use 2-3x more memory per entity (~20-31 KB vs ~9-11 KB for flat). UpsertGraph is the most expensive due to loading existing entities and tracking changes. DivideAndConquer speedups are compressed but still significant (2-76x depending on provider).
 
 For full results, see [SQLite](docs/benchmarks/sqlite.md), [PostgreSQL](docs/benchmarks/postgresql.md), and [SQL Server](docs/benchmarks/sqlserver.md) benchmarks.
 
@@ -280,8 +284,8 @@ For full result type documentation, see [Results Reference](docs/results-referen
 | Insert parent + children | `InsertGraph` | DivideAndConquer; 2-3x more memory |
 | Update parent + children | `UpdateGraph` | Set `OrphanBehavior` explicitly |
 | Delete parent + children | `DeleteGraph` | Set `CascadeBehavior` explicitly |
-| Many-to-one references | `*GraphBatch` | Set `IncludeReferences = true` |
-| Many-to-many relationships | `*GraphBatch` | Set `IncludeManyToMany = true` |
+| Many-to-one references | `*Graph` | Set `IncludeReferences = true` |
+| Many-to-many relationships | `*Graph` | Set `IncludeManyToMany = true` |
 | High failure rate (>5%) | Any | Pre-validate, then DivideAndConquer |
 | Per-entity error isolation needed | Any | OneByOne |
 
@@ -314,7 +318,7 @@ Or use `IDbContextFactory<TContext>`:
 var saver = factory.CreateParallelWinnower<Product, int, AppDbContext>(maxDegreeOfParallelism: 4);
 ```
 
-**Benchmark reality check:** In our benchmarks, ParallelWinnower showed **no consistent benefit** across any provider. SQLite uses file-level locking so parallel writes contend. PostgreSQL and SQL Server showed marginal improvements (10-23%) at DOP 4 for small batches, but the gains disappeared or reversed at larger sizes due to connection pool contention. **For most workloads, standard `Winnower` with DivideAndConquer is faster and simpler.** See the [benchmark docs](docs/benchmarks/postgresql.md) for details.
+**Benchmark reality check:** In our benchmarks, ParallelWinnower showed **no consistent benefit** across any provider. SQLite uses file-level locking so parallel writes contend. PostgreSQL and SQL Server showed improvements (26-36%) at DOP 4 for small batches (1K entities), but the gains disappeared or reversed at larger sizes due to connection pool contention. **For most workloads, standard `Winnower` with DivideAndConquer is faster and simpler.** See the [benchmark docs](docs/benchmarks/postgresql.md) for details.
 
 | | Winnower | ParallelWinnower |
 |---|---|---|

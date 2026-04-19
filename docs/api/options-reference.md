@@ -74,7 +74,10 @@ Used with `DeleteGraph`.
 | `MaxDepth` | `int` | `10` | Maximum traversal depth |
 | `NavigationFilter` | `NavigationFilter?` | `null` | Filter which navigations are traversed |
 | `CascadeBehavior` | `DeleteCascadeBehavior` | `Cascade` | How to handle children on delete |
+| `IncludeReferences` | `bool` | `false` | Include many-to-one references |
 | `IncludeManyToMany` | `bool` | `false` | Clean up M2M join records |
+| `CircularReferenceHandling` | `CircularReferenceHandling` | `Throw` | How to handle circular references |
+| `ValidateReferencedEntitiesExist` | `bool` | `true` | Validate referenced entities exist before deletion |
 | `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
 | `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
 

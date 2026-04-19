@@ -100,8 +100,18 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
         _failures.Add(failure);
     }
 
-    public void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context) =>
-        context.Context.Entry(entity).State = EntityState.Detached;
+    public void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context)
+    {
+        try
+        {
+            context.Context.Entry(entity).State = EntityState.Detached;
+        }
+        catch (ArgumentNullException)
+        {
+            // EF Core 8/9 throws when detaching entities with null keys (e.g., null string PKs).
+            // EF Core 10+ handles this gracefully. Cleanup is best-effort, so swallow the error.
+        }
+    }
 
     public UpsertResult<TKey> CreateResult(bool wasCancelled = false) => new()
     {
