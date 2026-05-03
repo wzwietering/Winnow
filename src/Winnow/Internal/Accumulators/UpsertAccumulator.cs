@@ -2,13 +2,15 @@ namespace Winnow.Internal.Accumulators;
 
 /// <summary>
 /// Accumulates per-entity success and failure data for upsert operations.
-/// Tracks insert vs update decisions per index. Allocation is gated by
-/// <see cref="ResultDetail"/>.
+/// Tracks insert vs update decisions per index. Allocation of result collections
+/// is gated by <see cref="ResultDetail"/>; the decision tracker is required at
+/// every level for correctness (count routing, duplicate-key fallback) and uses
+/// a compact byte-per-index list.
 /// </summary>
 internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<TKey>
 {
     private readonly ResultDetail _detail;
-    private readonly Dictionary<int, UpsertOperationType> _operationDecisions = [];
+    private readonly List<byte> _operationDecisions = [];
     private readonly List<UpsertedEntity<TKey>>? _insertedEntities;
     private readonly List<UpsertedEntity<TKey>>? _updatedEntities;
     private readonly List<TKey>? _insertedIds;
@@ -37,14 +39,27 @@ internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<T
         }
     }
 
-    internal void RecordOperationDecision(int index, UpsertOperationType operation) =>
-        _operationDecisions[index] = operation;
+    internal void RecordOperationDecision(int index, UpsertOperationType operation)
+    {
+        EnsureDecisionSlot(index);
+        _operationDecisions[index] = (byte)operation;
+    }
 
     internal UpsertOperationType GetOperationDecision(int index) =>
-        _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert);
+        index < _operationDecisions.Count
+            ? (UpsertOperationType)_operationDecisions[index]
+            : UpsertOperationType.Insert;
 
     internal bool WasInsertAttempt(int index) =>
         GetOperationDecision(index) == UpsertOperationType.Insert;
+
+    private void EnsureDecisionSlot(int index)
+    {
+        while (_operationDecisions.Count <= index)
+        {
+            _operationDecisions.Add((byte)UpsertOperationType.Insert);
+        }
+    }
 
     internal void RecordSuccess(TKey id, int index, object entity)
     {
@@ -55,7 +70,8 @@ internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<T
 
     internal void RecordSuccessAsUpdate(TKey id, int index, object entity)
     {
-        _operationDecisions[index] = UpsertOperationType.Update;
+        EnsureDecisionSlot(index);
+        _operationDecisions[index] = (byte)UpsertOperationType.Update;
         TallySuccess(UpsertOperationType.Update);
         AddSuccess(id, index, entity, UpsertOperationType.Update);
     }

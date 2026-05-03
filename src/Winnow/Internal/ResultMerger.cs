@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Winnow.Internal;
 
 internal static class ResultMerger
@@ -8,19 +10,19 @@ internal static class ResultMerger
         int totalRoundTrips,
         int totalRetries) where TKey : notnull, IEquatable<TKey>
     {
-        var detail = results.Count > 0 ? results[0].ResultDetail : ResultDetail.Full;
+        var detail = ResolveDetail<WinnowResult<TKey>>(results, r => r.ResultDetail);
         return new WinnowResult<TKey>
         {
             ResultDetail = detail,
-            SuccessfulIds = MergeIds(results),
-            Failures = MergeWinnowFailures(results),
+            SuccessfulIds = detail >= ResultDetail.Minimal ? MergeIds(results) : [],
+            Failures = detail >= ResultDetail.Minimal ? MergeWinnowFailures(results) : [],
             SuccessCount = results.Sum(r => r.SuccessCount),
             FailureCount = results.Sum(r => r.FailureCount),
             Duration = duration,
             DatabaseRoundTrips = totalRoundTrips,
             WasCancelled = results.Any(r => r.WasCancelled),
-            GraphHierarchy = MergeGraphHierarchy<TKey>(results.Cast<WinnowResultBase<TKey>>()),
-            TraversalInfo = MergeTraversalInfoFromResults<TKey>(results.Cast<WinnowResultBase<TKey>>()),
+            GraphHierarchy = MergeGraphHierarchy<TKey>(results),
+            TraversalInfo = MergeTraversalInfoFromResults<TKey>(results),
             TotalRetries = totalRetries
         };
     }
@@ -31,20 +33,23 @@ internal static class ResultMerger
         int totalRoundTrips,
         int totalRetries) where TKey : notnull, IEquatable<TKey>
     {
-        var detail = partitions.Count > 0 ? partitions[0].Result.ResultDetail : ResultDetail.Full;
+        var detail = ResolveDetail(partitions, p => p.Result.ResultDetail);
+        var bases = partitions.Select(p => (WinnowResultBase<TKey>)p.Result);
         return new InsertResult<TKey>
         {
             ResultDetail = detail,
-            InsertedEntities = RemapInsertedEntities<TKey>(partitions),
-            InsertedIds = partitions.SelectMany(p => p.Result.InsertedIdsRaw).ToList(),
-            Failures = RemapInsertFailures(partitions),
+            InsertedEntities = detail >= ResultDetail.Full ? RemapInsertedEntities(partitions) : [],
+            InsertedIds = detail >= ResultDetail.Minimal
+                ? partitions.SelectMany(p => p.Result.InsertedIdsRaw).ToList()
+                : [],
+            Failures = detail >= ResultDetail.Minimal ? RemapInsertFailures(partitions) : [],
             SuccessCount = partitions.Sum(p => p.Result.SuccessCount),
             FailureCount = partitions.Sum(p => p.Result.FailureCount),
             Duration = duration,
             DatabaseRoundTrips = totalRoundTrips,
             WasCancelled = partitions.Any(p => p.Result.WasCancelled),
-            GraphHierarchy = MergeGraphHierarchy<TKey>(partitions.Select(p => (WinnowResultBase<TKey>)p.Result)),
-            TraversalInfo = MergeTraversalInfoFromResults<TKey>(partitions.Select(p => (WinnowResultBase<TKey>)p.Result)),
+            GraphHierarchy = MergeGraphHierarchy(bases),
+            TraversalInfo = MergeTraversalInfoFromResults(bases),
             TotalRetries = totalRetries
         };
     }
@@ -55,15 +60,24 @@ internal static class ResultMerger
         int totalRoundTrips,
         int totalRetries) where TKey : notnull, IEquatable<TKey>
     {
-        var detail = partitions.Count > 0 ? partitions[0].Result.ResultDetail : ResultDetail.Full;
+        var detail = ResolveDetail(partitions, p => p.Result.ResultDetail);
+        var bases = partitions.Select(p => (WinnowResultBase<TKey>)p.Result);
         return new UpsertResult<TKey>
         {
             ResultDetail = detail,
-            InsertedEntities = RemapUpsertedEntities<TKey>(partitions, p => p.Result.InsertedEntitiesRaw),
-            UpdatedEntities = RemapUpsertedEntities<TKey>(partitions, p => p.Result.UpdatedEntitiesRaw),
-            InsertedIds = partitions.SelectMany(p => p.Result.InsertedIdsRaw).ToList(),
-            UpdatedIds = partitions.SelectMany(p => p.Result.UpdatedIdsRaw).ToList(),
-            Failures = RemapUpsertFailures<TKey>(partitions),
+            InsertedEntities = detail >= ResultDetail.Full
+                ? RemapUpsertedEntities(partitions, p => p.Result.InsertedEntitiesRaw)
+                : [],
+            UpdatedEntities = detail >= ResultDetail.Full
+                ? RemapUpsertedEntities(partitions, p => p.Result.UpdatedEntitiesRaw)
+                : [],
+            InsertedIds = detail >= ResultDetail.Minimal
+                ? partitions.SelectMany(p => p.Result.InsertedIdsRaw).ToList()
+                : [],
+            UpdatedIds = detail >= ResultDetail.Minimal
+                ? partitions.SelectMany(p => p.Result.UpdatedIdsRaw).ToList()
+                : [],
+            Failures = detail >= ResultDetail.Minimal ? RemapUpsertFailures(partitions) : [],
             SuccessCount = partitions.Sum(p => p.Result.SuccessCount),
             FailureCount = partitions.Sum(p => p.Result.FailureCount),
             InsertedCount = partitions.Sum(p => p.Result.InsertedCount),
@@ -71,10 +85,21 @@ internal static class ResultMerger
             Duration = duration,
             DatabaseRoundTrips = totalRoundTrips,
             WasCancelled = partitions.Any(p => p.Result.WasCancelled),
-            GraphHierarchy = MergeGraphHierarchy<TKey>(partitions.Select(p => (WinnowResultBase<TKey>)p.Result)),
-            TraversalInfo = MergeTraversalInfoFromResults<TKey>(partitions.Select(p => (WinnowResultBase<TKey>)p.Result)),
+            GraphHierarchy = MergeGraphHierarchy(bases),
+            TraversalInfo = MergeTraversalInfoFromResults(bases),
             TotalRetries = totalRetries
         };
+    }
+
+    private static ResultDetail ResolveDetail<T>(IReadOnlyList<T> items, Func<T, ResultDetail> selector)
+    {
+        if (items.Count == 0)
+            return ResultDetail.Full;
+        var detail = selector(items[0]);
+        Debug.Assert(
+            items.All(i => selector(i) == detail),
+            "All partitions must share the same ResultDetail");
+        return detail;
     }
 
     private static List<TKey> MergeIds<TKey>(List<WinnowResult<TKey>> results)
