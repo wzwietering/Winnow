@@ -1,4 +1,5 @@
 using Winnow.Internal;
+using Winnow.Internal.Accumulators;
 
 namespace Winnow.Operations;
 
@@ -12,15 +13,18 @@ internal class UpdateGraphOperation<TEntity, TKey> : IOperation<TEntity, TKey>
 {
     private readonly GraphOptions _options;
     private readonly TraversalContext _tc;
-    private readonly List<TKey> _successfulIds = [];
-    private readonly List<WinnowFailure<TKey>> _failures = [];
-    private readonly List<GraphNode<TKey>> _graphHierarchy = [];
+    private readonly WinnowAccumulator<TKey> _accumulator;
+    private readonly GraphResultAccumulator<TKey> _graph;
     private readonly Dictionary<TKey, (GraphNode<TKey> Node, GraphTraversalResult<TKey> Stats)> _pendingGraphNodes = [];
-    private readonly GraphStatisticsTracker<TKey> _statsTracker = new();
 
-    internal UpdateGraphOperation(GraphOptions options)
+    internal UpdateGraphOperation(
+        GraphOptions options,
+        WinnowAccumulator<TKey> accumulator,
+        GraphResultAccumulator<TKey> graph)
     {
         _options = options;
+        _accumulator = accumulator;
+        _graph = graph;
         _tc = TraversalContext.FromOptions(options);
     }
 
@@ -52,7 +56,7 @@ internal class UpdateGraphOperation<TEntity, TKey> : IOperation<TEntity, TKey>
         if (_options.IncludeReferences)
         {
             var refResult = context.AttachEntityGraphAsModifiedWithReferences(entity, _tc);
-            _statsTracker.AggregateReferenceStats(refResult);
+            _graph.AggregateReferenceStats(refResult);
         }
         else
         {
@@ -64,9 +68,13 @@ internal class UpdateGraphOperation<TEntity, TKey> : IOperation<TEntity, TKey>
         if (_options.IncludeManyToMany)
         {
             var m2mResult = context.ApplyManyToManyChanges(entity, _options);
-            _statsTracker.AggregateManyToManyStats(m2mResult);
+            _graph.AggregateManyToManyStats(m2mResult);
         }
 
+        if (!_graph.IsActive)
+        {
+            return;
+        }
         var entityId = context.GetEntityId(entity);
         var (node, stats) = _options.IncludeReferences
             ? context.BuildGraphHierarchyWithReferences(entity, _tc)
@@ -77,13 +85,11 @@ internal class UpdateGraphOperation<TEntity, TKey> : IOperation<TEntity, TKey>
     public void RecordSuccess(TEntity entity, StrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
-        _successfulIds.Add(entityId);
+        _accumulator.RecordSuccess(entityId);
 
-        if (_pendingGraphNodes.TryGetValue(entityId, out var pending))
+        if (_pendingGraphNodes.Remove(entityId, out var pending))
         {
-            _graphHierarchy.Add(pending.Node);
-            _statsTracker.AggregateStats(pending.Stats);
-            _pendingGraphNodes.Remove(entityId);
+            _graph.AddHierarchyNode(pending.Node, pending.Stats);
         }
     }
 
@@ -91,26 +97,15 @@ internal class UpdateGraphOperation<TEntity, TKey> : IOperation<TEntity, TKey>
     {
         var entityId = context.GetEntityId(entity);
         _pendingGraphNodes.Remove(entityId);
-
-        var failure = new WinnowFailure<TKey>
-        {
-            EntityId = entityId,
-            ErrorMessage = $"Graph update failed: {ex.Message}",
-            Reason = FailureClassifier.Classify(ex),
-            Exception = ex
-        };
-        _failures.Add(failure);
+        _accumulator.RecordFailure(
+            entityId,
+            $"Graph update failed: {ex.Message}",
+            FailureClassifier.Classify(ex),
+            ex);
     }
 
     public void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context) =>
         context.DetachEntityWithOrphansRecursive(entity, _tc);
 
-    public WinnowResult<TKey> CreateResult(bool wasCancelled = false) => new()
-    {
-        SuccessfulIds = _successfulIds,
-        Failures = _failures,
-        GraphHierarchy = _graphHierarchy,
-        TraversalInfo = _statsTracker.CreateTraversalInfo(),
-        WasCancelled = wasCancelled
-    };
+    public WinnowResult<TKey> CreateResult(bool wasCancelled = false) => _accumulator.Build(wasCancelled, _graph);
 }

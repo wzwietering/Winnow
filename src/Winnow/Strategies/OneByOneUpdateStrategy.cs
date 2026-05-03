@@ -1,3 +1,4 @@
+using Winnow.Internal.Accumulators;
 using Winnow.Operations;
 
 namespace Winnow.Strategies;
@@ -11,7 +12,7 @@ internal class OneByOneUpdateStrategy<TEntity, TKey> : IUpdateStrategy<TEntity, 
         StrategyContext<TEntity, TKey> context,
         WinnowOptions options)
     {
-        var operation = new UpdateOperation<TEntity, TKey>(options);
+        var operation = new UpdateOperation<TEntity, TKey>(options, AccumulatorFactory.CreateWinnow<TKey>(options.ResultDetail));
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
@@ -22,7 +23,7 @@ internal class OneByOneUpdateStrategy<TEntity, TKey> : IUpdateStrategy<TEntity, 
         WinnowOptions options,
         CancellationToken cancellationToken)
     {
-        var operation = new UpdateOperation<TEntity, TKey>(options);
+        var operation = new UpdateOperation<TEntity, TKey>(options, AccumulatorFactory.CreateWinnow<TKey>(options.ResultDetail));
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.ExecuteAsync(entities, context, operation, cancellationToken);
     }

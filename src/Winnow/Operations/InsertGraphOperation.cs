@@ -1,4 +1,5 @@
 using Winnow.Internal;
+using Winnow.Internal.Accumulators;
 
 namespace Winnow.Operations;
 
@@ -8,14 +9,17 @@ internal class InsertGraphOperation<TEntity, TKey> : IInsertOperation<TEntity, T
 {
     private readonly InsertGraphOptions _options;
     private readonly TraversalContext _tc;
-    private readonly List<InsertedEntity<TKey>> _insertedEntities = [];
-    private readonly List<InsertFailure> _failures = [];
-    private readonly List<GraphNode<TKey>> _graphHierarchy = [];
-    private readonly GraphStatisticsTracker<TKey> _statsTracker = new();
+    private readonly InsertAccumulator<TKey> _accumulator;
+    private readonly GraphResultAccumulator<TKey> _graph;
 
-    internal InsertGraphOperation(InsertGraphOptions options)
+    internal InsertGraphOperation(
+        InsertGraphOptions options,
+        InsertAccumulator<TKey> accumulator,
+        GraphResultAccumulator<TKey> graph)
     {
         _options = options;
+        _accumulator = accumulator;
+        _graph = graph;
         _tc = TraversalContext.FromOptions(options);
     }
 
@@ -43,7 +47,7 @@ internal class InsertGraphOperation<TEntity, TKey> : IInsertOperation<TEntity, T
         if (_options.IncludeReferences)
         {
             var refResult = context.AttachEntityGraphAsAddedWithReferences(entity, _tc);
-            _statsTracker.AggregateReferenceStats(refResult);
+            _graph.AggregateReferenceStats(refResult);
         }
         else
         {
@@ -53,49 +57,34 @@ internal class InsertGraphOperation<TEntity, TKey> : IInsertOperation<TEntity, T
         if (_options.IncludeManyToMany)
         {
             var m2mResult = context.ProcessManyToManyForInsert(entity, _options);
-            _statsTracker.AggregateManyToManyStats(m2mResult);
+            _graph.AggregateManyToManyStats(m2mResult);
         }
     }
 
     public void RecordSuccess(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
+        _accumulator.RecordSuccess(entityId, index, entity);
 
-        _insertedEntities.Add(new InsertedEntity<TKey>
+        if (!_graph.IsActive)
         {
-            Id = entityId,
-            OriginalIndex = index,
-            Entity = entity
-        });
-
+            return;
+        }
         var (node, stats) = _options.IncludeReferences
             ? context.BuildGraphHierarchyWithReferences(entity, _tc)
             : context.BuildGraphHierarchy(entity, _tc);
-        _graphHierarchy.Add(node);
-        _statsTracker.AggregateStats(stats);
+        _graph.AddHierarchyNode(node, stats);
     }
 
-    public void RecordFailure(TEntity entity, int index, Exception ex, StrategyContext<TEntity, TKey> context)
-    {
-        var failure = new InsertFailure
-        {
-            EntityIndex = index,
-            ErrorMessage = $"Graph insert failed: {ex.Message}",
-            Reason = FailureClassifier.Classify(ex),
-            Exception = ex
-        };
-        _failures.Add(failure);
-    }
+    public void RecordFailure(TEntity entity, int index, Exception ex, StrategyContext<TEntity, TKey> context) =>
+        _accumulator.RecordFailure(
+            index,
+            $"Graph insert failed: {ex.Message}",
+            FailureClassifier.Classify(ex),
+            ex);
 
     public void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context) =>
         context.DetachEntityGraphRecursive(entity, _tc);
 
-    public InsertResult<TKey> CreateResult(bool wasCancelled = false) => new()
-    {
-        InsertedEntities = _insertedEntities,
-        Failures = _failures,
-        GraphHierarchy = _graphHierarchy,
-        TraversalInfo = _statsTracker.CreateTraversalInfo(),
-        WasCancelled = wasCancelled
-    };
+    public InsertResult<TKey> CreateResult(bool wasCancelled = false) => _accumulator.Build(wasCancelled, _graph);
 }

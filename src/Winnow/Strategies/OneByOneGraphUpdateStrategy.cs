@@ -1,3 +1,4 @@
+using Winnow.Internal.Accumulators;
 using Winnow.Operations;
 
 namespace Winnow.Strategies;
@@ -11,7 +12,7 @@ internal class OneByOneGraphUpdateStrategy<TEntity, TKey> : IGraphUpdateStrategy
         StrategyContext<TEntity, TKey> context,
         GraphOptions options)
     {
-        var operation = new UpdateGraphOperation<TEntity, TKey>(options);
+        var operation = BuildOperation(options);
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
@@ -22,8 +23,13 @@ internal class OneByOneGraphUpdateStrategy<TEntity, TKey> : IGraphUpdateStrategy
         GraphOptions options,
         CancellationToken cancellationToken)
     {
-        var operation = new UpdateGraphOperation<TEntity, TKey>(options);
+        var operation = BuildOperation(options);
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.ExecuteAsync(entities, context, operation, cancellationToken);
     }
+
+    private static UpdateGraphOperation<TEntity, TKey> BuildOperation(GraphOptions options) =>
+        new(options,
+            AccumulatorFactory.CreateWinnow<TKey>(options.ResultDetail),
+            AccumulatorFactory.CreateGraph<TKey>(options.ResultDetail));
 }

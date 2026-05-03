@@ -1,3 +1,4 @@
+using Winnow.Internal.Accumulators;
 using Winnow.Operations;
 
 namespace Winnow.Strategies;
@@ -11,7 +12,7 @@ internal class OneByOneDeleteStrategy<TEntity, TKey> : IDeleteStrategy<TEntity, 
         StrategyContext<TEntity, TKey> context,
         DeleteOptions options)
     {
-        var operation = new DeleteOperation<TEntity, TKey>(options);
+        var operation = new DeleteOperation<TEntity, TKey>(options, AccumulatorFactory.CreateWinnow<TKey>(options.ResultDetail));
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
@@ -22,7 +23,7 @@ internal class OneByOneDeleteStrategy<TEntity, TKey> : IDeleteStrategy<TEntity, 
         DeleteOptions options,
         CancellationToken cancellationToken)
     {
-        var operation = new DeleteOperation<TEntity, TKey>(options);
+        var operation = new DeleteOperation<TEntity, TKey>(options, AccumulatorFactory.CreateWinnow<TKey>(options.ResultDetail));
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.ExecuteAsync(entities, context, operation, cancellationToken);
     }

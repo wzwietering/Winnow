@@ -1,3 +1,4 @@
+using Winnow.Internal.Accumulators;
 using Winnow.Operations;
 
 namespace Winnow.Strategies;
@@ -11,7 +12,7 @@ internal class DivideAndConquerUpsertGraphStrategy<TEntity, TKey> : IUpsertGraph
         StrategyContext<TEntity, TKey> context,
         UpsertGraphOptions options)
     {
-        var operation = new UpsertGraphOperation<TEntity, TKey>(options);
+        var operation = BuildOperation(options);
         var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
         return strategy.ExecuteUpsert(entities, context, operation);
     }
@@ -22,8 +23,13 @@ internal class DivideAndConquerUpsertGraphStrategy<TEntity, TKey> : IUpsertGraph
         UpsertGraphOptions options,
         CancellationToken cancellationToken)
     {
-        var operation = new UpsertGraphOperation<TEntity, TKey>(options);
+        var operation = BuildOperation(options);
         var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
         return strategy.ExecuteUpsertAsync(entities, context, operation, cancellationToken);
     }
+
+    private static UpsertGraphOperation<TEntity, TKey> BuildOperation(UpsertGraphOptions options) =>
+        new(options,
+            AccumulatorFactory.CreateUpsert<TKey>(options.ResultDetail),
+            AccumulatorFactory.CreateGraph<TKey>(options.ResultDetail));
 }

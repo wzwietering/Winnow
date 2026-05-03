@@ -138,6 +138,21 @@ Memory follows the same pattern:
 
 **Guidance:** Use DivideAndConquer when failure rates are low (under ~5%). On PostgreSQL the crossover point is lower than on SQLite — at 25% failures the strategies are essentially equal. Pre-validate entities before calling the batch operation if you expect frequent failures.
 
+## ResultDetail
+
+`ResultDetailBenchmarks` measures `ResultDetail.Full` (default), `Minimal`, and `None` for both flat `Insert` and `InsertGraph` at 1K and 5K entities. The savings differ sharply by workload:
+
+- **Flat**: tracking adds ~31-34% over raw EF Core. `Minimal` drops entity refs and stats; `None` keeps only counts.
+- **Graph**: tracking is the dominant cost (~20-29 KB/entity vs ~10 KB for flat — 2-3x). Most of that is the recursive `GraphHierarchy` tree, which only `Full` captures. `Minimal` and `None` skip building it.
+
+Run the benchmark to measure for your workload:
+
+```bash
+dotnet run -c Release --project benchmarks/Winnow.Benchmarks -- --filter '*ResultDetailBenchmarks*'
+```
+
+`SuccessCount` and `FailureCount` are accurate at every level. Properties whose data was not captured throw `InvalidOperationException` on access. Correctness-side trackers (orphan deletion, M2M change tracking) are unaffected by `ResultDetail`.
+
 ## Choosing a Strategy
 
 | Scenario | Recommended Strategy |

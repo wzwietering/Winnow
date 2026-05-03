@@ -6,56 +6,90 @@ internal static class ResultMerger
         List<WinnowResult<TKey>> results,
         TimeSpan duration,
         int totalRoundTrips,
-        int totalRetries) where TKey : notnull, IEquatable<TKey> => new()
+        int totalRetries) where TKey : notnull, IEquatable<TKey>
     {
-        SuccessfulIds = results.SelectMany(r => r.SuccessfulIds).ToList(),
-        Failures = results.SelectMany(r => r.Failures).ToList(),
-        Duration = duration,
-        DatabaseRoundTrips = totalRoundTrips,
-        WasCancelled = results.Any(r => r.WasCancelled),
-        GraphHierarchy = MergeGraphHierarchy<TKey>(results.Cast<WinnowResultBase<TKey>>()),
-        TraversalInfo = MergeTraversalInfoFromResults<TKey>(results.Cast<WinnowResultBase<TKey>>()),
-        TotalRetries = totalRetries
-    };
+        var detail = results.Count > 0 ? results[0].ResultDetail : ResultDetail.Full;
+        return new WinnowResult<TKey>
+        {
+            ResultDetail = detail,
+            SuccessfulIds = MergeIds(results),
+            Failures = MergeWinnowFailures(results),
+            SuccessCount = results.Sum(r => r.SuccessCount),
+            FailureCount = results.Sum(r => r.FailureCount),
+            Duration = duration,
+            DatabaseRoundTrips = totalRoundTrips,
+            WasCancelled = results.Any(r => r.WasCancelled),
+            GraphHierarchy = MergeGraphHierarchy<TKey>(results.Cast<WinnowResultBase<TKey>>()),
+            TraversalInfo = MergeTraversalInfoFromResults<TKey>(results.Cast<WinnowResultBase<TKey>>()),
+            TotalRetries = totalRetries
+        };
+    }
 
     internal static InsertResult<TKey> MergeInsertResults<TKey>(
         List<(InsertResult<TKey> Result, int Offset)> partitions,
         TimeSpan duration,
         int totalRoundTrips,
-        int totalRetries) where TKey : notnull, IEquatable<TKey> => new()
+        int totalRetries) where TKey : notnull, IEquatable<TKey>
     {
-        InsertedEntities = RemapInsertedEntities<TKey>(partitions),
-        Failures = RemapInsertFailures(partitions),
-        Duration = duration,
-        DatabaseRoundTrips = totalRoundTrips,
-        WasCancelled = partitions.Any(p => p.Result.WasCancelled),
-        GraphHierarchy = MergeGraphHierarchy<TKey>(partitions.Select(p => (WinnowResultBase<TKey>)p.Result)),
-        TraversalInfo = MergeTraversalInfoFromResults<TKey>(partitions.Select(p => (WinnowResultBase<TKey>)p.Result)),
-        TotalRetries = totalRetries
-    };
+        var detail = partitions.Count > 0 ? partitions[0].Result.ResultDetail : ResultDetail.Full;
+        return new InsertResult<TKey>
+        {
+            ResultDetail = detail,
+            InsertedEntities = RemapInsertedEntities<TKey>(partitions),
+            InsertedIds = partitions.SelectMany(p => p.Result.InsertedIdsRaw).ToList(),
+            Failures = RemapInsertFailures(partitions),
+            SuccessCount = partitions.Sum(p => p.Result.SuccessCount),
+            FailureCount = partitions.Sum(p => p.Result.FailureCount),
+            Duration = duration,
+            DatabaseRoundTrips = totalRoundTrips,
+            WasCancelled = partitions.Any(p => p.Result.WasCancelled),
+            GraphHierarchy = MergeGraphHierarchy<TKey>(partitions.Select(p => (WinnowResultBase<TKey>)p.Result)),
+            TraversalInfo = MergeTraversalInfoFromResults<TKey>(partitions.Select(p => (WinnowResultBase<TKey>)p.Result)),
+            TotalRetries = totalRetries
+        };
+    }
 
     internal static UpsertResult<TKey> MergeUpsertResults<TKey>(
         List<(UpsertResult<TKey> Result, int Offset)> partitions,
         TimeSpan duration,
         int totalRoundTrips,
-        int totalRetries) where TKey : notnull, IEquatable<TKey> => new()
+        int totalRetries) where TKey : notnull, IEquatable<TKey>
     {
-        InsertedEntities = RemapUpsertedEntities<TKey>(partitions, e => e.InsertedEntities),
-        UpdatedEntities = RemapUpsertedEntities<TKey>(partitions, e => e.UpdatedEntities),
-        Failures = RemapUpsertFailures<TKey>(partitions),
-        Duration = duration,
-        DatabaseRoundTrips = totalRoundTrips,
-        WasCancelled = partitions.Any(p => p.Result.WasCancelled),
-        GraphHierarchy = MergeGraphHierarchy<TKey>(partitions.Select(p => (WinnowResultBase<TKey>)p.Result)),
-        TraversalInfo = MergeTraversalInfoFromResults<TKey>(partitions.Select(p => (WinnowResultBase<TKey>)p.Result)),
-        TotalRetries = totalRetries
-    };
+        var detail = partitions.Count > 0 ? partitions[0].Result.ResultDetail : ResultDetail.Full;
+        return new UpsertResult<TKey>
+        {
+            ResultDetail = detail,
+            InsertedEntities = RemapUpsertedEntities<TKey>(partitions, p => p.Result.InsertedEntitiesRaw),
+            UpdatedEntities = RemapUpsertedEntities<TKey>(partitions, p => p.Result.UpdatedEntitiesRaw),
+            InsertedIds = partitions.SelectMany(p => p.Result.InsertedIdsRaw).ToList(),
+            UpdatedIds = partitions.SelectMany(p => p.Result.UpdatedIdsRaw).ToList(),
+            Failures = RemapUpsertFailures<TKey>(partitions),
+            SuccessCount = partitions.Sum(p => p.Result.SuccessCount),
+            FailureCount = partitions.Sum(p => p.Result.FailureCount),
+            InsertedCount = partitions.Sum(p => p.Result.InsertedCount),
+            UpdatedCount = partitions.Sum(p => p.Result.UpdatedCount),
+            Duration = duration,
+            DatabaseRoundTrips = totalRoundTrips,
+            WasCancelled = partitions.Any(p => p.Result.WasCancelled),
+            GraphHierarchy = MergeGraphHierarchy<TKey>(partitions.Select(p => (WinnowResultBase<TKey>)p.Result)),
+            TraversalInfo = MergeTraversalInfoFromResults<TKey>(partitions.Select(p => (WinnowResultBase<TKey>)p.Result)),
+            TotalRetries = totalRetries
+        };
+    }
+
+    private static List<TKey> MergeIds<TKey>(List<WinnowResult<TKey>> results)
+        where TKey : notnull, IEquatable<TKey> =>
+        results.SelectMany(r => r.SuccessfulIdsRaw).ToList();
+
+    private static List<WinnowFailure<TKey>> MergeWinnowFailures<TKey>(List<WinnowResult<TKey>> results)
+        where TKey : notnull, IEquatable<TKey> =>
+        results.SelectMany(r => r.FailuresRaw).ToList();
 
     private static List<InsertedEntity<TKey>> RemapInsertedEntities<TKey>(
         List<(InsertResult<TKey> Result, int Offset)> partitions)
         where TKey : notnull, IEquatable<TKey>
     {
-        return partitions.SelectMany(p => p.Result.InsertedEntities.Select(e =>
+        return partitions.SelectMany(p => p.Result.InsertedEntitiesRaw.Select(e =>
             new InsertedEntity<TKey>
             {
                 Id = e.Id,
@@ -68,7 +102,7 @@ internal static class ResultMerger
         List<(InsertResult<TKey> Result, int Offset)> partitions)
         where TKey : notnull, IEquatable<TKey>
     {
-        return partitions.SelectMany(p => p.Result.Failures.Select(f =>
+        return partitions.SelectMany(p => p.Result.FailuresRaw.Select(f =>
             new InsertFailure
             {
                 EntityIndex = f.EntityIndex + p.Offset,
@@ -80,10 +114,10 @@ internal static class ResultMerger
 
     private static List<UpsertedEntity<TKey>> RemapUpsertedEntities<TKey>(
         List<(UpsertResult<TKey> Result, int Offset)> partitions,
-        Func<UpsertResult<TKey>, IReadOnlyList<UpsertedEntity<TKey>>> selector)
+        Func<(UpsertResult<TKey> Result, int Offset), IReadOnlyList<UpsertedEntity<TKey>>> selector)
         where TKey : notnull, IEquatable<TKey>
     {
-        return partitions.SelectMany(p => selector(p.Result).Select(e =>
+        return partitions.SelectMany(p => selector(p).Select(e =>
             new UpsertedEntity<TKey>
             {
                 Id = e.Id,
@@ -97,7 +131,7 @@ internal static class ResultMerger
         List<(UpsertResult<TKey> Result, int Offset)> partitions)
         where TKey : notnull, IEquatable<TKey>
     {
-        return partitions.SelectMany(p => p.Result.Failures.Select(f =>
+        return partitions.SelectMany(p => p.Result.FailuresRaw.Select(f =>
             new UpsertFailure<TKey>
             {
                 EntityIndex = f.EntityIndex + p.Offset,
@@ -114,8 +148,8 @@ internal static class ResultMerger
         IEnumerable<WinnowResultBase<TKey>> results) where TKey : notnull, IEquatable<TKey>
     {
         var hierarchies = results
-            .Where(r => r.GraphHierarchy is not null)
-            .SelectMany(r => r.GraphHierarchy!)
+            .Where(r => r.GraphHierarchyRaw is not null)
+            .SelectMany(r => r.GraphHierarchyRaw!)
             .ToList();
 
         return hierarchies.Count > 0 ? hierarchies : null;
@@ -125,7 +159,7 @@ internal static class ResultMerger
         IEnumerable<WinnowResultBase<TKey>> results) where TKey : notnull, IEquatable<TKey>
     {
         var traversals = results
-            .Select(r => r.TraversalInfo)
+            .Select(r => r.TraversalInfoRaw)
             .Where(t => t is not null)
             .Cast<GraphTraversalResult<TKey>>()
             .ToList();

@@ -138,6 +138,21 @@ Memory follows the same pattern:
 
 **Guidance:** Use DivideAndConquer when failure rates are low (under ~5%). If you expect frequent validation failures, consider pre-validating entities before calling the batch operation, or accept that DivideAndConquer will degrade to OneByOne-like performance for the affected batches.
 
+## ResultDetail
+
+`ResultDetailBenchmarks` measures `ResultDetail.Full` (default), `Minimal`, and `None` for both flat `Insert` and `InsertGraph` at 1K and 5K entities. The savings differ sharply by workload:
+
+- **Flat**: tracking adds ~27-30% over raw EF Core. `Minimal` drops entity refs and stats; `None` keeps only counts.
+- **Graph**: tracking is the dominant cost (~22-31 KB/entity vs ~11 KB for flat — 2-3x). Most of that is the recursive `GraphHierarchy` tree, which only `Full` captures. `Minimal` and `None` skip building it.
+
+Run the benchmark to measure for your workload:
+
+```bash
+dotnet run -c Release --project benchmarks/Winnow.Benchmarks -- --sqlite-only --filter '*ResultDetailBenchmarks*'
+```
+
+`SuccessCount` and `FailureCount` are accurate at every level. Properties whose data was not captured throw `InvalidOperationException` on access. Correctness-side trackers (orphan deletion, M2M change tracking) are unaffected by `ResultDetail`.
+
 ## Choosing a Strategy
 
 | Scenario | Recommended Strategy |

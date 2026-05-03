@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Winnow.Internal;
+using Winnow.Internal.Accumulators;
 
 namespace Winnow.Operations;
 
@@ -11,12 +13,12 @@ internal class UpdateOperation<TEntity, TKey> : IOperation<TEntity, TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly WinnowOptions _options;
-    private readonly List<TKey> _successfulIds = [];
-    private readonly List<WinnowFailure<TKey>> _failures = [];
+    private readonly WinnowAccumulator<TKey> _accumulator;
 
-    internal UpdateOperation(WinnowOptions options)
+    internal UpdateOperation(WinnowOptions options, WinnowAccumulator<TKey> accumulator)
     {
         _options = options;
+        _accumulator = accumulator;
     }
 
     public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
@@ -32,27 +34,21 @@ internal class UpdateOperation<TEntity, TKey> : IOperation<TEntity, TKey>
         }
     }
 
-    public void PrepareEntity(TEntity entity, StrategyContext<TEntity, TKey> context) => context.Context.Entry(entity).State = EntityState.Modified;
+    public void PrepareEntity(TEntity entity, StrategyContext<TEntity, TKey> context) =>
+        context.Context.Entry(entity).State = EntityState.Modified;
 
-    public void RecordSuccess(TEntity entity, StrategyContext<TEntity, TKey> context)
-    {
-        var entityId = context.GetEntityId(entity);
-        _successfulIds.Add(entityId);
-    }
+    public void RecordSuccess(TEntity entity, StrategyContext<TEntity, TKey> context) =>
+        _accumulator.RecordSuccess(context.GetEntityId(entity));
 
-    public void RecordFailure(TEntity entity, Exception ex, StrategyContext<TEntity, TKey> context)
-    {
-        var entityId = context.GetEntityId(entity);
-        var failure = context.CreateWinnowFailure(entityId, ex);
-        _failures.Add(failure);
-    }
+    public void RecordFailure(TEntity entity, Exception ex, StrategyContext<TEntity, TKey> context) =>
+        _accumulator.RecordFailure(
+            context.GetEntityId(entity),
+            ex.Message,
+            FailureClassifier.Classify(ex),
+            ex);
 
-    public void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context) => context.Context.Entry(entity).State = EntityState.Detached;
+    public void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context) =>
+        context.Context.Entry(entity).State = EntityState.Detached;
 
-    public WinnowResult<TKey> CreateResult(bool wasCancelled = false) => new()
-    {
-        SuccessfulIds = _successfulIds,
-        Failures = _failures,
-        WasCancelled = wasCancelled
-    };
+    public WinnowResult<TKey> CreateResult(bool wasCancelled = false) => _accumulator.Build(wasCancelled);
 }

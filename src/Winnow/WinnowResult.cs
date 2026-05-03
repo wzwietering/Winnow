@@ -1,3 +1,5 @@
+using Winnow.Internal;
+
 namespace Winnow;
 
 /// <summary>
@@ -5,28 +7,61 @@ namespace Winnow;
 /// </summary>
 public class WinnowResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, IEquatable<TKey>
 {
-    private IReadOnlyList<TKey>? _failedIds;
+    private readonly IReadOnlyList<TKey> _successfulIds = [];
+    private readonly IReadOnlyList<WinnowFailure<TKey>> _failures = [];
+    private IReadOnlyList<TKey>? _failedIdsCache;
 
     /// <summary>
-    /// IDs of entities that were successfully processed.
+    /// IDs of entities that were successfully processed. Throws when
+    /// <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower than
+    /// <see cref="ResultDetail.Minimal"/>.
     /// </summary>
-    public IReadOnlyList<TKey> SuccessfulIds { get; init; } = [];
+    public IReadOnlyList<TKey> SuccessfulIds
+    {
+        get => ResultDetail >= ResultDetail.Minimal
+            ? _successfulIds
+            : throw ResultDetailGuard.NotCaptured(nameof(SuccessfulIds), ResultDetail.Minimal, ResultDetail);
+        init => _successfulIds = value ?? [];
+    }
+
+    internal IReadOnlyList<TKey> SuccessfulIdsRaw => _successfulIds;
+
+    /// <summary>
+    /// Details of each failed entity operation. Throws when
+    /// <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower than
+    /// <see cref="ResultDetail.Minimal"/>. At <see cref="ResultDetail.Minimal"/>
+    /// the <see cref="WinnowFailure{TKey}.Exception"/> is null.
+    /// </summary>
+    public IReadOnlyList<WinnowFailure<TKey>> Failures
+    {
+        get => ResultDetail >= ResultDetail.Minimal
+            ? _failures
+            : throw ResultDetailGuard.NotCaptured(nameof(Failures), ResultDetail.Minimal, ResultDetail);
+        init => _failures = value ?? [];
+    }
+
+    internal IReadOnlyList<WinnowFailure<TKey>> FailuresRaw => _failures;
+
+    /// <summary>
+    /// IDs of entities that failed processing. Throws when
+    /// <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower than
+    /// <see cref="ResultDetail.Minimal"/>.
+    /// </summary>
+    public IReadOnlyList<TKey> FailedIds
+    {
+        get
+        {
+            if (ResultDetail < ResultDetail.Minimal)
+                throw ResultDetailGuard.NotCaptured(nameof(FailedIds), ResultDetail.Minimal, ResultDetail);
+            return _failedIdsCache ??= _failures.Select(f => f.EntityId).ToList();
+        }
+    }
 
     /// <inheritdoc />
-    public override int SuccessCount => SuccessfulIds.Count;
-
-    /// <summary>
-    /// Details of each failed entity operation.
-    /// </summary>
-    public IReadOnlyList<WinnowFailure<TKey>> Failures { get; init; } = [];
-
-    /// <summary>
-    /// IDs of entities that failed processing.
-    /// </summary>
-    public IReadOnlyList<TKey> FailedIds => _failedIds ??= Failures.Select(f => f.EntityId).ToList();
+    protected override int GetCollectionSuccessCount() => _successfulIds.Count;
 
     /// <inheritdoc />
-    public override int FailureCount => Failures.Count;
+    protected override int GetCollectionFailureCount() => _failures.Count;
 }
 
 /// <summary>
@@ -50,7 +85,7 @@ public class WinnowFailure<TKey> where TKey : notnull, IEquatable<TKey>
     public FailureReason Reason { get; init; }
 
     /// <summary>
-    /// The original exception, if available.
+    /// The original exception, if available. Null when ResultDetail is Minimal.
     /// </summary>
     public Exception? Exception { get; init; }
 }

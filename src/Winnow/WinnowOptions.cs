@@ -20,4 +20,12 @@ public class WinnowOptions
     /// When set, enables automatic retry with exponential backoff for transient failures.
     /// </summary>
     public RetryOptions? Retry { get; set; }
+
+    /// <summary>
+    /// Controls how much per-entity detail the result captures. Default: <see cref="Winnow.ResultDetail.Full"/>.
+    /// Lower levels (<see cref="Winnow.ResultDetail.Minimal"/>, <see cref="Winnow.ResultDetail.None"/>) reduce memory at the cost
+    /// of dropping reporting-only collections. <see cref="WinnowResultBase{TKey}.SuccessCount"/> and
+    /// <see cref="WinnowResultBase{TKey}.FailureCount"/> remain accurate at every level.
+    /// </summary>
+    public ResultDetail ResultDetail { get; set; } = ResultDetail.Full;
 }

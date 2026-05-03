@@ -1,3 +1,4 @@
+using Winnow.Internal.Accumulators;
 using Winnow.Operations;
 
 namespace Winnow.Strategies;
@@ -11,7 +12,7 @@ internal class OneByOneInsertStrategy<TEntity, TKey> : IInsertStrategy<TEntity, 
         StrategyContext<TEntity, TKey> context,
         InsertOptions options)
     {
-        var operation = new InsertOperation<TEntity, TKey>(options);
+        var operation = new InsertOperation<TEntity, TKey>(options, AccumulatorFactory.CreateInsert<TKey>(options.ResultDetail));
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.ExecuteInsert(entities, context, operation);
     }
@@ -22,7 +23,7 @@ internal class OneByOneInsertStrategy<TEntity, TKey> : IInsertStrategy<TEntity, 
         InsertOptions options,
         CancellationToken cancellationToken)
     {
-        var operation = new InsertOperation<TEntity, TKey>(options);
+        var operation = new InsertOperation<TEntity, TKey>(options, AccumulatorFactory.CreateInsert<TKey>(options.ResultDetail));
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.ExecuteInsertAsync(entities, context, operation, cancellationToken);
     }

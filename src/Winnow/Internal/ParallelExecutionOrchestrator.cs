@@ -185,12 +185,22 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     private WinnowResult<TKey> CreateWinnowFailureResult(List<TEntity> entities, Exception ex)
     {
         if (ex is OperationCanceledException)
-            return new WinnowResult<TKey> { WasCancelled = true, SuccessfulIds = [], Failures = [] };
+            return new WinnowResult<TKey>
+            {
+                WasCancelled = true,
+                SuccessfulIds = [],
+                Failures = [],
+                SuccessCount = 0,
+                FailureCount = 0
+            };
 
+        var failures = ExtractWinnowFailures(entities, ex);
         return new WinnowResult<TKey>
         {
             SuccessfulIds = [],
-            Failures = ExtractWinnowFailures(entities, ex)
+            Failures = failures,
+            SuccessCount = 0,
+            FailureCount = failures.Count
         };
     }
 
@@ -236,7 +246,14 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     private static InsertResult<TKey> CreateInsertFailureResult(List<TEntity> entities, Exception ex)
     {
         if (ex is OperationCanceledException)
-            return new InsertResult<TKey> { WasCancelled = true, InsertedEntities = [], Failures = [] };
+            return new InsertResult<TKey>
+            {
+                WasCancelled = true,
+                InsertedEntities = [],
+                Failures = [],
+                SuccessCount = 0,
+                FailureCount = 0
+            };
 
         var reason = FailureClassifier.Classify(ex);
         var failures = entities.Select((_, i) => new InsertFailure
@@ -247,7 +264,13 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
             Exception = ex
         }).ToList();
 
-        return new InsertResult<TKey> { InsertedEntities = [], Failures = failures };
+        return new InsertResult<TKey>
+        {
+            InsertedEntities = [],
+            Failures = failures,
+            SuccessCount = 0,
+            FailureCount = failures.Count
+        };
     }
 
     private static UpsertResult<TKey> CreateUpsertFailureResult(List<TEntity> entities, Exception ex)
@@ -255,7 +278,14 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         if (ex is OperationCanceledException)
             return new UpsertResult<TKey>
             {
-                WasCancelled = true, InsertedEntities = [], UpdatedEntities = [], Failures = []
+                WasCancelled = true,
+                InsertedEntities = [],
+                UpdatedEntities = [],
+                Failures = [],
+                SuccessCount = 0,
+                FailureCount = 0,
+                InsertedCount = 0,
+                UpdatedCount = 0
             };
 
         var reason = FailureClassifier.Classify(ex);
@@ -267,7 +297,16 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
             Exception = ex
         }).ToList();
 
-        return new UpsertResult<TKey> { InsertedEntities = [], UpdatedEntities = [], Failures = failures };
+        return new UpsertResult<TKey>
+        {
+            InsertedEntities = [],
+            UpdatedEntities = [],
+            Failures = failures,
+            SuccessCount = 0,
+            FailureCount = failures.Count,
+            InsertedCount = 0,
+            UpdatedCount = 0
+        };
     }
 
     private static List<(InsertResult<TKey> Result, int Offset)> ZipWithOffsets(

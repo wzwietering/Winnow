@@ -1,5 +1,6 @@
-using Winnow.Internal;
 using Microsoft.EntityFrameworkCore;
+using Winnow.Internal;
+using Winnow.Internal.Accumulators;
 
 namespace Winnow.Operations;
 
@@ -26,12 +27,13 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly UpsertOptions _options;
-    private readonly List<UpsertedEntity<TKey>> _insertedEntities = [];
-    private readonly List<UpsertedEntity<TKey>> _updatedEntities = [];
-    private readonly List<UpsertFailure<TKey>> _failures = [];
-    private readonly Dictionary<int, UpsertOperationType> _operationDecisions = [];
+    private readonly UpsertAccumulator<TKey> _accumulator;
 
-    internal UpsertOperation(UpsertOptions options) => _options = options;
+    internal UpsertOperation(UpsertOptions options, UpsertAccumulator<TKey> accumulator)
+    {
+        _options = options;
+        _accumulator = accumulator;
+    }
 
     public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {
@@ -49,55 +51,26 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
     public void PrepareEntity(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
         var isInsert = context.HasDefaultKeyValue(entity);
-        _operationDecisions[index] = isInsert ? UpsertOperationType.Insert : UpsertOperationType.Update;
+        _accumulator.RecordOperationDecision(
+            index, isInsert ? UpsertOperationType.Insert : UpsertOperationType.Update);
 
         context.Context.Entry(entity).State = isInsert ? EntityState.Added : EntityState.Modified;
     }
 
-    public void RecordSuccess(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
-    {
-        var entityId = context.GetEntityId(entity);
-        var operation = _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert);
-
-        var upsertedEntity = new UpsertedEntity<TKey>
-        {
-            Id = entityId,
-            OriginalIndex = index,
-            Entity = entity,
-            Operation = operation
-        };
-
-        if (operation == UpsertOperationType.Insert)
-        {
-            _insertedEntities.Add(upsertedEntity);
-        }
-        else
-        {
-            _updatedEntities.Add(upsertedEntity);
-        }
-    }
+    public void RecordSuccess(TEntity entity, int index, StrategyContext<TEntity, TKey> context) =>
+        _accumulator.RecordSuccess(context.GetEntityId(entity), index, entity);
 
     public void RecordFailure(TEntity entity, int index, Exception ex, StrategyContext<TEntity, TKey> context)
     {
-        var operation = _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert);
-        TKey? entityId = default;
-
-        if (operation == UpsertOperationType.Update)
-        {
-            entityId = context.GetEntityId(entity);
-        }
-
-        var failure = new UpsertFailure<TKey>
-        {
-            EntityIndex = index,
-            EntityId = entityId,
-            ErrorMessage = $"Upsert ({operation}) failed: {ex.Message}",
-            Reason = FailureClassifier.Classify(ex),
-            Exception = ex,
-            AttemptedOperation = operation,
-            IsDefaultKey = operation == UpsertOperationType.Insert
-        };
-        _failures.Add(failure);
+        var operation = _accumulator.GetOperationDecision(index);
+        TKey? entityId = operation == UpsertOperationType.Update ? context.GetEntityId(entity) : default;
+        _accumulator.RecordFailure(
+            index,
+            entityId,
+            $"Upsert ({operation}) failed: {ex.Message}",
+            FailureClassifier.Classify(ex),
+            ex,
+            operation);
     }
 
     public void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context)
@@ -113,31 +86,12 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
         }
     }
 
-    public UpsertResult<TKey> CreateResult(bool wasCancelled = false) => new()
-    {
-        InsertedEntities = _insertedEntities,
-        UpdatedEntities = _updatedEntities,
-        Failures = _failures,
-        WasCancelled = wasCancelled
-    };
+    public UpsertResult<TKey> CreateResult(bool wasCancelled = false) => _accumulator.Build(wasCancelled);
 
-    public bool WasInsertAttempt(int index) =>
-        _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert) == UpsertOperationType.Insert;
+    public bool WasInsertAttempt(int index) => _accumulator.WasInsertAttempt(index);
 
     public DuplicateKeyStrategy DuplicateKeyStrategy => _options.DuplicateKeyStrategy;
 
-    public void RecordSuccessAsUpdate(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
-    {
-        var entityId = context.GetEntityId(entity);
-        _operationDecisions[index] = UpsertOperationType.Update;
-
-        var upsertedEntity = new UpsertedEntity<TKey>
-        {
-            Id = entityId,
-            OriginalIndex = index,
-            Entity = entity,
-            Operation = UpsertOperationType.Update
-        };
-        _updatedEntities.Add(upsertedEntity);
-    }
+    public void RecordSuccessAsUpdate(TEntity entity, int index, StrategyContext<TEntity, TKey> context) =>
+        _accumulator.RecordSuccessAsUpdate(context.GetEntityId(entity), index, entity);
 }

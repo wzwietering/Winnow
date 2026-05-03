@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Winnow.Internal;
+using Winnow.Internal.Accumulators;
 
 namespace Winnow.Operations;
 
@@ -11,10 +13,13 @@ internal class InsertOperation<TEntity, TKey> : IInsertOperation<TEntity, TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly InsertOptions _options;
-    private readonly List<InsertedEntity<TKey>> _insertedEntities = [];
-    private readonly List<InsertFailure> _failures = [];
+    private readonly InsertAccumulator<TKey> _accumulator;
 
-    internal InsertOperation(InsertOptions options) => _options = options;
+    internal InsertOperation(InsertOptions options, InsertAccumulator<TKey> accumulator)
+    {
+        _options = options;
+        _accumulator = accumulator;
+    }
 
     public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {
@@ -29,24 +34,17 @@ internal class InsertOperation<TEntity, TKey> : IInsertOperation<TEntity, TKey>
         }
     }
 
-    public void PrepareEntity(TEntity entity, int index, StrategyContext<TEntity, TKey> context) => context.Context.Entry(entity).State = EntityState.Added;
+    public void PrepareEntity(TEntity entity, int index, StrategyContext<TEntity, TKey> context) =>
+        context.Context.Entry(entity).State = EntityState.Added;
 
     public void RecordSuccess(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
-        _insertedEntities.Add(new InsertedEntity<TKey>
-        {
-            Id = entityId,
-            OriginalIndex = index,
-            Entity = entity
-        });
+        _accumulator.RecordSuccess(entityId, index, entity);
     }
 
-    public void RecordFailure(TEntity entity, int index, Exception ex, StrategyContext<TEntity, TKey> context)
-    {
-        var failure = context.CreateInsertFailure(index, ex);
-        _failures.Add(failure);
-    }
+    public void RecordFailure(TEntity entity, int index, Exception ex, StrategyContext<TEntity, TKey> context) =>
+        _accumulator.RecordFailure(index, ex.Message, FailureClassifier.Classify(ex), ex);
 
     public void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context)
     {
@@ -61,10 +59,5 @@ internal class InsertOperation<TEntity, TKey> : IInsertOperation<TEntity, TKey>
         }
     }
 
-    public InsertResult<TKey> CreateResult(bool wasCancelled = false) => new()
-    {
-        InsertedEntities = _insertedEntities,
-        Failures = _failures,
-        WasCancelled = wasCancelled
-    };
+    public InsertResult<TKey> CreateResult(bool wasCancelled = false) => _accumulator.Build(wasCancelled);
 }

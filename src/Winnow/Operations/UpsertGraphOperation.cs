@@ -1,4 +1,5 @@
 using Winnow.Internal;
+using Winnow.Internal.Accumulators;
 
 namespace Winnow.Operations;
 
@@ -26,16 +27,17 @@ internal class UpsertGraphOperation<TEntity, TKey> : IUpsertOperation<TEntity, T
 {
     private readonly UpsertGraphOptions _options;
     private readonly TraversalContext _tc;
-    private readonly List<UpsertedEntity<TKey>> _insertedEntities = [];
-    private readonly List<UpsertedEntity<TKey>> _updatedEntities = [];
-    private readonly List<UpsertFailure<TKey>> _failures = [];
-    private readonly List<GraphNode<TKey>> _graphHierarchy = [];
-    private readonly Dictionary<int, UpsertOperationType> _operationDecisions = [];
-    private readonly GraphStatisticsTracker<TKey> _statsTracker = new();
+    private readonly UpsertAccumulator<TKey> _accumulator;
+    private readonly GraphResultAccumulator<TKey> _graph;
 
-    internal UpsertGraphOperation(UpsertGraphOptions options)
+    internal UpsertGraphOperation(
+        UpsertGraphOptions options,
+        UpsertAccumulator<TKey> accumulator,
+        GraphResultAccumulator<TKey> graph)
     {
         _options = options;
+        _accumulator = accumulator;
+        _graph = graph;
         _tc = TraversalContext.FromOptions(options);
     }
 
@@ -69,12 +71,13 @@ internal class UpsertGraphOperation<TEntity, TKey> : IUpsertOperation<TEntity, T
     public void PrepareEntity(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
         var isInsert = context.HasDefaultKeyValue(entity);
-        _operationDecisions[index] = isInsert ? UpsertOperationType.Insert : UpsertOperationType.Update;
+        _accumulator.RecordOperationDecision(
+            index, isInsert ? UpsertOperationType.Insert : UpsertOperationType.Update);
 
         if (_options.IncludeReferences)
         {
             var refResult = context.AttachEntityGraphAsUpsertWithReferences(entity, _tc);
-            _statsTracker.AggregateReferenceStats(refResult);
+            _graph.AggregateReferenceStats(refResult);
         }
         else
         {
@@ -97,79 +100,38 @@ internal class UpsertGraphOperation<TEntity, TKey> : IUpsertOperation<TEntity, T
         if (isInsert)
         {
             var m2mResult = context.ProcessManyToManyForInsert(entity, ToInsertGraphOptions());
-            _statsTracker.AggregateManyToManyStats(m2mResult);
+            _graph.AggregateManyToManyStats(m2mResult);
         }
         else
         {
             var m2mResult = context.ApplyManyToManyChanges(entity, ToGraphOptions());
-            _statsTracker.AggregateManyToManyStats(m2mResult);
+            _graph.AggregateManyToManyStats(m2mResult);
         }
     }
 
     public void RecordSuccess(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
-        var entityId = context.GetEntityId(entity);
-        var operation = _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert);
-
-        var upsertedEntity = new UpsertedEntity<TKey>
-        {
-            Id = entityId,
-            OriginalIndex = index,
-            Entity = entity,
-            Operation = operation
-        };
-
-        if (operation == UpsertOperationType.Insert)
-        {
-            _insertedEntities.Add(upsertedEntity);
-        }
-        else
-        {
-            _updatedEntities.Add(upsertedEntity);
-        }
-
-        var (node, stats) = _options.IncludeReferences
-            ? context.BuildGraphHierarchyWithReferences(entity, _tc)
-            : context.BuildGraphHierarchy(entity, _tc);
-        _graphHierarchy.Add(node);
-        _statsTracker.AggregateStats(stats);
+        _accumulator.RecordSuccess(context.GetEntityId(entity), index, entity);
+        AddHierarchyForEntity(entity, context);
     }
 
     public void RecordFailure(TEntity entity, int index, Exception ex, StrategyContext<TEntity, TKey> context)
     {
-        var operation = _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert);
-        TKey? entityId = default;
-
-        if (operation == UpsertOperationType.Update)
-        {
-            entityId = context.GetEntityId(entity);
-        }
-
-        var failure = new UpsertFailure<TKey>
-        {
-            EntityIndex = index,
-            EntityId = entityId,
-            ErrorMessage = $"Graph upsert ({operation}) failed: {ex.Message}",
-            Reason = FailureClassifier.Classify(ex),
-            Exception = ex,
-            AttemptedOperation = operation,
-            IsDefaultKey = operation == UpsertOperationType.Insert
-        };
-        _failures.Add(failure);
+        var operation = _accumulator.GetOperationDecision(index);
+        TKey? entityId = operation == UpsertOperationType.Update ? context.GetEntityId(entity) : default;
+        _accumulator.RecordFailure(
+            index,
+            entityId,
+            $"Graph upsert ({operation}) failed: {ex.Message}",
+            FailureClassifier.Classify(ex),
+            ex,
+            operation);
     }
 
     public void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context) =>
         context.DetachEntityWithOrphansRecursive(entity, _tc);
 
-    public UpsertResult<TKey> CreateResult(bool wasCancelled = false) => new()
-    {
-        InsertedEntities = _insertedEntities,
-        UpdatedEntities = _updatedEntities,
-        Failures = _failures,
-        GraphHierarchy = _graphHierarchy,
-        TraversalInfo = _statsTracker.CreateTraversalInfo(),
-        WasCancelled = wasCancelled
-    };
+    public UpsertResult<TKey> CreateResult(bool wasCancelled = false) => _accumulator.Build(wasCancelled, _graph);
 
     private GraphOptions ToGraphOptions() => new()
     {
@@ -178,7 +140,8 @@ internal class UpsertGraphOperation<TEntity, TKey> : IUpsertOperation<TEntity, T
         IncludeReferences = _options.IncludeReferences,
         CircularReferenceHandling = _options.CircularReferenceHandling,
         IncludeManyToMany = _options.IncludeManyToMany,
-        NavigationFilter = _options.NavigationFilter
+        NavigationFilter = _options.NavigationFilter,
+        ResultDetail = _options.ResultDetail
     };
 
     private InsertGraphOptions ToInsertGraphOptions() => new()
@@ -191,32 +154,29 @@ internal class UpsertGraphOperation<TEntity, TKey> : IUpsertOperation<TEntity, T
         ValidateManyToManyEntitiesExist = _options.ValidateManyToManyEntitiesExist,
         MaxManyToManyCollectionSize = _options.MaxManyToManyCollectionSize,
         ThrowOnUnsupportedValidation = _options.ThrowOnUnsupportedValidation,
-        NavigationFilter = _options.NavigationFilter
+        NavigationFilter = _options.NavigationFilter,
+        ResultDetail = _options.ResultDetail
     };
 
-    public bool WasInsertAttempt(int index) =>
-        _operationDecisions.GetValueOrDefault(index, UpsertOperationType.Insert) == UpsertOperationType.Insert;
+    public bool WasInsertAttempt(int index) => _accumulator.WasInsertAttempt(index);
 
     public DuplicateKeyStrategy DuplicateKeyStrategy => _options.DuplicateKeyStrategy;
 
     public void RecordSuccessAsUpdate(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
-        var entityId = context.GetEntityId(entity);
-        _operationDecisions[index] = UpsertOperationType.Update;
+        _accumulator.RecordSuccessAsUpdate(context.GetEntityId(entity), index, entity);
+        AddHierarchyForEntity(entity, context);
+    }
 
-        var upsertedEntity = new UpsertedEntity<TKey>
+    private void AddHierarchyForEntity(TEntity entity, StrategyContext<TEntity, TKey> context)
+    {
+        if (!_graph.IsActive)
         {
-            Id = entityId,
-            OriginalIndex = index,
-            Entity = entity,
-            Operation = UpsertOperationType.Update
-        };
-        _updatedEntities.Add(upsertedEntity);
-
+            return;
+        }
         var (node, stats) = _options.IncludeReferences
             ? context.BuildGraphHierarchyWithReferences(entity, _tc)
             : context.BuildGraphHierarchy(entity, _tc);
-        _graphHierarchy.Add(node);
-        _statsTracker.AggregateStats(stats);
+        _graph.AddHierarchyNode(node, stats);
     }
 }

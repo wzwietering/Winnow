@@ -1,3 +1,5 @@
+using Winnow.Internal;
+
 namespace Winnow;
 
 /// <summary>
@@ -6,29 +8,74 @@ namespace Winnow;
 /// </summary>
 public class InsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, IEquatable<TKey>
 {
-    private IReadOnlyList<TKey>? _insertedIds;
+    private readonly IReadOnlyList<InsertedEntity<TKey>> _insertedEntities = [];
+    private readonly IReadOnlyList<TKey> _explicitInsertedIds = [];
+    private readonly IReadOnlyList<InsertFailure> _failures = [];
+    private IReadOnlyList<TKey>? _insertedIdsCache;
 
     /// <summary>
     /// Entities that were successfully inserted with their generated IDs.
+    /// Throws when <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower
+    /// than <see cref="ResultDetail.Full"/>.
     /// </summary>
-    public IReadOnlyList<InsertedEntity<TKey>> InsertedEntities { get; init; } = [];
+    public IReadOnlyList<InsertedEntity<TKey>> InsertedEntities
+    {
+        get => ResultDetail >= ResultDetail.Full
+            ? _insertedEntities
+            : throw ResultDetailGuard.NotCaptured(
+                nameof(InsertedEntities), ResultDetail.Full, ResultDetail, $"{nameof(InsertedIds)}");
+        init => _insertedEntities = value ?? [];
+    }
+
+    internal IReadOnlyList<InsertedEntity<TKey>> InsertedEntitiesRaw => _insertedEntities;
 
     /// <summary>
-    /// Database-generated IDs of all successfully inserted entities.
+    /// Database-generated IDs of all successfully inserted entities. Throws
+    /// when <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower than
+    /// <see cref="ResultDetail.Minimal"/>.
     /// </summary>
-    public IReadOnlyList<TKey> InsertedIds =>
-        _insertedIds ??= InsertedEntities.Select(e => e.Id).ToList();
+    /// <remarks>
+    /// At <see cref="ResultDetail.Full"/>, the IDs are projected from
+    /// <see cref="InsertedEntities"/>. At <see cref="ResultDetail.Minimal"/>,
+    /// they are tracked directly.
+    /// </remarks>
+    public IReadOnlyList<TKey> InsertedIds
+    {
+        get
+        {
+            if (ResultDetail < ResultDetail.Minimal)
+                throw ResultDetailGuard.NotCaptured(nameof(InsertedIds), ResultDetail.Minimal, ResultDetail);
+            return _insertedIdsCache ??= _insertedEntities.Count > 0
+                ? _insertedEntities.Select(e => e.Id).ToList()
+                : _explicitInsertedIds;
+        }
+        init => _explicitInsertedIds = value ?? [];
+    }
 
-    /// <inheritdoc />
-    public override int SuccessCount => InsertedEntities.Count;
+    internal IReadOnlyList<TKey> InsertedIdsRaw => _explicitInsertedIds;
 
     /// <summary>
-    /// Details of each failed insert operation.
+    /// Details of each failed insert operation. Throws when
+    /// <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower than
+    /// <see cref="ResultDetail.Minimal"/>. At <see cref="ResultDetail.Minimal"/>
+    /// the <see cref="InsertFailure.Exception"/> is null.
     /// </summary>
-    public IReadOnlyList<InsertFailure> Failures { get; init; } = [];
+    public IReadOnlyList<InsertFailure> Failures
+    {
+        get => ResultDetail >= ResultDetail.Minimal
+            ? _failures
+            : throw ResultDetailGuard.NotCaptured(nameof(Failures), ResultDetail.Minimal, ResultDetail);
+        init => _failures = value ?? [];
+    }
+
+    internal IReadOnlyList<InsertFailure> FailuresRaw => _failures;
 
     /// <inheritdoc />
-    public override int FailureCount => Failures.Count;
+    protected override int GetCollectionSuccessCount() =>
+        _insertedEntities.Count > 0 ? _insertedEntities.Count : _explicitInsertedIds.Count;
+
+    /// <inheritdoc />
+    protected override int GetCollectionFailureCount() => _failures.Count;
 }
 
 /// <summary>
@@ -73,7 +120,7 @@ public class InsertFailure
     public FailureReason Reason { get; init; }
 
     /// <summary>
-    /// The original exception, if available.
+    /// The original exception, if available. Null when ResultDetail is Minimal.
     /// </summary>
     public Exception? Exception { get; init; }
 }
