@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Performance
 
-- Substantially lower allocations for large batches when callers opt into `ResultDetail.Minimal` or `ResultDetail.None`. Graph operations benefit most: at sub-`Full` detail the graph hierarchy and traversal statistics, typically the dominant memory cost, are no longer captured.
+- Memory savings of roughly 17–19% on `InsertGraph` workloads when callers opt into `ResultDetail.Minimal` or `ResultDetail.None`, by skipping the recursive `GraphHierarchy` tree and `TraversalInfo` statistics. Flat operations see negligible change since EF Core's change tracker dominates allocation there. See the per-provider benchmark docs for numbers.
 
 ## [1.0.0]
 
