@@ -54,4 +54,12 @@ public abstract class GraphOptionsBase
     /// When set, enables automatic retry with exponential backoff for transient failures.
     /// </summary>
     public RetryOptions? Retry { get; set; }
+
+    /// <summary>
+    /// Controls how much per-entity detail the result captures. Default: <see cref="Winnow.ResultDetail.Full"/>.
+    /// For graph operations, reducing detail also drops the graph hierarchy tree and traversal statistics,
+    /// which are typically the dominant memory cost. <see cref="WinnowResultBase{TKey}.SuccessCount"/>
+    /// and <see cref="WinnowResultBase{TKey}.FailureCount"/> remain accurate at every level.
+    /// </summary>
+    public ResultDetail ResultDetail { get; set; } = ResultDetail.Full;
 }

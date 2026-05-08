@@ -11,8 +11,9 @@ Used with `Update`.
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `ValidateNavigationProperties` | `bool` | `true` | When true, validates navigation properties are not modified |
 | `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff for transient failures |
+| `ResultDetail` | `ResultDetail` | `Full` | How much per-entity detail the result captures. Lower levels reduce memory; see [ResultDetail](#resultdetail) |
 
-All options classes that inherit from `WinnowOptions` also support `Strategy`, `ValidateNavigationProperties`, and `Retry`. All options classes that inherit from `GraphOptionsBase` also support `Retry`.
+All options classes that inherit from `WinnowOptions` also support `Strategy`, `ValidateNavigationProperties`, `Retry`, and `ResultDetail`. All options classes that inherit from `GraphOptionsBase` also support `Retry` and `ResultDetail`.
 
 ## InsertOptions
 
@@ -192,3 +193,41 @@ var result = saver.Update(entities, new WinnowOptions
 | `DuplicateKey` | Primary key or unique constraint violation. |
 | `Cancelled` | Operation was cancelled via CancellationToken. |
 | `UnknownError` | Unclassified error. |
+
+### ResultDetail
+
+Controls how much per-entity data the result captures. Numeric ordering is meaningful — `Full > Minimal > None`. Reducing detail does not change which rows are written, only what the result reports. `SuccessCount` and `FailureCount` remain accurate at every level.
+
+Properties whose backing data was not captured throw `InvalidOperationException` rather than returning silently empty collections.
+
+| Value | Description |
+|-------|-------------|
+| `Full` | Default. Captures inserted entity references, failure exceptions, graph hierarchy, and traversal statistics. |
+| `Minimal` | Captures successful IDs and failure indices/messages. Drops entity object references, exception object references, graph hierarchy, and traversal statistics. |
+| `None` | Captures only aggregate counts (`SuccessCount`, `FailureCount`, `TotalRetries`, `Duration`). |
+
+| Property | Available at |
+|----------|--------------|
+| `SuccessCount`, `FailureCount`, `Duration`, `TotalRetries`, `WasCancelled`, `IsCompleteSuccess`/`IsCompleteFailure`/`IsPartialSuccess` | `Full`, `Minimal`, `None` |
+| `SuccessfulIds`, `InsertedIds`, `UpdatedIds`, `FailedIds`, `Failures` | `Full`, `Minimal` |
+| `Failures[i].Exception` | `Full` only (null at `Minimal`) |
+| `InsertedEntities`, `UpdatedEntities`, `AllUpsertedEntities` | `Full` only |
+| `GraphHierarchy`, `TraversalInfo` | `Full` only |
+
+```csharp
+// Full (default) — best for debugging or when entity refs are needed downstream
+var result = saver.Insert(items, new InsertOptions { ResultDetail = ResultDetail.Full });
+var entity = result.InsertedEntities[0].Entity;
+
+// Minimal — drop entity refs and graph hierarchy; keep IDs and failure metadata
+var result = saver.Insert(items, new InsertOptions { ResultDetail = ResultDetail.Minimal });
+var ids = result.InsertedIds;
+// result.InsertedEntities throws InvalidOperationException
+
+// None — fastest path, counts only
+var result = saver.Insert(items, new InsertOptions { ResultDetail = ResultDetail.None });
+var n = result.SuccessCount;
+// result.InsertedIds throws InvalidOperationException
+```
+
+> **Note:** `ResultDetail` controls reporting only. Correctness-side trackers (orphan deletion, many-to-many link change tracking) run at every level, so `OrphanBehavior.Delete` and `IncludeManyToMany` continue to work correctly when `ResultDetail` is `Minimal` or `None`.

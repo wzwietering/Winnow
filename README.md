@@ -272,7 +272,7 @@ Console.WriteLine($"Round trips: {result.DatabaseRoundTrips}");
 Console.WriteLine($"Duration: {result.Duration}");
 ```
 
-For full result type documentation, see [Results Reference](docs/results-reference.md).
+For full result type documentation, see [Results Reference](docs/results-reference.md). To trade reporting detail for lower allocation (especially on graph operations, where per-entity tracking dominates memory), set `ResultDetail` on the options object — see [`ResultDetail`](docs/api/options-reference.md#resultdetail).
 
 ## When to Use What
 

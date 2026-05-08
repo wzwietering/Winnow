@@ -15,18 +15,21 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     private readonly Lazy<(DbContext Context, EntityKeyService<TEntity, TKey> Service)> _keyService;
 
     private readonly RetryOptions? _retryOptions;
+    private readonly ResultDetail _resultDetail;
     private record PartitionResult<TResult>(TResult Result, int RoundTrips, int Retries);
 
     internal ParallelExecutionOrchestrator(
         Func<DbContext> contextFactory,
         int maxDegreeOfParallelism,
         ILogger? logger = null,
-        RetryOptions? retryOptions = null)
+        RetryOptions? retryOptions = null,
+        ResultDetail resultDetail = ResultDetail.Full)
     {
         _contextFactory = contextFactory ?? throw new ArgumentNullException(nameof(contextFactory));
         _maxDegreeOfParallelism = maxDegreeOfParallelism;
         _logger = logger;
         _retryOptions = retryOptions;
+        _resultDetail = resultDetail;
         _keyService = new Lazy<(DbContext, EntityKeyService<TEntity, TKey>)>(() =>
         {
             var ctx = _contextFactory();
@@ -185,12 +188,26 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     private WinnowResult<TKey> CreateWinnowFailureResult(List<TEntity> entities, Exception ex)
     {
         if (ex is OperationCanceledException)
-            return new WinnowResult<TKey> { WasCancelled = true, SuccessfulIds = [], Failures = [] };
+            return new WinnowResult<TKey>
+            {
+                ResultDetail = _resultDetail,
+                WasCancelled = true,
+                SuccessfulIds = [],
+                Failures = [],
+                SuccessCount = 0,
+                FailureCount = 0
+            };
 
+        var failures = _resultDetail >= ResultDetail.Minimal
+            ? ExtractWinnowFailures(entities, ex)
+            : [];
         return new WinnowResult<TKey>
         {
+            ResultDetail = _resultDetail,
             SuccessfulIds = [],
-            Failures = ExtractWinnowFailures(entities, ex)
+            Failures = failures,
+            SuccessCount = 0,
+            FailureCount = entities.Count
         };
     }
 
@@ -213,61 +230,110 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         List<TEntity> entities, Exception ex, FailureReason reason)
     {
         var keyService = _keyService.Value.Service;
+        var capturedException = _resultDetail >= ResultDetail.Full ? ex : null;
         return entities.Select(e => new WinnowFailure<TKey>
         {
             EntityId = keyService.GetEntityId(e),
             ErrorMessage = ex.Message,
             Reason = reason,
-            Exception = ex
+            Exception = capturedException
         }).ToList();
     }
 
-    private static List<WinnowFailure<TKey>> CreateFailuresWithoutKeys(
+    private List<WinnowFailure<TKey>> CreateFailuresWithoutKeys(
         List<TEntity> entities, Exception ex, FailureReason reason, string suffix = "")
     {
+        var capturedException = _resultDetail >= ResultDetail.Full ? ex : null;
         return entities.Select(_ => new WinnowFailure<TKey>
         {
             ErrorMessage = ex.Message + suffix,
             Reason = reason,
-            Exception = ex
+            Exception = capturedException
         }).ToList();
     }
 
-    private static InsertResult<TKey> CreateInsertFailureResult(List<TEntity> entities, Exception ex)
+    private InsertResult<TKey> CreateInsertFailureResult(List<TEntity> entities, Exception ex)
     {
         if (ex is OperationCanceledException)
-            return new InsertResult<TKey> { WasCancelled = true, InsertedEntities = [], Failures = [] };
+            return new InsertResult<TKey>
+            {
+                ResultDetail = _resultDetail,
+                WasCancelled = true,
+                InsertedEntities = [],
+                Failures = [],
+                SuccessCount = 0,
+                FailureCount = 0
+            };
 
+        var failures = _resultDetail >= ResultDetail.Minimal
+            ? BuildInsertFailures(entities, ex)
+            : [];
+        return new InsertResult<TKey>
+        {
+            ResultDetail = _resultDetail,
+            InsertedEntities = [],
+            Failures = failures,
+            SuccessCount = 0,
+            FailureCount = entities.Count
+        };
+    }
+
+    private List<InsertFailure> BuildInsertFailures(List<TEntity> entities, Exception ex)
+    {
         var reason = FailureClassifier.Classify(ex);
-        var failures = entities.Select((_, i) => new InsertFailure
+        var capturedException = _resultDetail >= ResultDetail.Full ? ex : null;
+        return entities.Select((_, i) => new InsertFailure
         {
             EntityIndex = i,
             ErrorMessage = ex.Message,
             Reason = reason,
-            Exception = ex
+            Exception = capturedException
         }).ToList();
-
-        return new InsertResult<TKey> { InsertedEntities = [], Failures = failures };
     }
 
-    private static UpsertResult<TKey> CreateUpsertFailureResult(List<TEntity> entities, Exception ex)
+    private UpsertResult<TKey> CreateUpsertFailureResult(List<TEntity> entities, Exception ex)
     {
         if (ex is OperationCanceledException)
             return new UpsertResult<TKey>
             {
-                WasCancelled = true, InsertedEntities = [], UpdatedEntities = [], Failures = []
+                ResultDetail = _resultDetail,
+                WasCancelled = true,
+                InsertedEntities = [],
+                UpdatedEntities = [],
+                Failures = [],
+                SuccessCount = 0,
+                FailureCount = 0,
+                InsertedCount = 0,
+                UpdatedCount = 0
             };
 
+        var failures = _resultDetail >= ResultDetail.Minimal
+            ? BuildUpsertFailures(entities, ex)
+            : [];
+        return new UpsertResult<TKey>
+        {
+            ResultDetail = _resultDetail,
+            InsertedEntities = [],
+            UpdatedEntities = [],
+            Failures = failures,
+            SuccessCount = 0,
+            FailureCount = entities.Count,
+            InsertedCount = 0,
+            UpdatedCount = 0
+        };
+    }
+
+    private List<UpsertFailure<TKey>> BuildUpsertFailures(List<TEntity> entities, Exception ex)
+    {
         var reason = FailureClassifier.Classify(ex);
-        var failures = entities.Select((_, i) => new UpsertFailure<TKey>
+        var capturedException = _resultDetail >= ResultDetail.Full ? ex : null;
+        return entities.Select((_, i) => new UpsertFailure<TKey>
         {
             EntityIndex = i,
             ErrorMessage = ex.Message,
             Reason = reason,
-            Exception = ex
+            Exception = capturedException
         }).ToList();
-
-        return new UpsertResult<TKey> { InsertedEntities = [], UpdatedEntities = [], Failures = failures };
     }
 
     private static List<(InsertResult<TKey> Result, int Offset)> ZipWithOffsets(

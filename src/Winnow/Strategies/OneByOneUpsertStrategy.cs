@@ -1,3 +1,4 @@
+using Winnow.Internal.Accumulators;
 using Winnow.Operations;
 
 namespace Winnow.Strategies;
@@ -11,7 +12,7 @@ internal class OneByOneUpsertStrategy<TEntity, TKey> : IUpsertStrategy<TEntity, 
         StrategyContext<TEntity, TKey> context,
         UpsertOptions options)
     {
-        var operation = new UpsertOperation<TEntity, TKey>(options);
+        var operation = new UpsertOperation<TEntity, TKey>(options, AccumulatorFactory.CreateUpsert<TKey>(options.ResultDetail));
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.ExecuteUpsert(entities, context, operation);
     }
@@ -22,7 +23,7 @@ internal class OneByOneUpsertStrategy<TEntity, TKey> : IUpsertStrategy<TEntity, 
         UpsertOptions options,
         CancellationToken cancellationToken)
     {
-        var operation = new UpsertOperation<TEntity, TKey>(options);
+        var operation = new UpsertOperation<TEntity, TKey>(options, AccumulatorFactory.CreateUpsert<TKey>(options.ResultDetail));
         var strategy = new GenericOneByOneStrategy<TEntity, TKey>();
         return strategy.ExecuteUpsertAsync(entities, context, operation, cancellationToken);
     }

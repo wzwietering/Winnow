@@ -1,3 +1,4 @@
+using Winnow.Internal.Accumulators;
 using Winnow.Operations;
 
 namespace Winnow.Strategies;
@@ -11,7 +12,7 @@ internal class DivideAndConquerUpdateStrategy<TEntity, TKey> : IUpdateStrategy<T
         StrategyContext<TEntity, TKey> context,
         WinnowOptions options)
     {
-        var operation = new UpdateOperation<TEntity, TKey>(options);
+        var operation = new UpdateOperation<TEntity, TKey>(options, AccumulatorFactory.CreateWinnow<TKey>(options.ResultDetail));
         var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
         return strategy.Execute(entities, context, operation);
     }
@@ -22,7 +23,7 @@ internal class DivideAndConquerUpdateStrategy<TEntity, TKey> : IUpdateStrategy<T
         WinnowOptions options,
         CancellationToken cancellationToken)
     {
-        var operation = new UpdateOperation<TEntity, TKey>(options);
+        var operation = new UpdateOperation<TEntity, TKey>(options, AccumulatorFactory.CreateWinnow<TKey>(options.ResultDetail));
         var strategy = new GenericDivideAndConquerStrategy<TEntity, TKey>();
         return strategy.ExecuteAsync(entities, context, operation, cancellationToken);
     }
