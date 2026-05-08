@@ -140,12 +140,29 @@ Memory follows the same pattern:
 
 ## ResultDetail
 
-`ResultDetailBenchmarks` measures `ResultDetail.Full` (default), `Minimal`, and `None` for both flat `Insert` and `InsertGraph` at 1K and 5K entities. The savings differ sharply by workload:
+`ResultDetailBenchmarks` measures `ResultDetail.Full` (default), `Minimal`, and `None` for both flat `Insert` and `InsertGraph`. Graph batch size refers to root entities; total entity count is 5x larger.
 
-- **Flat**: tracking adds ~30-36% over raw EF Core. `Minimal` drops entity refs and stats; `None` keeps only counts.
-- **Graph**: tracking is the dominant cost (~20-29 KB/entity vs ~9 KB for flat — 2-3x). Most of that is the recursive `GraphHierarchy` tree, which only `Full` captures. `Minimal` and `None` skip building it.
+> Numbers below were captured on Linux (Ubuntu 24.04 / WSL2) on the same Core Ultra 5 225U as the rest of this doc. Other sections were captured on Windows 11; absolute timings may differ slightly across the OS boundary, but the cross-detail trends are robust.
 
-Run the benchmark to measure for your workload:
+### Flat Insert
+
+| Detail | 1K time | 1K memory | 5K time | 5K memory |
+|---|---|---|---|---|
+| Full | 66.0 ms | 9.76 MB | 204.6 ms | 46.63 MB |
+| Minimal | 70.9 ms | 9.52 MB | 216.0 ms | 46.41 MB |
+| None | 100.8 ms | 9.72 MB | 200.2 ms | 46.35 MB |
+
+For flat inserts `ResultDetail` has no meaningful impact on memory — all three levels land inside ~0.3 MB of each other at every batch size. Time variance at 1K (66 ms vs 101 ms across levels) is dominated by error bars (`±5–28 ms`); it is not a real ordering. Choose `Full` for flat inserts unless you are explicitly trying to drop exception object references at `Minimal`.
+
+### InsertGraph (3-level: Order → OrderItem ×2 → OrderReservation)
+
+| Detail | 1K roots time | 1K memory | 5K roots time | 5K memory |
+|---|---|---|---|---|
+| Full | 290.2 ms | 97.59 MB | 1,166.0 ms | 487.85 MB |
+| Minimal | 241.7 ms | 78.96 MB | 1,116.3 ms | 396.40 MB |
+| None | 251.2 ms | 78.57 MB | 1,376.6 ms | 396.31 MB |
+
+For `InsertGraph` lowering `ResultDetail` cuts roughly **19% of total allocation** (~92 MB saved at 5K roots / 25K entities). The savings come from skipping the recursive `GraphHierarchy` tree and `TraversalInfo` statistics, which `Minimal` and `None` no longer build. `Minimal` and `None` are essentially identical in cost — choose `Minimal` if you still want the inserted-ID list; choose `None` if counts alone are sufficient. Time is roughly unchanged across detail levels; the `None` outlier at 5K (1,377 ms) is well within its `±112 ms` error band.
 
 ```bash
 dotnet run -c Release --project benchmarks/Winnow.Benchmarks -- --filter '*ResultDetailBenchmarks*'
