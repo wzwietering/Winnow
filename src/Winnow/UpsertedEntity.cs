@@ -28,8 +28,15 @@ public class UpsertedEntity<TKey> where TKey : notnull, IEquatable<TKey>
     public int OriginalIndex { get; init; }
 
     /// <summary>
-    /// Reference to the entity.
+    /// Reference to the entity. Cast to your <c>TEntity</c> type to access typed
+    /// properties.
     /// </summary>
+    /// <remarks>
+    /// Typed as <see cref="object"/> because <see cref="UpsertResult{TKey}"/> does
+    /// not carry the entity type as a generic parameter. For inserts the reference
+    /// is the same instance the caller passed in with its key populated; for
+    /// updates it is the same instance with its scalar properties refreshed.
+    /// </remarks>
     public object Entity { get; init; } = null!;
 
     /// <summary>

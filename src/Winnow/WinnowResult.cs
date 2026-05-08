@@ -3,8 +3,24 @@ using Winnow.Internal;
 namespace Winnow;
 
 /// <summary>
-/// Entity to report succeeded and failed CRUD entities
+/// Result of an update or delete batch, listing successful entity IDs and per-entity failures.
 /// </summary>
+/// <remarks>
+/// When <see cref="WinnowResultBase{TKey}.ResultDetail"/> is reduced from the
+/// default <see cref="ResultDetail.Full"/>, several properties throw
+/// <see cref="InvalidOperationException"/> on access:
+/// <list type="bullet">
+///   <item>At <see cref="ResultDetail.None"/>: <see cref="SuccessfulIds"/>,
+///   <see cref="Failures"/>, <see cref="FailedIds"/>,
+///   <see cref="WinnowResultBase{TKey}.GraphHierarchy"/>,
+///   <see cref="WinnowResultBase{TKey}.TraversalInfo"/>.</item>
+///   <item>At <see cref="ResultDetail.Minimal"/>: only the graph properties throw.</item>
+/// </list>
+/// <see cref="WinnowResultBase{TKey}.SuccessCount"/>,
+/// <see cref="WinnowResultBase{TKey}.FailureCount"/>,
+/// <see cref="WinnowResultBase{TKey}.Duration"/>, and
+/// <see cref="WinnowResultBase{TKey}.WasCancelled"/> are always available.
+/// </remarks>
 public class WinnowResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, IEquatable<TKey>
 {
     private readonly IReadOnlyList<TKey> _successfulIds = [];

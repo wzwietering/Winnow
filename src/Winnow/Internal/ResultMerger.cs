@@ -93,6 +93,9 @@ internal static class ResultMerger
 
     private static ResultDetail ResolveDetail<T>(IReadOnlyList<T> items, Func<T, ResultDetail> selector)
     {
+        // Empty partition list is unreachable in practice — the orchestrator
+        // only invokes the merger when at least one partition exists. The
+        // Full fallback is a safe default that never suppresses data.
         if (items.Count == 0)
             return ResultDetail.Full;
         var detail = selector(items[0]);

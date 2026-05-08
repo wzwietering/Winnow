@@ -13,9 +13,12 @@ internal static class ResultDetailGuard
         ResultDetail actual,
         string? alternative = null)
     {
+        var fallback = alternative is null
+            ? string.Empty
+            : $", or use {alternative} instead";
         var message =
             $"{propertyName} requires ResultDetail.{required} or higher; current is ResultDetail.{actual}. " +
-            $"Either raise the ResultDetail on the operation options, or use {alternative ?? "SuccessCount/FailureCount"} instead.";
+            $"Raise the ResultDetail on the operation options{fallback}.";
         return new InvalidOperationException(message);
     }
 }

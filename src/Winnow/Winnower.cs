@@ -63,7 +63,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyResult(stopwatch);
+            return CreateEmptyResult(stopwatch, options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -90,7 +90,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyResult(stopwatch);
+            return CreateEmptyResult(stopwatch, options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -127,7 +127,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyGraphResult(stopwatch);
+            return CreateEmptyGraphResult(stopwatch, options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -159,7 +159,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyGraphResult(stopwatch);
+            return CreateEmptyGraphResult(stopwatch, options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -191,7 +191,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyInsertResult(stopwatch);
+            return CreateEmptyInsertResult(stopwatch, resultDetail: options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -223,7 +223,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyInsertResult(stopwatch);
+            return CreateEmptyInsertResult(stopwatch, resultDetail: options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -255,7 +255,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyInsertResult(stopwatch, includeGraph: true);
+            return CreateEmptyInsertResult(stopwatch, includeGraph: true, resultDetail: options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -287,7 +287,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyInsertResult(stopwatch, includeGraph: true);
+            return CreateEmptyInsertResult(stopwatch, includeGraph: true, resultDetail: options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -319,7 +319,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyResult(stopwatch);
+            return CreateEmptyResult(stopwatch, options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -351,7 +351,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyResult(stopwatch);
+            return CreateEmptyResult(stopwatch, options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -383,7 +383,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyGraphResult(stopwatch);
+            return CreateEmptyGraphResult(stopwatch, options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -415,7 +415,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyGraphResult(stopwatch);
+            return CreateEmptyGraphResult(stopwatch, options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -447,7 +447,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
         var entityList = entities.ToList();
 
         if (entityList.Count == 0)
-            return CreateEmptyUpsertResult(stopwatch);
+            return CreateEmptyUpsertResult(stopwatch, resultDetail: options.ResultDetail);
 
         var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = StrategyFactory.CreateUpsertStrategy<TEntity, TKey>(options.Strategy);
@@ -477,7 +477,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyUpsertResult(stopwatch);
+            return CreateEmptyUpsertResult(stopwatch, resultDetail: options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -507,7 +507,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
         var entityList = entities.ToList();
 
         if (entityList.Count == 0)
-            return CreateEmptyUpsertResult(stopwatch, includeGraph: true);
+            return CreateEmptyUpsertResult(stopwatch, includeGraph: true, resultDetail: options.ResultDetail);
 
         var strategyContext = CreateStrategyContext(options.Retry);
         var strategy = StrategyFactory.CreateUpsertGraphStrategy<TEntity, TKey>(options.Strategy);
@@ -537,7 +537,7 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
 
         if (entityList.Count == 0)
         {
-            return CreateEmptyUpsertResult(stopwatch, includeGraph: true);
+            return CreateEmptyUpsertResult(stopwatch, includeGraph: true, resultDetail: options.ResultDetail);
         }
 
         var strategyContext = CreateStrategyContext(options.Retry);
@@ -555,10 +555,10 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
     private StrategyContext<TEntity, TKey> CreateStrategyContext(RetryOptions? retry) =>
         new(_context) { Logger = _logger, RetryOptions = retry };
 
-    private WinnowResult<TKey> CreateEmptyResult(Stopwatch stopwatch)
+    private WinnowResult<TKey> CreateEmptyResult(Stopwatch stopwatch, ResultDetail resultDetail = ResultDetail.Full)
     {
         stopwatch.Stop();
-        return ResultFactory.CreateEmpty<TKey>(stopwatch.Elapsed);
+        return ResultFactory.CreateEmpty<TKey>(stopwatch.Elapsed, resultDetail: resultDetail);
     }
 
     private WinnowResult<TKey> EnrichResultWithMetrics(
@@ -573,16 +573,19 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
         return enriched;
     }
 
-    private WinnowResult<TKey> CreateEmptyGraphResult(Stopwatch stopwatch)
+    private WinnowResult<TKey> CreateEmptyGraphResult(Stopwatch stopwatch, ResultDetail resultDetail = ResultDetail.Full)
     {
         stopwatch.Stop();
-        return ResultFactory.CreateEmpty<TKey>(stopwatch.Elapsed, includeGraph: true);
+        return ResultFactory.CreateEmpty<TKey>(stopwatch.Elapsed, includeGraph: true, resultDetail: resultDetail);
     }
 
-    private InsertResult<TKey> CreateEmptyInsertResult(Stopwatch stopwatch, bool includeGraph = false)
+    private InsertResult<TKey> CreateEmptyInsertResult(
+        Stopwatch stopwatch,
+        bool includeGraph = false,
+        ResultDetail resultDetail = ResultDetail.Full)
     {
         stopwatch.Stop();
-        return ResultFactory.CreateEmptyInsert<TKey>(stopwatch.Elapsed, includeGraph);
+        return ResultFactory.CreateEmptyInsert<TKey>(stopwatch.Elapsed, includeGraph, resultDetail);
     }
 
     private InsertResult<TKey> EnrichInsertResultWithMetrics(
@@ -597,10 +600,13 @@ public class Winnower<TEntity, TKey> : IWinnower<TEntity, TKey>
         return enriched;
     }
 
-    private UpsertResult<TKey> CreateEmptyUpsertResult(Stopwatch stopwatch, bool includeGraph = false)
+    private UpsertResult<TKey> CreateEmptyUpsertResult(
+        Stopwatch stopwatch,
+        bool includeGraph = false,
+        ResultDetail resultDetail = ResultDetail.Full)
     {
         stopwatch.Stop();
-        return ResultFactory.CreateEmptyUpsert<TKey>(stopwatch.Elapsed, includeGraph);
+        return ResultFactory.CreateEmptyUpsert<TKey>(stopwatch.Elapsed, includeGraph, resultDetail);
     }
 
     private UpsertResult<TKey> EnrichUpsertResultWithMetrics(

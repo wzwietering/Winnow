@@ -11,6 +11,30 @@ namespace Winnow;
 /// This is NOT an atomic database-level upsert (MERGE/INSERT ON CONFLICT).
 /// It performs conditional INSERT or UPDATE operations based on key detection.
 /// </para>
+/// <para><strong>ResultDetail-gated properties:</strong></para>
+/// <para>
+/// When <see cref="WinnowResultBase{TKey}.ResultDetail"/> is reduced from the
+/// default <see cref="ResultDetail.Full"/>, several properties throw
+/// <see cref="InvalidOperationException"/> on access:
+/// </para>
+/// <list type="bullet">
+///   <item>At <see cref="ResultDetail.None"/>: <see cref="InsertedEntities"/>,
+///   <see cref="UpdatedEntities"/>, <see cref="AllUpsertedEntities"/>,
+///   <see cref="GetByIndex"/>, <see cref="InsertedIds"/>, <see cref="UpdatedIds"/>,
+///   <see cref="SuccessfulIds"/>, <see cref="Failures"/>,
+///   <see cref="WinnowResultBase{TKey}.GraphHierarchy"/>,
+///   <see cref="WinnowResultBase{TKey}.TraversalInfo"/>.</item>
+///   <item>At <see cref="ResultDetail.Minimal"/>: the entity collections,
+///   <see cref="GetByIndex"/>, and the graph properties throw; ID lists and
+///   <see cref="Failures"/> are populated but <see cref="UpsertFailure{TKey}.Exception"/>
+///   is null.</item>
+/// </list>
+/// <para>
+/// <see cref="WinnowResultBase{TKey}.SuccessCount"/>,
+/// <see cref="WinnowResultBase{TKey}.FailureCount"/>, <see cref="InsertedCount"/>,
+/// <see cref="UpdatedCount"/>, <see cref="WinnowResultBase{TKey}.Duration"/>, and
+/// <see cref="WinnowResultBase{TKey}.WasCancelled"/> are always available.
+/// </para>
 /// </remarks>
 public class UpsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, IEquatable<TKey>
 {
@@ -20,6 +44,7 @@ public class UpsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, I
     private readonly IReadOnlyList<TKey> _explicitUpdatedIds = [];
     private readonly IReadOnlyList<UpsertFailure<TKey>> _failures = [];
     private IReadOnlyList<UpsertedEntity<TKey>>? _allUpsertedEntitiesCache;
+    private Dictionary<int, UpsertedEntity<TKey>>? _byIndexCache;
     private IReadOnlyList<TKey>? _insertedIdsCache;
     private IReadOnlyList<TKey>? _updatedIdsCache;
     private IReadOnlyList<TKey>? _successfulIdsCache;
@@ -78,6 +103,13 @@ public class UpsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, I
     /// <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower than
     /// <see cref="ResultDetail.Minimal"/>.
     /// </summary>
+    /// <remarks>
+    /// At <see cref="ResultDetail.Full"/>, the IDs are projected from
+    /// <see cref="InsertedEntities"/>. At <see cref="ResultDetail.Minimal"/>,
+    /// they are tracked directly. Invariant: at most one of the two backing
+    /// fields is non-empty. The cache is safe because <see cref="UpsertResult{TKey}"/>
+    /// is effectively immutable after construction.
+    /// </remarks>
     public IReadOnlyList<TKey> InsertedIds
     {
         get
@@ -98,6 +130,10 @@ public class UpsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, I
     /// <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower than
     /// <see cref="ResultDetail.Minimal"/>.
     /// </summary>
+    /// <remarks>
+    /// Same dual-source pattern as <see cref="InsertedIds"/>; at most one of
+    /// the two backing fields is non-empty.
+    /// </remarks>
     public IReadOnlyList<TKey> UpdatedIds
     {
         get
@@ -157,10 +193,26 @@ public class UpsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, I
     /// <summary>
     /// Finds a successfully upserted entity by its original input index.
     /// Throws when <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower
-    /// than <see cref="ResultDetail.Full"/>.
+    /// than <see cref="ResultDetail.Full"/>. O(1) after the first call.
     /// </summary>
-    public UpsertedEntity<TKey>? GetByIndex(int originalIndex) =>
-        AllUpsertedEntities.FirstOrDefault(e => e.OriginalIndex == originalIndex);
+    public UpsertedEntity<TKey>? GetByIndex(int originalIndex)
+    {
+        if (ResultDetail < ResultDetail.Full)
+            throw ResultDetailGuard.NotCaptured(
+                nameof(GetByIndex), ResultDetail.Full, ResultDetail, $"{nameof(SuccessfulIds)}");
+        _byIndexCache ??= BuildByIndexCache();
+        return _byIndexCache.TryGetValue(originalIndex, out var entity) ? entity : null;
+    }
+
+    private Dictionary<int, UpsertedEntity<TKey>> BuildByIndexCache()
+    {
+        var cache = new Dictionary<int, UpsertedEntity<TKey>>(_insertedEntities.Count + _updatedEntities.Count);
+        foreach (var entity in _insertedEntities)
+            cache[entity.OriginalIndex] = entity;
+        foreach (var entity in _updatedEntities)
+            cache[entity.OriginalIndex] = entity;
+        return cache;
+    }
 
     /// <summary>
     /// Finds a failure by the entity's original input index. Throws when

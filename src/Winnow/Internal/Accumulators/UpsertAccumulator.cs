@@ -55,6 +55,8 @@ internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<T
 
     private void EnsureDecisionSlot(int index)
     {
+        // Indices arrive in monotonically increasing order from strategy callers,
+        // so the loop normally runs at most once and stays amortized O(1).
         while (_operationDecisions.Count <= index)
         {
             _operationDecisions.Add((byte)UpsertOperationType.Insert);

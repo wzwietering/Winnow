@@ -87,7 +87,10 @@ internal class DeleteGraphOperation<TEntity, TKey> : IOperation<TEntity, TKey>
     public void RecordFailure(TEntity entity, Exception ex, StrategyContext<TEntity, TKey> context)
     {
         var entityId = context.GetEntityId(entity);
-        _pendingGraphNodes.Remove(entityId);
+        if (_graph.IsActive)
+        {
+            _pendingGraphNodes.Remove(entityId);
+        }
         _accumulator.RecordFailure(
             entityId,
             $"Graph delete failed: {ex.Message}",

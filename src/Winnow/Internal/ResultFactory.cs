@@ -1,5 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-
 namespace Winnow.Internal;
 
 /// <summary>
@@ -7,9 +5,13 @@ namespace Winnow.Internal;
 /// </summary>
 internal static class ResultFactory
 {
-    internal static WinnowResult<TKey> CreateEmpty<TKey>(TimeSpan duration, bool includeGraph = false)
+    internal static WinnowResult<TKey> CreateEmpty<TKey>(
+        TimeSpan duration,
+        bool includeGraph = false,
+        ResultDetail resultDetail = ResultDetail.Full)
         where TKey : notnull, IEquatable<TKey> => new()
         {
+            ResultDetail = resultDetail,
             SuccessfulIds = [],
             Failures = [],
             SuccessCount = 0,
@@ -40,9 +42,13 @@ internal static class ResultFactory
             TotalRetries = totalRetries
         };
 
-    internal static InsertResult<TKey> CreateEmptyInsert<TKey>(TimeSpan duration, bool includeGraph = false)
+    internal static InsertResult<TKey> CreateEmptyInsert<TKey>(
+        TimeSpan duration,
+        bool includeGraph = false,
+        ResultDetail resultDetail = ResultDetail.Full)
         where TKey : notnull, IEquatable<TKey> => new()
         {
+            ResultDetail = resultDetail,
             InsertedEntities = [],
             Failures = [],
             SuccessCount = 0,
@@ -74,9 +80,13 @@ internal static class ResultFactory
             TotalRetries = totalRetries
         };
 
-    internal static UpsertResult<TKey> CreateEmptyUpsert<TKey>(TimeSpan duration, bool includeGraph = false)
+    internal static UpsertResult<TKey> CreateEmptyUpsert<TKey>(
+        TimeSpan duration,
+        bool includeGraph = false,
+        ResultDetail resultDetail = ResultDetail.Full)
         where TKey : notnull, IEquatable<TKey> => new()
         {
+            ResultDetail = resultDetail,
             InsertedEntities = [],
             UpdatedEntities = [],
             Failures = [],
@@ -121,22 +131,5 @@ internal static class ResultFactory
             MaxDepthReached = 0,
             TotalEntitiesTraversed = 0,
             EntitiesByDepth = new Dictionary<int, int>()
-        };
-
-    internal static WinnowFailure<TKey> CreateWinnowFailure<TKey>(TKey entityId, Exception exception)
-        where TKey : notnull, IEquatable<TKey> => new()
-        {
-            EntityId = entityId,
-            ErrorMessage = exception.Message,
-            Reason = FailureClassifier.Classify(exception),
-            Exception = exception
-        };
-
-    internal static InsertFailure CreateInsertFailure(int entityIndex, Exception exception) => new()
-        {
-            EntityIndex = entityIndex,
-            ErrorMessage = exception.Message,
-            Reason = FailureClassifier.Classify(exception),
-            Exception = exception
         };
 }

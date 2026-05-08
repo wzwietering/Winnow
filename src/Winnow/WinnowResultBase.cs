@@ -72,7 +72,9 @@ public abstract class WinnowResultBase<TKey> where TKey : notnull, IEquatable<TK
     /// <summary>
     /// For graph operations only: full hierarchy of processed entities.
     /// Null for parent-only operations. Throws when <see cref="ResultDetail"/>
-    /// is lower than <see cref="ResultDetail.Full"/>.
+    /// is lower than <see cref="ResultDetail.Full"/>; the throw applies to
+    /// non-graph results too because the guard cannot distinguish a parent-only
+    /// operation from a graph operation whose hierarchy was suppressed.
     /// </summary>
     public IReadOnlyList<GraphNode<TKey>>? GraphHierarchy
     {
@@ -87,7 +89,9 @@ public abstract class WinnowResultBase<TKey> where TKey : notnull, IEquatable<TK
     /// <summary>
     /// For graph operations only: statistics about the traversal.
     /// Null for parent-only operations. Throws when <see cref="ResultDetail"/>
-    /// is lower than <see cref="ResultDetail.Full"/>.
+    /// is lower than <see cref="ResultDetail.Full"/>; the throw applies to
+    /// non-graph results too because the guard cannot distinguish a parent-only
+    /// operation from a graph operation whose stats were suppressed.
     /// </summary>
     public GraphTraversalResult<TKey>? TraversalInfo
     {

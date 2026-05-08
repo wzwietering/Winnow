@@ -72,14 +72,6 @@ internal class StrategyContext<TEntity, TKey>
         catch (Exception) { return "unknown"; }
     }
 
-    // ========== Batch Result Factory Delegation ==========
-
-    internal WinnowFailure<TKey> CreateWinnowFailure(TKey entityId, Exception exception) =>
-        ResultFactory.CreateWinnowFailure(entityId, exception);
-
-    internal InsertFailure CreateInsertFailure(int entityIndex, Exception exception) =>
-        ResultFactory.CreateInsertFailure(entityIndex, exception);
-
     // ========== Validation Service Delegation ==========
 
     internal void ValidateNoModifiedNavigationProperties(TEntity entity) =>

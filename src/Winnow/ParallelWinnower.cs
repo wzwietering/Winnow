@@ -97,7 +97,7 @@ public class ParallelWinnower<TEntity, TKey>
         {
             var strategy = StrategyFactory.CreateStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, () => ResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, false),
+        }, () => ResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, false, options.ResultDetail),
         (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), options.Retry, options.ResultDetail, cancellationToken);
 
     // === UPDATE GRAPH OPERATIONS ===
@@ -123,7 +123,7 @@ public class ParallelWinnower<TEntity, TKey>
         {
             var strategy = StrategyFactory.CreateGraphStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, () => ResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, true),
+        }, () => ResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, true, options.ResultDetail),
         (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), options.Retry, options.ResultDetail, cancellationToken);
 
     // === INSERT OPERATIONS ===
@@ -149,7 +149,7 @@ public class ParallelWinnower<TEntity, TKey>
         {
             var strategy = StrategyFactory.CreateInsertStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, () => ResultFactory.CreateEmptyInsert<TKey>(TimeSpan.Zero, false),
+        }, () => ResultFactory.CreateEmptyInsert<TKey>(TimeSpan.Zero, false, options.ResultDetail),
         (o, list, exec, ct) => o.ExecuteInsertAsync(list, exec, ct), options.Retry, options.ResultDetail, cancellationToken);
 
     // === INSERT GRAPH OPERATIONS ===
@@ -175,7 +175,7 @@ public class ParallelWinnower<TEntity, TKey>
         {
             var strategy = StrategyFactory.CreateInsertGraphStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, () => ResultFactory.CreateEmptyInsert<TKey>(TimeSpan.Zero, true),
+        }, () => ResultFactory.CreateEmptyInsert<TKey>(TimeSpan.Zero, true, options.ResultDetail),
         (o, list, exec, ct) => o.ExecuteInsertAsync(list, exec, ct), options.Retry, options.ResultDetail, cancellationToken);
 
     // === DELETE OPERATIONS ===
@@ -201,7 +201,7 @@ public class ParallelWinnower<TEntity, TKey>
         {
             var strategy = StrategyFactory.CreateDeleteStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, () => ResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, false),
+        }, () => ResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, false, options.ResultDetail),
         (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), options.Retry, options.ResultDetail, cancellationToken);
 
     // === DELETE GRAPH OPERATIONS ===
@@ -227,7 +227,7 @@ public class ParallelWinnower<TEntity, TKey>
         {
             var strategy = StrategyFactory.CreateDeleteGraphStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, () => ResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, true),
+        }, () => ResultFactory.CreateEmpty<TKey>(TimeSpan.Zero, true, options.ResultDetail),
         (o, list, exec, ct) => o.ExecuteBatchAsync(list, exec, ct), options.Retry, options.ResultDetail, cancellationToken);
 
     // === UPSERT OPERATIONS ===
@@ -253,7 +253,7 @@ public class ParallelWinnower<TEntity, TKey>
         {
             var strategy = StrategyFactory.CreateUpsertStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, () => ResultFactory.CreateEmptyUpsert<TKey>(TimeSpan.Zero, false),
+        }, () => ResultFactory.CreateEmptyUpsert<TKey>(TimeSpan.Zero, false, options.ResultDetail),
         (o, list, exec, ct) => o.ExecuteUpsertAsync(list, exec, ct), options.Retry, options.ResultDetail, cancellationToken);
 
     // === UPSERT GRAPH OPERATIONS ===
@@ -279,7 +279,7 @@ public class ParallelWinnower<TEntity, TKey>
         {
             var strategy = StrategyFactory.CreateUpsertGraphStrategy<TEntity, TKey>(options.Strategy);
             return strategy.ExecuteAsync(partition, ctx, options, ct);
-        }, () => ResultFactory.CreateEmptyUpsert<TKey>(TimeSpan.Zero, true),
+        }, () => ResultFactory.CreateEmptyUpsert<TKey>(TimeSpan.Zero, true, options.ResultDetail),
         (o, list, exec, ct) => o.ExecuteUpsertAsync(list, exec, ct), options.Retry, options.ResultDetail, cancellationToken);
 
     // === PRIVATE HELPERS ===
