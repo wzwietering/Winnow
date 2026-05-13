@@ -4,3 +4,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Microsoft.EntityFrameworkCore and Microsoft.Extensions.* are pinned per-TFM
+    # via conditional ItemGroups. Dependabot can't see those conditions, so block
+    # major bumps. They only happen when we add a new TargetFramework manually.
+    ignore:
+      - dependency-name: "Microsoft.EntityFrameworkCore*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
