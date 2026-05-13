@@ -90,6 +90,7 @@ Used with `Upsert`.
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `DuplicateKeyStrategy` | `DuplicateKeyStrategy` | `Fail` | How to handle duplicate key errors during INSERT |
+| `MatchBy` | `LambdaExpression?` | `null` | Optional business-key expression that overrides default-PK detection. See [Upsert Operations → Custom Match Expressions](../upsert-operations.md#custom-match-expressions-matchby). Use `UpsertOptionsExtensions.WithMatchBy<TEntity, TKey>` for type-safe construction. |
 
 ## UpsertGraphOptions
 

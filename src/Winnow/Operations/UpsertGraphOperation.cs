@@ -68,6 +68,18 @@ internal class UpsertGraphOperation<TEntity, TKey> : IUpsertOperation<TEntity, T
         }
     }
 
+    public void ResolveBatch(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
+    {
+        // Graph upsert does not support MatchBy in 1.2.0 — no pre-batch resolution to perform.
+    }
+
+    public Task ResolveBatchAsync(
+        List<TEntity> entities,
+        StrategyContext<TEntity, TKey> context,
+        CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public bool TryRefreshFromMatchBy(TEntity entity, StrategyContext<TEntity, TKey> context) => false;
+
     public void PrepareEntity(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
         var isInsert = context.HasDefaultKeyValue(entity);

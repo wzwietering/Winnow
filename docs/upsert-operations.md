@@ -18,6 +18,88 @@ Upsert operations perform INSERT or UPDATE based on key detection:
 3. **Optimistic concurrency**: Add a `RowVersion` column and handle `DbUpdateConcurrencyException`
 4. **Application-level locking**: Use distributed locks for critical sections
 
+## Custom Match Expressions (MatchBy)
+
+By default, upsert routes entities by checking whether the primary key holds its
+default value. For data sync scenarios where the primary key is database-generated
+and you want to match on a business key (e.g. `ExternalId`, `Email`, `Sku`),
+set `UpsertOptions.MatchBy` to an expression that selects that key.
+
+```csharp
+// Single business key:
+saver.Upsert(products, new UpsertOptions()
+    .WithMatchBy<Product, string>(p => p.Sku));
+
+// Composite business key:
+saver.Upsert(items, new UpsertOptions()
+    .WithMatchBy<Item, object>(i => new { i.TenantId, i.ExternalId }));
+```
+
+### How it works
+
+When `MatchBy` is set, Winnow performs a single batched `SELECT` against the
+target table before `SaveChanges` to look up existing rows by the user-supplied
+columns. The lookup result drives the insert/update routing:
+
+| Outcome | Routing |
+|---------|---------|
+| Match values found in the database | UPDATE (input entity's primary key and concurrency-token values are overwritten with the DB row's values) |
+| No row matches | INSERT (using the caller-supplied primary key, if any) |
+| Any match value is null | INSERT (null business keys can't identify an existing row) |
+
+The lookup uses `AsNoTracking`, so it does not interfere with the change tracker
+or affect entities the caller has already loaded.
+
+### Supported expression shapes
+
+- A single property: `e => e.ExternalId`
+- An anonymous projection: `e => new { e.TenantId, e.ExternalId }`
+
+Method calls, nested member access (`e => e.Address.City`), and references to
+navigation properties are rejected at runtime with a descriptive
+`ArgumentException`.
+
+### Race conditions
+
+`MatchBy` reduces but does not eliminate the SELECT→SaveChanges race window.
+If a concurrent process inserts a row with the same business key after our
+SELECT but before our SaveChanges, the INSERT fails with a unique-constraint
+violation. Combine `MatchBy` with `DuplicateKeyStrategy.RetryAsUpdate` to
+mitigate: the retry path re-queries the row that now exists, copies its primary
+key and concurrency-token values onto the input entity, and re-issues the save
+as an UPDATE.
+
+```csharp
+var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate }
+    .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
+saver.Upsert(orders, options);
+```
+
+For best results, add a unique index on the columns referenced by `MatchBy` —
+the database will then enforce uniqueness at write time, making the retry path
+correct under concurrent inserts.
+
+### Errors
+
+`MatchBy` throws `InvalidOperationException` (not a per-entity failure) when:
+
+- The pre-SELECT resolves multiple rows to the same match-key tuple (ambiguous
+  match — add a unique constraint or refine the expression).
+- The input batch contains two entities with the same non-null match-key tuple.
+
+### Limitations
+
+- Graph upsert (`UpsertGraph`) does not support `MatchBy` in this release.
+- `MatchBy` properties must be CLR properties; shadow properties are not
+  supported.
+- Concurrency tokens copied during the merge must also be CLR properties.
+
+### Performance
+
+`MatchBy` adds one round trip per `Upsert` call (the pre-SELECT). For composite
+match keys, the predicate is chunked at roughly 500 tuples per query to stay
+inside the database's parameter limit.
+
 ## DuplicateKeyStrategy
 
 Handle race conditions automatically with `DuplicateKeyStrategy`:

@@ -69,6 +69,7 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         CancellationToken cancellationToken)
     {
         operation.ValidateAll(entities, context);
+        await operation.ResolveBatchAsync(entities, context, cancellationToken);
         context.DetachAllEntities(entities);
 
         var wasCancelled = false;
@@ -236,6 +237,7 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         IUpsertOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
+        operation.ResolveBatch(entities, context);
         context.DetachAllEntities(entities);
 
         for (var i = 0; i < entities.Count; i++)

@@ -41,6 +41,7 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
     {
         try
         {
+            PreparePrimaryKeyForRetry(entity, context, operation);
             context.Context.Entry(entity).State = EntityState.Modified;
             SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
             context.IncrementRoundTrip();
@@ -66,6 +67,7 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
     {
         try
         {
+            PreparePrimaryKeyForRetry(entity, context, operation);
             context.Context.Entry(entity).State = EntityState.Modified;
             await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
             context.IncrementRoundTrip();
@@ -84,4 +86,17 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
             return false;
         }
     }
+
+    /// <summary>
+    /// When MatchBy is active, the original INSERT attempt may have used a default PK.
+    /// Re-query the row that now exists (a concurrent client just inserted it) and
+    /// copy its PK and concurrency-token values onto the entity so the upcoming
+    /// Modified+SaveChanges targets the right row with a valid optimistic-concurrency check.
+    /// No-op when MatchBy is not configured — falls back to today's behavior.
+    /// </summary>
+    private static void PreparePrimaryKeyForRetry(
+        TEntity entity,
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation) =>
+        operation.TryRefreshFromMatchBy(entity, context);
 }

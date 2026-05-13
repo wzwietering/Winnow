@@ -15,6 +15,29 @@ internal interface IUpsertOperation<TEntity, TKey>
     void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context);
 
     /// <summary>
+    /// Runs any pre-batch resolution that needs to happen before per-entity preparation
+    /// (e.g. MatchBy SELECT). Default for operations that have no pre-resolution is a no-op.
+    /// </summary>
+    void ResolveBatch(List<TEntity> entities, StrategyContext<TEntity, TKey> context);
+
+    /// <summary>
+    /// Async counterpart of <see cref="ResolveBatch"/>.
+    /// </summary>
+    Task ResolveBatchAsync(
+        List<TEntity> entities,
+        StrategyContext<TEntity, TKey> context,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Re-queries an existing row matching the entity's MatchBy values and, when found,
+    /// copies the primary key and any concurrency-token values from the row onto the entity.
+    /// Returns false when MatchBy is not configured or no row matches.
+    /// Used by the duplicate-key retry path so it can flip a failed INSERT to MODIFIED
+    /// even when the original detection was business-key based.
+    /// </summary>
+    bool TryRefreshFromMatchBy(TEntity entity, StrategyContext<TEntity, TKey> context);
+
+    /// <summary>
     /// Creates the final result from tracked successes and failures.
     /// </summary>
     /// <param name="wasCancelled">Whether the operation was cancelled before completing.</param>

@@ -66,6 +66,10 @@ internal class StrategyContext<TEntity, TKey>
 
     internal TKey GetEntityId(TEntity entity) => _keyService.GetEntityId(entity);
 
+    internal void SetEntityId(TEntity entity, TKey value) => _keyService.SetEntityId(entity, value);
+
+    internal TKey GetEntityIdFromInstance(TEntity entity) => _keyService.GetEntityIdFromInstance(entity);
+
     internal string GetEntityIdString(TEntity entity)
     {
         try { return GetEntityId(entity).ToString()!; }
