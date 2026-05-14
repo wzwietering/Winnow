@@ -17,6 +17,8 @@ internal static class OperationPreValidationHelper
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
         WinnowAccumulator<TKey> accumulator,
+        bool isGraphOperation,
+        NavigationFilter? navigationFilter,
         CancellationToken cancellationToken)
         where TEntity : class
         where TKey : notnull, IEquatable<TKey>
@@ -25,7 +27,7 @@ internal static class OperationPreValidationHelper
         {
             return entities;
         }
-        var result = RunCore(validation, entities, context.Logger, cancellationToken,
+        var result = RunCore(validation, entities, context.Logger, isGraphOperation, navigationFilter, cancellationToken,
             (originalIndex, message, _) => accumulator.RecordFailure(
                 ReadIdOrDefault(context, entities[originalIndex]),
                 message,
@@ -39,6 +41,8 @@ internal static class OperationPreValidationHelper
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
         InsertAccumulator<TKey> accumulator,
+        bool isGraphOperation,
+        NavigationFilter? navigationFilter,
         CancellationToken cancellationToken)
         where TEntity : class
         where TKey : notnull, IEquatable<TKey>
@@ -47,7 +51,7 @@ internal static class OperationPreValidationHelper
         {
             return PreValidationResult<TEntity>.Passthrough(entities);
         }
-        return RunCore(validation, entities, context.Logger, cancellationToken,
+        return RunCore(validation, entities, context.Logger, isGraphOperation, navigationFilter, cancellationToken,
             (originalIndex, message, _) => accumulator.RecordFailure(
                 originalIndex,
                 message,
@@ -60,6 +64,8 @@ internal static class OperationPreValidationHelper
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
         UpsertAccumulator<TKey> accumulator,
+        bool isGraphOperation,
+        NavigationFilter? navigationFilter,
         CancellationToken cancellationToken)
         where TEntity : class
         where TKey : notnull, IEquatable<TKey>
@@ -68,7 +74,7 @@ internal static class OperationPreValidationHelper
         {
             return PreValidationResult<TEntity>.Passthrough(entities);
         }
-        return RunCore(validation, entities, context.Logger, cancellationToken,
+        return RunCore(validation, entities, context.Logger, isGraphOperation, navigationFilter, cancellationToken,
             (originalIndex, message, _) => RecordUpsertFailure(
                 originalIndex, message, entities, context, accumulator));
     }
@@ -97,11 +103,13 @@ internal static class OperationPreValidationHelper
         ValidationOptions validation,
         List<TEntity> entities,
         ILogger? logger,
+        bool isGraphOperation,
+        NavigationFilter? navigationFilter,
         CancellationToken cancellationToken,
         Action<int, string, IReadOnlyList<ValidationError>> recordFailure)
         where TEntity : class
     {
-        var result = PreValidationRunner.Run<TEntity>(entities, validation, recordFailure, cancellationToken);
+        var result = PreValidationRunner.Run<TEntity>(entities, validation, recordFailure, isGraphOperation, navigationFilter, cancellationToken);
         LogIfFiltered(logger, typeof(TEntity), entities.Count, result.Survivors.Count);
         return result;
     }

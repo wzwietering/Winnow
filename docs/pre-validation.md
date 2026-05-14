@@ -96,7 +96,7 @@ options.Validation!.CancellationCheckInterval = 32;
 
 ## Graph Operations
 
-By default, pre-validation walks only the top-level entities passed to `InsertGraph`, `UpdateGraph`, `DeleteGraph`, or `UpsertGraph` — navigation children are not validated. Set `IncludeNavigations = true` to opt into walking the entity's reference and collection navigations and applying DataAnnotations to each reachable child:
+By default, pre-validation walks only the top-level entities passed to `InsertGraph`, `UpdateGraph`, `DeleteGraph`, or `UpsertGraph` — navigation children are not validated. `IncludeNavigations` only affects graph operations; setting it on a flat `InsertOptions`/`UpdateOptions`/`DeleteOptions`/`UpsertOptions` is a no-op. Set `IncludeNavigations = true` to opt into walking the entity's reference and collection navigations and applying DataAnnotations to each reachable child:
 
 ```csharp
 var options = new InsertGraphOptions();
@@ -104,7 +104,7 @@ options.WithDataAnnotations<Order>();
 options.Validation!.IncludeNavigations = true;
 ```
 
-Child failures are reported on the parent's failure record with a property path that locates the offending value, for example `"Items[2].Sku"`. Cycle protection is reference-based: if a child links back to an already-visited parent it is skipped, so self-referencing graphs terminate cleanly.
+Child failures are reported on the parent's failure record with a property path that locates the offending value, for example `"Items[2].Sku"`. Cycle protection is reference-based: if a child links back to an already-visited parent it is skipped, so self-referencing graphs terminate cleanly. The walk also honours `GraphOptionsBase.NavigationFilter` — navigations excluded by the filter are not validated, matching the scope of the graph operation that owns the walk. Validation also recurses through unannotated intermediate types when a deeper child has DataAnnotations, so a `Root → Mid (no annotations) → Leaf [Required]` graph still surfaces leaf failures.
 
 > `IncludeNavigations` requires a DataAnnotations-built validator
 > (`WithDataAnnotations<TEntity>()`). A typed `ValidatorDelegate<TEntity>`

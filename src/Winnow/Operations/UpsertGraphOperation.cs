@@ -44,6 +44,8 @@ internal class UpsertGraphOperation<TEntity, TKey> : IUpsertOperation<TEntity, T
 
     public ValidationOptions? Validation => _options.Validation;
     public UpsertAccumulator<TKey> Accumulator => _accumulator;
+    public bool IsGraphOperation => true;
+    public NavigationFilter? NavigationFilter => _options.NavigationFilter;
 
     public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {

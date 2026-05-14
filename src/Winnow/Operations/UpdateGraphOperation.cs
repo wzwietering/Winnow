@@ -31,6 +31,8 @@ internal class UpdateGraphOperation<TEntity, TKey> : IOperation<TEntity, TKey>
 
     public ValidationOptions? Validation => _options.Validation;
     public WinnowAccumulator<TKey> Accumulator => _accumulator;
+    public bool IsGraphOperation => true;
+    public NavigationFilter? NavigationFilter => _options.NavigationFilter;
 
     public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {

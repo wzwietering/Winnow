@@ -23,6 +23,20 @@ internal interface IUpsertOperation<TEntity, TKey>
     UpsertAccumulator<TKey> Accumulator { get; }
 
     /// <summary>
+    /// True for the four graph operations. Used to gate
+    /// <see cref="ValidationOptions.IncludeNavigations"/>, which is documented as
+    /// having no effect on flat operations.
+    /// </summary>
+    bool IsGraphOperation => false;
+
+    /// <summary>
+    /// Optional navigation filter forwarded to the pre-validation navigation walk
+    /// so excluded navigations are not validated, matching the scope of the graph
+    /// operation. Always <c>null</c> for flat operations.
+    /// </summary>
+    NavigationFilter? NavigationFilter => null;
+
+    /// <summary>
     /// Runs the configured pre-validation pipeline (if any). Returns the
     /// survivors plus an optional original-index map; the caller uses
     /// <see cref="Winnow.Internal.Validation.PreValidationResult{TEntity}.GetOriginalIndex"/>
@@ -32,7 +46,7 @@ internal interface IUpsertOperation<TEntity, TKey>
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
         CancellationToken cancellationToken) =>
-        OperationPreValidationHelper.RunIndexed(Validation, entities, context, Accumulator, cancellationToken);
+        OperationPreValidationHelper.RunIndexed(Validation, entities, context, Accumulator, IsGraphOperation, NavigationFilter, cancellationToken);
 
     void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context);
     void PrepareEntity(TEntity entity, int index, StrategyContext<TEntity, TKey> context);

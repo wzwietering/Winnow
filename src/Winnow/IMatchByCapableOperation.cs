@@ -18,13 +18,25 @@ internal interface IMatchByCapableOperation<TEntity, TKey> : IUpsertOperation<TE
     /// of the current batch. Called once by the strategy before per-entity preparation.
     /// No-op when <see cref="UpsertOptions.MatchBy"/> is null.
     /// </summary>
-    void ResolveBatch(List<TEntity> entities, StrategyContext<TEntity, TKey> context);
+    /// <param name="entities">The survivor list (post pre-validation).</param>
+    /// <param name="originalIndices">Original input position of each survivor, or
+    /// <c>null</c> when no pre-validation was applied (identity).</param>
+    /// <param name="inputCount">Original caller-supplied input count, used to size
+    /// the match-value array so per-entity routing can index by original position.</param>
+    /// <param name="context">Strategy context.</param>
+    void ResolveBatch(
+        List<TEntity> entities,
+        int[]? originalIndices,
+        int inputCount,
+        StrategyContext<TEntity, TKey> context);
 
     /// <summary>
     /// Async counterpart of <see cref="ResolveBatch"/>.
     /// </summary>
     Task ResolveBatchAsync(
         List<TEntity> entities,
+        int[]? originalIndices,
+        int inputCount,
         StrategyContext<TEntity, TKey> context,
         CancellationToken cancellationToken);
 

@@ -138,20 +138,13 @@ public class WinnowerInsertValidationTests : TestBase
     }
 
     [Fact]
-    public void WinnowValidationException_HasStandardConstructors()
+    public void WinnowValidationException_RequiresNonEmptyFailures()
     {
-        var defaultCtor = new WinnowValidationException();
-        defaultCtor.Failures.ShouldBeEmpty();
+        Should.Throw<ArgumentNullException>(() =>
+            new WinnowValidationException(null!));
 
-        var messageCtor = new WinnowValidationException("custom message");
-        messageCtor.Message.ShouldBe("custom message");
-        messageCtor.Failures.ShouldBeEmpty();
-
-        var inner = new InvalidOperationException("inner");
-        var withInner = new WinnowValidationException("wrapped", inner);
-        withInner.Message.ShouldBe("wrapped");
-        withInner.InnerException.ShouldBe(inner);
-        withInner.Failures.ShouldBeEmpty();
+        Should.Throw<ArgumentException>(() =>
+            new WinnowValidationException(Array.Empty<EntityValidationFailure>()));
     }
 
     [Fact]
@@ -376,6 +369,8 @@ public class WinnowerInsertValidationTests : TestBase
             products.ToList(),
             options[0],
             (idx, msg, errs) => failures.Add((idx, msg, errs)),
+            isGraphOperation: false,
+            navigationFilter: null,
             CancellationToken.None);
 
         failures.Count.ShouldBe(2);

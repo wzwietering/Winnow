@@ -56,7 +56,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         // strategy? Make the same call here at your batch entry point.
         if (operation is IMatchByCapableOperation<TEntity, TKey> matchByOp)
         {
-            await matchByOp.ResolveBatchAsync(preValidated.Survivors, context, cancellationToken);
+            await matchByOp.ResolveBatchAsync(
+                preValidated.Survivors, preValidated.OriginalIndices, entities.Count, context, cancellationToken);
         }
         context.DetachAllEntities(preValidated.Survivors);
 
@@ -479,7 +480,8 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         // MatchBy still routes correctly.
         if (operation is IMatchByCapableOperation<TEntity, TKey> matchByOp)
         {
-            matchByOp.ResolveBatch(preValidated.Survivors, context);
+            matchByOp.ResolveBatch(
+                preValidated.Survivors, preValidated.OriginalIndices, entities.Count, context);
         }
         context.DetachAllEntities(preValidated.Survivors);
 

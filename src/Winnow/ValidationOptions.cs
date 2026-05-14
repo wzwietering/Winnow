@@ -53,10 +53,12 @@ public sealed class ValidationOptions
     public ValidationFailureBehavior FailureBehavior { get; set; } = ValidationFailureBehavior.RecordAsFailure;
 
     /// <summary>
-    /// Reserved for graph operations: when set to <c>true</c>, pre-validation
-    /// descends into the navigation properties that the configured
-    /// <see cref="GraphOptionsBase.NavigationFilter"/> traverses and validates each
-    /// reachable entity. Default: <c>false</c> — only the top-level entities are
+    /// When set to <c>true</c> on a graph operation's <see cref="GraphOptionsBase.Validation"/>,
+    /// pre-validation descends into navigation properties and validates each reachable
+    /// entity (DataAnnotations only). Cycle protection is reference-based; failures are
+    /// surfaced on the top-level entity with a property path locating the offending child.
+    /// The walk honours <see cref="GraphOptionsBase.NavigationFilter"/> — excluded
+    /// navigations are skipped. Default: <c>false</c> — only the top-level entities are
     /// validated. Has no effect on flat (non-graph) operations.
     /// </summary>
     public bool IncludeNavigations { get; set; }

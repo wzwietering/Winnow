@@ -32,46 +32,51 @@ internal static class NavigationWalker
     /// <summary>
     /// Walks <paramref name="root"/>'s reachable children and adds any validation
     /// failures to <paramref name="collector"/> with property paths prefixed so
-    /// the failing entity can be located in the graph.
+    /// the failing entity can be located in the graph. When <paramref name="filter"/>
+    /// is supplied, navigations excluded by the filter are skipped, matching the
+    /// scope of the graph operation that owns this walk.
     /// </summary>
-    internal static void Walk(object root, ref ValidationCollector collector)
+    internal static void Walk(object root, ref ValidationCollector collector, NavigationFilter? filter = null)
     {
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance) { root };
-        WalkChildrenOf(root, ref collector, visited, pathPrefix: string.Empty);
+        WalkChildrenOf(root, ref collector, visited, filter, pathPrefix: string.Empty);
     }
 
     private static void WalkChildrenOf(
-        object entity, ref ValidationCollector collector, HashSet<object> visited, string pathPrefix)
+        object entity, ref ValidationCollector collector, HashSet<object> visited,
+        NavigationFilter? filter, string pathPrefix)
     {
-        var navs = GetNavigations(entity.GetType());
+        var entityType = entity.GetType();
+        var navs = GetNavigations(entityType);
         foreach (var nav in navs)
         {
+            if (filter is not null && !filter.ShouldTraverse(entityType, nav.Name)) continue;
             var value = nav.Getter(entity);
             if (value is null) continue;
             if (nav.IsCollection)
             {
-                WalkCollection((IEnumerable)value, nav.Name, ref collector, visited, pathPrefix);
+                WalkCollection((IEnumerable)value, nav.Name, ref collector, visited, filter, pathPrefix);
             }
             else
             {
-                WalkSingle(value, nav.Name, ref collector, visited, pathPrefix);
+                WalkSingle(value, nav.Name, ref collector, visited, filter, pathPrefix);
             }
         }
     }
 
     private static void WalkSingle(
         object child, string navName, ref ValidationCollector collector,
-        HashSet<object> visited, string pathPrefix)
+        HashSet<object> visited, NavigationFilter? filter, string pathPrefix)
     {
         if (!visited.Add(child)) return;
         var childPrefix = pathPrefix + navName + ".";
         DataAnnotationsValidatorFactory.ValidateInstance(child, ref collector, childPrefix);
-        WalkChildrenOf(child, ref collector, visited, childPrefix);
+        WalkChildrenOf(child, ref collector, visited, filter, childPrefix);
     }
 
     private static void WalkCollection(
         IEnumerable collection, string navName, ref ValidationCollector collector,
-        HashSet<object> visited, string pathPrefix)
+        HashSet<object> visited, NavigationFilter? filter, string pathPrefix)
     {
         int index = 0;
         foreach (var child in collection)
@@ -81,7 +86,7 @@ internal static class NavigationWalker
             {
                 var childPrefix = $"{pathPrefix}{navName}[{index}].";
                 DataAnnotationsValidatorFactory.ValidateInstance(child, ref collector, childPrefix);
-                WalkChildrenOf(child, ref collector, visited, childPrefix);
+                WalkChildrenOf(child, ref collector, visited, filter, childPrefix);
             }
             index++;
         }
@@ -107,13 +112,51 @@ internal static class NavigationWalker
         var elementType = TryGetCollectionElementType(property.PropertyType);
         if (elementType is not null)
         {
-            return TypeHasAnnotations(elementType)
+            return TypeHasReachableAnnotations(elementType, new HashSet<Type>())
                 ? new NavigationProperty(property.Name, BuildGetter(property), IsCollection: true)
                 : null;
         }
-        return TypeHasAnnotations(property.PropertyType)
+        return TypeHasReachableAnnotations(property.PropertyType, new HashSet<Type>())
             ? new NavigationProperty(property.Name, BuildGetter(property), IsCollection: false)
             : null;
+    }
+
+    private static readonly ConcurrentDictionary<Type, bool> _reachableCache = new();
+
+    /// <summary>
+    /// True if <paramref name="type"/> has its own DataAnnotations OR any class-typed
+    /// navigation reachable from it transitively does. The intermediate type itself
+    /// need not be annotated — failing to recurse through it would silently drop the
+    /// reachable leaf's failures.
+    /// </summary>
+    private static bool TypeHasReachableAnnotations(Type type, HashSet<Type> inProgress)
+    {
+        if (_reachableCache.TryGetValue(type, out var cached)) return cached;
+        if (TypeHasAnnotations(type))
+        {
+            _reachableCache[type] = true;
+            return true;
+        }
+        if (!inProgress.Add(type)) return false;
+        try
+        {
+            foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            {
+                if (!property.CanRead || IsScalar(property.PropertyType)) continue;
+                var childType = TryGetCollectionElementType(property.PropertyType) ?? property.PropertyType;
+                if (TypeHasReachableAnnotations(childType, inProgress))
+                {
+                    _reachableCache[type] = true;
+                    return true;
+                }
+            }
+            _reachableCache[type] = false;
+            return false;
+        }
+        finally
+        {
+            inProgress.Remove(type);
+        }
     }
 
     private static bool IsScalar(Type type) =>

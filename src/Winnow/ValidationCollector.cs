@@ -26,8 +26,10 @@ public ref struct ValidationCollector
     /// <summary>
     /// Inline slot count before the collector falls back to <see cref="ArrayPool{T}"/>.
     /// Sized to cover the overwhelming majority of validators (typically 0–4 errors).
+    /// Internal because tuning this value is an implementation detail; future tightening
+    /// would otherwise be a semver event.
     /// </summary>
-    public const int InlineCapacity = 4;
+    internal const int InlineCapacity = 4;
 
     private Span<ValidationError> _buffer;
     private ValidationError[]? _rented;
@@ -44,6 +46,21 @@ public ref struct ValidationCollector
         _rented = null;
         _count = 0;
     }
+
+    /// <summary>
+    /// Creates a standalone collector suitable for unit-testing a
+    /// <see cref="ValidatorDelegate{TEntity}"/> in isolation. Allocates a small inline
+    /// buffer; rents from <see cref="ArrayPool{T}"/> only if the test pushes more
+    /// errors than the buffer holds. Call <c>using</c> or assign to a local so the
+    /// caller does not retain the collector beyond the scope.
+    /// </summary>
+    /// <remarks>
+    /// Not on the production hot path — the pipeline supplies its own batch-wide
+    /// inline buffer to avoid the per-call allocation this factory does. Use this
+    /// only from tests or one-off diagnostic code.
+    /// </remarks>
+    public static ValidationCollector CreateForTesting() =>
+        new(new ValidationError[InlineCapacity]);
 
     /// <summary>
     /// Number of errors currently held.

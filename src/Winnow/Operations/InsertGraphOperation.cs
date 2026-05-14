@@ -26,6 +26,8 @@ internal class InsertGraphOperation<TEntity, TKey> : IInsertOperation<TEntity, T
 
     public ValidationOptions? Validation => _options.Validation;
     public InsertAccumulator<TKey> Accumulator => _accumulator;
+    public bool IsGraphOperation => true;
+    public NavigationFilter? NavigationFilter => _options.NavigationFilter;
 
     public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {

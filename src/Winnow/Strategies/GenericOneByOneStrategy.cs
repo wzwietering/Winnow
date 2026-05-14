@@ -76,7 +76,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         // MatchBy silently skips and routing falls back to PK default-value detection.
         if (operation is IMatchByCapableOperation<TEntity, TKey> matchByOp)
         {
-            await matchByOp.ResolveBatchAsync(preValidated.Survivors, context, cancellationToken);
+            await matchByOp.ResolveBatchAsync(
+                preValidated.Survivors, preValidated.OriginalIndices, entities.Count, context, cancellationToken);
         }
         context.DetachAllEntities(preValidated.Survivors);
 
@@ -251,7 +252,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         // New upsert strategies must mirror this call at their batch entry.
         if (operation is IMatchByCapableOperation<TEntity, TKey> matchByOp)
         {
-            matchByOp.ResolveBatch(preValidated.Survivors, context);
+            matchByOp.ResolveBatch(
+                preValidated.Survivors, preValidated.OriginalIndices, entities.Count, context);
         }
         context.DetachAllEntities(preValidated.Survivors);
 

@@ -54,44 +54,63 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         }
     }
 
-    public void ResolveBatch(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
+    public void ResolveBatch(
+        List<TEntity> entities,
+        int[]? originalIndices,
+        int inputCount,
+        StrategyContext<TEntity, TKey> context)
     {
         if (_options.MatchBy is null) return;
         _accumulator.MarkMatchByActive();
-        var prepared = PrepareMatchBatch(entities, context);
+        var prepared = PrepareMatchBatch(entities, originalIndices, inputCount, context);
         WinnowLogger.LogMatchByPreSelect(
-            context.Logger, typeof(TEntity).Name, prepared.Values.Length, prepared.Plan.Properties.Count);
+            context.Logger, typeof(TEntity).Name, entities.Count, prepared.Plan.Properties.Count);
         var existing = context.MatchByQueryService.QueryExisting<TEntity>(
-            prepared.Plan.Properties, prepared.Values);
+            prepared.Plan.Properties, CompactValues(prepared.Values));
         context.MatchByResolution = BuildResolution(prepared, existing);
     }
 
     public async Task ResolveBatchAsync(
         List<TEntity> entities,
+        int[]? originalIndices,
+        int inputCount,
         StrategyContext<TEntity, TKey> context,
         CancellationToken cancellationToken)
     {
         if (_options.MatchBy is null) return;
         _accumulator.MarkMatchByActive();
-        var prepared = PrepareMatchBatch(entities, context);
+        var prepared = PrepareMatchBatch(entities, originalIndices, inputCount, context);
         WinnowLogger.LogMatchByPreSelect(
-            context.Logger, typeof(TEntity).Name, prepared.Values.Length, prepared.Plan.Properties.Count);
+            context.Logger, typeof(TEntity).Name, entities.Count, prepared.Plan.Properties.Count);
         var existing = await context.MatchByQueryService.QueryExistingAsync<TEntity>(
-            prepared.Plan.Properties, prepared.Values, cancellationToken);
+            prepared.Plan.Properties, CompactValues(prepared.Values), cancellationToken);
         context.MatchByResolution = BuildResolution(prepared, existing);
     }
 
     private PreparedMatchBatch PrepareMatchBatch(
-        List<TEntity> entities, StrategyContext<TEntity, TKey> context)
+        List<TEntity> entities,
+        int[]? originalIndices,
+        int inputCount,
+        StrategyContext<TEntity, TKey> context)
     {
         var entityType = context.Context.Model.FindEntityType(typeof(TEntity))
             ?? throw new InvalidOperationException(
                 $"Entity type {typeof(TEntity).Name} is not part of the DbContext model.");
         RejectGlobalQueryFilter(entityType);
         var plan = MatchExpressionParser.Parse<TEntity>(_options.MatchBy!.Expression, entityType);
-        var values = ExtractMatchValues(entities, plan);
+        var values = ExtractMatchValues(entities, originalIndices, inputCount, plan);
         RejectDuplicateMatchKeys(values);
         return new PreparedMatchBatch(plan, values, entityType);
+    }
+
+    private static object?[][] CompactValues(object?[]?[] sparse)
+    {
+        var compact = new List<object?[]>(sparse.Length);
+        foreach (var row in sparse)
+        {
+            if (row is not null) compact.Add(row);
+        }
+        return compact.ToArray();
     }
 
     private static void RejectGlobalQueryFilter(IEntityType entityType)
@@ -128,7 +147,7 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
             existing);
 
     private sealed record PreparedMatchBatch(
-        MatchExpressionPlan<TEntity> Plan, object?[][] Values, IEntityType EntityType);
+        MatchExpressionPlan<TEntity> Plan, object?[]?[] Values, IEntityType EntityType);
 
     private static IReadOnlyList<IProperty> CollectConcurrencyTokens(IEntityType entityType)
     {
@@ -154,24 +173,30 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
             $"or remove its IsConcurrencyToken configuration.");
     }
 
-    private static object?[][] ExtractMatchValues(
-        List<TEntity> entities, MatchExpressionPlan<TEntity> plan)
+    private static object?[]?[] ExtractMatchValues(
+        List<TEntity> entities,
+        int[]? originalIndices,
+        int inputCount,
+        MatchExpressionPlan<TEntity> plan)
     {
-        var values = new object?[entities.Count][];
+        var values = new object?[]?[inputCount];
         for (var i = 0; i < entities.Count; i++)
         {
-            values[i] = plan.Extractor(entities[i]);
+            var originalIndex = originalIndices is null ? i : originalIndices[i];
+            values[originalIndex] = plan.Extractor(entities[i]);
         }
         return values;
     }
 
-    private static void RejectDuplicateMatchKeys(object?[][] values)
+    private static void RejectDuplicateMatchKeys(object?[]?[] values)
     {
         var seen = new Dictionary<MatchKey, int>();
         for (var i = 0; i < values.Length; i++)
         {
-            if (MatchKey.ContainsNull(values[i])) continue;
-            var key = new MatchKey(values[i]);
+            var row = values[i];
+            if (row is null) continue;
+            if (MatchKey.ContainsNull(row)) continue;
+            var key = new MatchKey(row);
             if (seen.TryGetValue(key, out var firstIndex))
             {
                 throw new InvalidOperationException(
@@ -199,7 +224,9 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
             return context.HasDefaultKeyValue(entity);
         }
 
-        var values = resolution.EntityMatchValues[index];
+        // EntityMatchValues is sparse: pre-validation rejects leave null holes, but
+        // rejected entities never reach this method, so the slot is populated by construction.
+        var values = resolution.EntityMatchValues[index]!;
         if (MatchKey.ContainsNull(values))
         {
             _accumulator.RecordNullMatchKeyInsert();

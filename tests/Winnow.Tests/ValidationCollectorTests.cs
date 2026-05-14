@@ -4,6 +4,22 @@ namespace Winnow.Tests;
 
 public class ValidationCollectorTests
 {
+    // Improvement A: external consumers must be able to construct a collector to
+    // unit-test their own ValidatorDelegate<T>. CreateForTesting exposes a public
+    // factory so the otherwise-internal constructor stays hidden.
+    [Fact]
+    public void CreateForTesting_AllowsAddingErrorsFromUserCode()
+    {
+        var collector = ValidationCollector.CreateForTesting();
+        collector.IsValid.ShouldBeTrue();
+
+        collector.Add("Foo", "bar");
+
+        collector.Count.ShouldBe(1);
+        collector.AsSpan()[0].PropertyName.ShouldBe("Foo");
+        collector.AsSpan()[0].Message.ShouldBe("bar");
+    }
+
     [Fact]
     public void Add_NoErrors_IsValidAndCountZero()
     {
