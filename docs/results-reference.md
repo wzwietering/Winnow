@@ -53,6 +53,7 @@ failure.Exception     // Exception? - The original exception, if available
 | `DuplicateKey` | Primary key or unique constraint violation |
 | `Cancelled` | Operation was cancelled via CancellationToken |
 | `UnknownError` | Unclassified error |
+| `BusinessKeyConflictLost` | Under `MatchBy` with `DuplicateKeyStrategy.RetryAsUpdate`, a concurrent process won a race: the row matching our business key existed long enough to cause our INSERT to fail, but was gone by the time we re-queried for the retry. |
 
 ## InsertResult&lt;TKey&gt;
 
