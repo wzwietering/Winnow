@@ -41,10 +41,20 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
     {
         try
         {
-            context.Context.Entry(entity).State = EntityState.Modified;
-            SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
-            context.IncrementRoundTrip();
-            operation.RecordSuccessAsUpdate(entity, index, context);
+            var matchByOp = operation as IMatchByCapableOperation<TEntity, TKey>;
+            var outcome = matchByOp?.TryRefreshFromMatchBy(entity, context) ?? MatchByRefreshOutcome.NotApplicable;
+            if (outcome == MatchByRefreshOutcome.NotFound)
+            {
+                context.IncrementRoundTrip();
+                WinnowLogger.LogEntityFailed(
+                    context.Logger,
+                    typeof(TEntity).Name,
+                    $"index:{index}",
+                    $"{FailureReason.BusinessKeyConflictLost}: MatchBy refresh found no matching row at retry time.");
+                matchByOp!.RecordBusinessKeyConflictLost(entity, index, context);
+                return;
+            }
+            SaveAsUpdate(entity, index, context, operation);
         }
         catch (Exception retryEx)
         {
@@ -66,10 +76,22 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
     {
         try
         {
-            context.Context.Entry(entity).State = EntityState.Modified;
-            await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
-            context.IncrementRoundTrip();
-            operation.RecordSuccessAsUpdate(entity, index, context);
+            var matchByOp = operation as IMatchByCapableOperation<TEntity, TKey>;
+            var outcome = matchByOp is null
+                ? MatchByRefreshOutcome.NotApplicable
+                : await matchByOp.TryRefreshFromMatchByAsync(entity, context, cancellationToken);
+            if (outcome == MatchByRefreshOutcome.NotFound)
+            {
+                context.IncrementRoundTrip();
+                WinnowLogger.LogEntityFailed(
+                    context.Logger,
+                    typeof(TEntity).Name,
+                    $"index:{index}",
+                    $"{FailureReason.BusinessKeyConflictLost}: MatchBy refresh found no matching row at retry time.");
+                matchByOp!.RecordBusinessKeyConflictLost(entity, index, context);
+                return false;
+            }
+            await SaveAsUpdateAsync(entity, index, context, operation, cancellationToken);
             return false;
         }
         catch (OperationCanceledException)
@@ -83,5 +105,30 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
             operation.RecordFailure(entity, index, retryEx, context);
             return false;
         }
+    }
+
+    private static void SaveAsUpdate(
+        TEntity entity,
+        int index,
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation)
+    {
+        context.Context.Entry(entity).State = EntityState.Modified;
+        SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
+        context.IncrementRoundTrip();
+        operation.RecordSuccessAsUpdate(entity, index, context);
+    }
+
+    private static async Task SaveAsUpdateAsync(
+        TEntity entity,
+        int index,
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation,
+        CancellationToken cancellationToken)
+    {
+        context.Context.Entry(entity).State = EntityState.Modified;
+        await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
+        context.IncrementRoundTrip();
+        operation.RecordSuccessAsUpdate(entity, index, context);
     }
 }

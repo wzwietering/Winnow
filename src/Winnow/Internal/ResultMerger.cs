@@ -82,6 +82,7 @@ internal static class ResultMerger
             FailureCount = partitions.Sum(p => p.Result.FailureCount),
             InsertedCount = partitions.Sum(p => p.Result.InsertedCount),
             UpdatedCount = partitions.Sum(p => p.Result.UpdatedCount),
+            InsertedWithNullMatchKeyCount = SumNullableCounts(partitions, p => p.Result.InsertedWithNullMatchKeyCount),
             Duration = duration,
             DatabaseRoundTrips = totalRoundTrips,
             WasCancelled = partitions.Any(p => p.Result.WasCancelled),
@@ -89,6 +90,18 @@ internal static class ResultMerger
             TraversalInfo = MergeTraversalInfoFromResults(bases),
             TotalRetries = totalRetries
         };
+    }
+
+    private static int? SumNullableCounts<T>(IReadOnlyList<T> items, Func<T, int?> selector)
+    {
+        int? sum = null;
+        foreach (var item in items)
+        {
+            var value = selector(item);
+            if (value is null) continue;
+            sum = (sum ?? 0) + value.Value;
+        }
+        return sum;
     }
 
     private static ResultDetail ResolveDetail<T>(IReadOnlyList<T> items, Func<T, ResultDetail> selector)

@@ -117,6 +117,7 @@ internal static class ResultFactory
             FailureCount = result.FailureCount,
             InsertedCount = result.InsertedCount,
             UpdatedCount = result.UpdatedCount,
+            InsertedWithNullMatchKeyCount = result.InsertedWithNullMatchKeyCount,
             Duration = duration,
             DatabaseRoundTrips = roundTrips,
             GraphHierarchy = result.GraphHierarchyRaw,

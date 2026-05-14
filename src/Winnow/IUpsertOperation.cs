@@ -4,6 +4,11 @@ namespace Winnow;
 /// Defines operation-specific behavior for upsert batch processing strategies.
 /// Uses index tracking (like IInsertOperation) since some entities may be new.
 /// </summary>
+/// <remarks>
+/// MatchBy-specific hooks (batch pre-SELECT, retry refresh) live on
+/// <see cref="IMatchByCapableOperation{TEntity, TKey}"/>; strategies branch via
+/// <c>as</c>-cast so operations without MatchBy support carry no no-op stubs.
+/// </remarks>
 internal interface IUpsertOperation<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>

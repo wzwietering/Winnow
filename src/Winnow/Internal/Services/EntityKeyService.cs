@@ -9,16 +9,153 @@ internal class EntityKeyService<TEntity, TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly DbContext _context;
+    private IReadOnlyList<IProperty>? _cachedKeyProperties;
 
     internal EntityKeyService(DbContext context)
     {
         _context = context;
     }
 
+    // Resolve and cache PK metadata once per service lifetime — UpsertOperation's
+    // MatchBy UPDATE path calls GetEntityIdFromInstance / SetEntityId once per
+    // matched entity, and the EF model lookup is wasted work after the first call.
+    private IReadOnlyList<IProperty> KeyProperties
+    {
+        get
+        {
+            if (_cachedKeyProperties is not null) return _cachedKeyProperties;
+            var entityType = _context.Model.FindEntityType(typeof(TEntity))
+                ?? throw new InvalidOperationException(
+                    $"Entity type {typeof(TEntity).Name} is not part of the DbContext model.");
+            _cachedKeyProperties = entityType.FindPrimaryKey()?.Properties
+                ?? throw new InvalidOperationException(
+                    $"Entity {typeof(TEntity).Name} does not have a primary key.");
+            return _cachedKeyProperties;
+        }
+    }
+
+    // Two read paths exist:
+    //   GetEntityId            — reads via the EF change tracker entry. Use when the
+    //                            entity is attached / about to be saved.
+    //   GetEntityIdFromInstance — reads via reflection on the CLR instance, bypassing
+    //                            the tracker. Use for AsNoTracking lookup results
+    //                            (e.g. MatchBy's pre-SELECT) where no entry exists.
+    // They are NOT interchangeable: GetEntityId throws if the entity isn't tracked;
+    // GetEntityIdFromInstance throws if the PK is a shadow property.
     internal TKey GetEntityId(TEntity entity)
     {
         var entry = _context.Entry(entity);
         return GetEntityIdFromEntry(entry);
+    }
+
+    internal TKey GetEntityIdFromInstance(TEntity entity)
+    {
+        var keyProperties = KeyProperties;
+        if (keyProperties.Count == 1)
+        {
+            return ReadSimpleKey(entity, keyProperties[0]);
+        }
+        return ReadCompositeKey(entity, keyProperties);
+    }
+
+    private static TKey ReadSimpleKey(TEntity entity, IProperty keyProperty)
+    {
+        var propertyInfo = keyProperty.PropertyInfo
+            ?? throw new InvalidOperationException(
+                $"Primary key '{keyProperty.Name}' is a shadow property; MatchBy requires CLR properties.");
+        var value = propertyInfo.GetValue(entity)
+            ?? throw new InvalidOperationException(
+                $"Entity {typeof(TEntity).Name} has null primary key value '{keyProperty.Name}'.");
+        if (typeof(TKey) == typeof(CompositeKey))
+        {
+            return (TKey)(object)new CompositeKey(value);
+        }
+        return value is TKey typed
+            ? typed
+            : throw new InvalidOperationException(
+                $"Primary key type mismatch on {typeof(TEntity).Name}. " +
+                $"Expected {typeof(TKey).Name}, got {value.GetType().Name}.");
+    }
+
+    private static TKey ReadCompositeKey(TEntity entity, IReadOnlyList<IProperty> keyProperties)
+    {
+        if (typeof(TKey) != typeof(CompositeKey))
+        {
+            throw new InvalidOperationException(
+                $"Entity {typeof(TEntity).Name} has a composite primary key but TKey is {typeof(TKey).Name}. " +
+                $"Use CompositeKey to read this value.");
+        }
+        var values = new object[keyProperties.Count];
+        for (var i = 0; i < keyProperties.Count; i++)
+        {
+            values[i] = ReadCompositeKeyComponent(entity, keyProperties[i]);
+        }
+        return (TKey)(object)new CompositeKey(values);
+    }
+
+    private static object ReadCompositeKeyComponent(TEntity entity, IProperty keyProperty)
+    {
+        var propertyInfo = keyProperty.PropertyInfo
+            ?? throw new InvalidOperationException(
+                $"Primary key '{keyProperty.Name}' is a shadow property; MatchBy requires CLR properties.");
+        return propertyInfo.GetValue(entity)
+            ?? throw new InvalidOperationException(
+                $"Entity {typeof(TEntity).Name} has null primary key column '{keyProperty.Name}'.");
+    }
+
+    internal void SetEntityId(TEntity entity, TKey value)
+    {
+        var keyProperties = KeyProperties;
+        if (keyProperties.Count == 1)
+        {
+            SetSimpleKey(entity, keyProperties[0], value);
+            return;
+        }
+        SetCompositeKey(entity, keyProperties, value);
+    }
+
+    private static void SetSimpleKey(TEntity entity, IProperty keyProperty, TKey value)
+    {
+        var propertyInfo = keyProperty.PropertyInfo
+            ?? throw new InvalidOperationException(
+                $"Primary key '{keyProperty.Name}' on {typeof(TEntity).Name} is not a CLR property; " +
+                $"shadow primary keys are not supported by MatchBy.");
+        var scalar = value is CompositeKey ck && ck.IsSingle ? ck[0] : (object)value;
+        propertyInfo.SetValue(entity, scalar);
+    }
+
+    private static void SetCompositeKey(TEntity entity, IReadOnlyList<IProperty> keyProperties, TKey value)
+    {
+        var composite = EnsureCompositeKeyShape(value, keyProperties);
+        for (var i = 0; i < keyProperties.Count; i++)
+        {
+            SetCompositeKeyComponent(entity, keyProperties[i], composite[i]);
+        }
+    }
+
+    private static CompositeKey EnsureCompositeKeyShape(TKey value, IReadOnlyList<IProperty> keyProperties)
+    {
+        if (value is not CompositeKey composite)
+        {
+            throw new InvalidOperationException(
+                $"Entity {typeof(TEntity).Name} has a composite primary key but TKey is {typeof(TKey).Name}. " +
+                $"Use a CompositeKey to set this value.");
+        }
+        if (composite.Count != keyProperties.Count)
+        {
+            throw new InvalidOperationException(
+                $"CompositeKey has {composite.Count} component(s) but entity {typeof(TEntity).Name} " +
+                $"has {keyProperties.Count} primary key column(s).");
+        }
+        return composite;
+    }
+
+    private static void SetCompositeKeyComponent(TEntity entity, IProperty keyProperty, object componentValue)
+    {
+        var propertyInfo = keyProperty.PropertyInfo
+            ?? throw new InvalidOperationException(
+                $"Primary key '{keyProperty.Name}' is a shadow property; MatchBy does not support this.");
+        propertyInfo.SetValue(entity, componentValue);
     }
 
     internal TKey GetEntityIdFromEntry(EntityEntry entry)

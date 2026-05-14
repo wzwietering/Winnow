@@ -166,6 +166,16 @@ var result = saver.Upsert(products, new UpsertOptions
 Console.WriteLine($"Inserted: {result.InsertedCount}, Updated: {result.UpdatedCount}");
 ```
 
+To route by a business key (e.g. an `ExternalId` or `Sku`) rather than the
+primary-key default-value check, use `MatchBy`:
+
+```csharp
+saver.Upsert(products, new UpsertOptions()
+    .WithMatchBy<Product>(p => p.Sku));
+```
+
+See [Custom Match Expressions](docs/upsert-operations.md#custom-match-expressions-matchby) for composite keys, race-condition behavior, and limitations.
+
 ### Graph Operations
 
 Handle parent entities with their children:
@@ -391,8 +401,12 @@ saver.UpdateGraph(orders, new GraphOptions
 // Race condition possible between key check and save
 saver.Upsert(products);
 
-// Better: Add retry logic for high-concurrency scenarios
-// See docs/upsert-operations.md for details
+// Better: identify entities by a unique business key
+saver.Upsert(products, new UpsertOptions()
+    .WithMatchBy<Product>(p => p.Sku));
+
+// Best for high-concurrency: combine MatchBy with RetryAsUpdate.
+// See docs/upsert-operations.md for race condition details.
 ```
 
 ### 5. Using DivideAndConquer with High Failure Rates

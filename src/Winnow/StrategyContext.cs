@@ -29,6 +29,7 @@ internal class StrategyContext<TEntity, TKey>
     private readonly ManyToManyDeleteProcessor<TEntity, TKey> _m2mDeleteProcessor;
 
     private GraphHierarchyBuilder<TKey>? _graphBuilder;
+    private MatchExpressionQueryService? _matchByQueryService;
 
     internal StrategyContext(DbContext context)
     {
@@ -55,6 +56,21 @@ internal class StrategyContext<TEntity, TKey>
     internal DbContext Context => _context;
     internal ILogger? Logger { get; init; }
     internal RetryOptions? RetryOptions { get; init; }
+
+    /// <summary>
+    /// Per-execution MatchBy resolution slot. Strategies populate this before processing
+    /// entities; operations read from it during routing decisions. Lives here (not on the
+    /// operation) so per-batch state cannot leak across invocations or threads.
+    /// </summary>
+    internal MatchByResolution<TEntity>? MatchByResolution { get; set; }
+
+    /// <summary>
+    /// Lazily-initialized MatchBy query service. Only constructed for upserts that
+    /// actually configure <c>WithMatchBy</c>; flat upserts and graph upserts never
+    /// touch the field.
+    /// </summary>
+    internal MatchExpressionQueryService MatchByQueryService =>
+        _matchByQueryService ??= new MatchExpressionQueryService(_context);
     internal int RoundTripCounter => _roundTripCounter;
     internal void IncrementRoundTrip() => _roundTripCounter++;
 
@@ -65,6 +81,10 @@ internal class StrategyContext<TEntity, TKey>
     // ========== Key Service Delegation ==========
 
     internal TKey GetEntityId(TEntity entity) => _keyService.GetEntityId(entity);
+
+    internal void SetEntityId(TEntity entity, TKey value) => _keyService.SetEntityId(entity, value);
+
+    internal TKey GetEntityIdFromInstance(TEntity entity) => _keyService.GetEntityIdFromInstance(entity);
 
     internal string GetEntityIdString(TEntity entity)
     {

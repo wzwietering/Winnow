@@ -12,8 +12,6 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    // === ASYNC METHODS ===
-
     internal async Task<WinnowResult<TKey>> ExecuteAsync(
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
@@ -69,6 +67,13 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         CancellationToken cancellationToken)
     {
         operation.ValidateAll(entities, context);
+        // MatchBy pre-SELECT fires once per batch here, before per-entity processing.
+        // New upsert strategies must mirror this call at their batch entry, otherwise
+        // MatchBy silently skips and routing falls back to PK default-value detection.
+        if (operation is IMatchByCapableOperation<TEntity, TKey> matchByOp)
+        {
+            await matchByOp.ResolveBatchAsync(entities, context, cancellationToken);
+        }
         context.DetachAllEntities(entities);
 
         var wasCancelled = false;
@@ -196,8 +201,6 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         }
     }
 
-    // === SYNC METHODS ===
-
     internal WinnowResult<TKey> Execute(
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
@@ -236,6 +239,12 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         IUpsertOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
+        // MatchBy pre-SELECT fires once per batch here, before per-entity processing.
+        // New upsert strategies must mirror this call at their batch entry.
+        if (operation is IMatchByCapableOperation<TEntity, TKey> matchByOp)
+        {
+            matchByOp.ResolveBatch(entities, context);
+        }
         context.DetachAllEntities(entities);
 
         for (var i = 0; i < entities.Count; i++)

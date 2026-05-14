@@ -139,5 +139,21 @@ public enum FailureReason
     /// <summary>
     /// Failure could not be classified into a known category.
     /// </summary>
-    UnknownError
+    UnknownError,
+
+    /// <summary>
+    /// Under <c>MatchBy</c> with <c>DuplicateKeyStrategy.RetryAsUpdate</c>, a concurrent
+    /// process won a race: a row matching the business key existed long enough to cause
+    /// our INSERT to fail, but was gone (or never existed under the configured key) by
+    /// the time we re-queried for the retry. The entity has not been persisted.
+    /// </summary>
+    /// <remarks>
+    /// Typical cause is an INSERT-then-DELETE between our save and our retry, but the same
+    /// classification fires whenever the duplicate-key retry refresh finds no matching row.
+    /// To recover: inspect <see cref="UpsertFailure{TKey}.EntityIndex"/>, decide whether to
+    /// discard or re-queue the entity, or wrap the operation in application-level retry
+    /// with a delay. A unique constraint on the MatchBy columns narrows but does not
+    /// eliminate the race window — the row may be genuinely gone.
+    /// </remarks>
+    BusinessKeyConflictLost
 }

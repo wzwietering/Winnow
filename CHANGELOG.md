@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `UpsertOptionsExtensions.WithMatchBy<TEntity>` — route upsert by a business-key expression (single property or anonymous projection for composite keys) instead of the primary-key default-value check. See [docs/upsert-operations.md](docs/upsert-operations.md#custom-match-expressions-matchby).
+- `UpsertResult.InsertedWithNullMatchKeyCount` (`int?`) — count of entities routed to INSERT because their MatchBy projection contained a null component. `null` when MatchBy was not configured.
+- `FailureReason.BusinessKeyConflictLost` — `DuplicateKeyStrategy.RetryAsUpdate` under MatchBy could not refresh the row at retry time (concurrent writer won the race).
+
+### Changed
+
+- `DuplicateKeyStrategy.RetryAsUpdate` re-queries by business key when MatchBy is configured, copying the existing row's primary key and concurrency tokens before re-issuing as UPDATE.
+
 ## [1.1.0] - 2026-05-08
 
 ### Added
