@@ -10,7 +10,7 @@ public class WinnowerUpsertMatchByAsyncTests : TestBase
     public async Task UpsertAsync_MatchBy_MixedBatch_PartitionsCorrectly()
     {
         using var context = CreateContext();
-        SeedOrder(context, "ASYNC-A", "Existing", 1m);
+        MatchByTestHelpers.SeedOrder(context, "ASYNC-A", "Existing", 1m);
 
         var batch = new[]
         {
@@ -73,19 +73,4 @@ public class WinnowerUpsertMatchByAsyncTests : TestBase
             cts.Token));
     }
 
-    private static CustomerOrder SeedOrder(TestDbContext context, string orderNumber, string customerName, decimal total)
-    {
-        var order = new CustomerOrder
-        {
-            OrderNumber = orderNumber,
-            CustomerId = 1,
-            CustomerName = customerName,
-            TotalAmount = total,
-            OrderDate = DateTimeOffset.UtcNow
-        };
-        context.CustomerOrders.Add(order);
-        context.SaveChanges();
-        context.ChangeTracker.Clear();
-        return order;
-    }
 }

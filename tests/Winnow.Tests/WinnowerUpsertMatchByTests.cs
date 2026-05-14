@@ -35,7 +35,7 @@ public class WinnowerUpsertMatchByTests : TestBase
     public void Upsert_MatchBy_SingleMember_ExistingEntity_UpdatedByBusinessKey()
     {
         using var context = CreateContext();
-        var existing = SeedOrder(context, "ORD-100", "Original", 50m);
+        var existing = MatchByTestHelpers.SeedOrder(context, "ORD-100", "Original", 50m);
 
         var incoming = new CustomerOrder
         {
@@ -66,7 +66,7 @@ public class WinnowerUpsertMatchByTests : TestBase
     public void Upsert_MatchBy_PopulatesPkFromExistingRow_WhenInputHasDefaultPk()
     {
         using var context = CreateContext();
-        var existing = SeedOrder(context, "ORD-200", "Seed", 10m);
+        var existing = MatchByTestHelpers.SeedOrder(context, "ORD-200", "Seed", 10m);
 
         var incoming = new CustomerOrder
         {
@@ -89,8 +89,8 @@ public class WinnowerUpsertMatchByTests : TestBase
     public void Upsert_MatchBy_MixedBatch_PartitionsCorrectly()
     {
         using var context = CreateContext();
-        SeedOrder(context, "ORD-MIX-A", "Existing A", 1m);
-        SeedOrder(context, "ORD-MIX-B", "Existing B", 2m);
+        MatchByTestHelpers.SeedOrder(context, "ORD-MIX-A", "Existing A", 1m);
+        MatchByTestHelpers.SeedOrder(context, "ORD-MIX-B", "Existing B", 2m);
 
         var batch = new[]
         {
@@ -195,8 +195,8 @@ public class WinnowerUpsertMatchByTests : TestBase
     public void Upsert_MatchBy_DivideAndConquerStrategy_PartitionsCorrectly()
     {
         using var context = CreateContext();
-        SeedOrder(context, "DC-A", "Existing A", 1m);
-        SeedOrder(context, "DC-B", "Existing B", 2m);
+        MatchByTestHelpers.SeedOrder(context, "DC-A", "Existing A", 1m);
+        MatchByTestHelpers.SeedOrder(context, "DC-B", "Existing B", 2m);
 
         var batch = new[]
         {
@@ -235,20 +235,28 @@ public class WinnowerUpsertMatchByTests : TestBase
         result.InsertedCount.ShouldBe(1);
     }
 
-    private static CustomerOrder SeedOrder(TestDbContext context, string orderNumber, string customerName, decimal total)
+    [Fact]
+    public void Upsert_MatchBy_WithNullMatchValue_RoutesToInsert_AndReportsNullMatchKeyInsertCount()
     {
-        var order = new CustomerOrder
+        using var context = CreateContext();
+
+        var batch = new[]
         {
-            OrderNumber = orderNumber,
-            CustomerId = 1,
-            CustomerName = customerName,
-            TotalAmount = total,
-            OrderDate = DateTimeOffset.UtcNow
+            // CategoryId is null — match values contain null, must route to INSERT and be counted.
+            new Product { Name = "OrphanA", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow, CategoryId = null },
+            new Product { Name = "OrphanB", Price = 2m, Stock = 1, LastModified = DateTimeOffset.UtcNow, CategoryId = null }
         };
-        context.CustomerOrders.Add(order);
-        context.SaveChanges();
-        context.ChangeTracker.Clear();
-        return order;
+
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Upsert(
+            batch,
+            new UpsertOptions().WithMatchBy<Product, int?>(p => p.CategoryId));
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.InsertedCount.ShouldBe(2);
+        result.UpdatedCount.ShouldBe(0);
+        result.NullMatchKeyInsertCount.ShouldBe(2,
+            "entities whose MatchBy values contain null are routed to INSERT — the count surfaces that fact for observability.");
     }
 
     private static void SeedStudentAndCourse(TestDbContext context, int studentId, int courseId)

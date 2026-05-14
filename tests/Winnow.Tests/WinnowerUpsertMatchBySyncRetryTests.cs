@@ -26,7 +26,7 @@ public class WinnowerUpsertMatchBySyncRetryTests : TestBase
             OrderDate = DateTimeOffset.UtcNow
         };
 
-        InjectConflictingRowOnce(context, "RACE-SYNC", "Concurrent");
+        MatchByTestHelpers.InjectConflictingRowOnce(context, "RACE-SYNC", "Concurrent");
 
         var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate }
             .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
@@ -44,17 +44,4 @@ public class WinnowerUpsertMatchBySyncRetryTests : TestBase
         incoming.Id.ShouldBe(reloaded.Id);
     }
 
-    private static void InjectConflictingRowOnce(TestDbContext context, string orderNumber, string customerName)
-    {
-        var fired = false;
-        context.SavingChanges += (_, _) =>
-        {
-            if (fired) return;
-            fired = true;
-            var rowsAffected = context.Database.ExecuteSqlInterpolated(
-                $@"INSERT INTO CustomerOrders (OrderNumber, CustomerId, CustomerName, Status, TotalAmount, OrderDate, Version)
-                   VALUES ({orderNumber}, 1, {customerName}, 0, 1.00, '2020-01-01 00:00:00', X'0000000000000001')");
-            rowsAffected.ShouldBe(1);
-        };
-    }
 }

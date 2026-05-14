@@ -1,4 +1,6 @@
+using Microsoft.EntityFrameworkCore.Metadata;
 using Shouldly;
+using Winnow.Internal.Services;
 using Winnow.Tests.Entities;
 using Winnow.Tests.Infrastructure;
 
@@ -49,6 +51,21 @@ public class MatchExpressionQueryServiceChunkingTests : TestBase
         // so a 600-entity batch produces 2 chunks.
         result.UpdatedCount.ShouldBe(count);
         result.InsertedCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public void QueryExisting_WithEmptyMatchProperties_ThrowsInvariantError_NotNullReference()
+    {
+        using var context = CreateContext();
+        var service = new MatchExpressionQueryService(context);
+
+        // Empty matchProperties + non-empty (but empty) tuple triggers the predicate-builder
+        // null-combined branch. Should be a clear InvalidOperationException, not a NullRef.
+        IReadOnlyList<IProperty> emptyProperties = Array.Empty<IProperty>();
+        var tuples = new[] { Array.Empty<object?>() };
+
+        Should.Throw<InvalidOperationException>(() =>
+            service.QueryExisting<CustomerOrder>(emptyProperties, tuples));
     }
 
     private static void SeedOrders(TestDbContext context, int count)

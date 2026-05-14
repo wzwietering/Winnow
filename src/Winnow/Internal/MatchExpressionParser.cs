@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore.Metadata;
 
@@ -9,9 +10,24 @@ namespace Winnow.Internal;
 /// </summary>
 internal static class MatchExpressionParser
 {
+    // Cache the parsed plan per (expression, entity type) so a streaming workload that
+    // reuses a single UpsertOptions doesn't pay Expression.Compile() cost on every batch.
+    // Key uses reference equality of LambdaExpression — fluent helpers reuse the same
+    // instance across calls, so cache hits are the normal case.
+    private static readonly ConcurrentDictionary<(LambdaExpression, IEntityType), object> PlanCache = new();
+
     internal static MatchExpressionPlan<TEntity> Parse<TEntity>(
         LambdaExpression expression,
         IEntityType entityType) where TEntity : class
+    {
+        var cached = (MatchExpressionPlan<TEntity>?)PlanCache.GetOrAdd(
+            (expression, entityType),
+            static key => BuildPlan<TEntity>((LambdaExpression)key.Item1, (IEntityType)key.Item2));
+        return cached!;
+    }
+
+    private static MatchExpressionPlan<TEntity> BuildPlan<TEntity>(
+        LambdaExpression expression, IEntityType entityType) where TEntity : class
     {
         ValidateLambdaShape<TEntity>(expression);
         var memberNames = ExtractMemberNames(expression);
@@ -116,9 +132,25 @@ internal static class MatchExpressionParser
                 $"{typeof(TEntity).Name}. Use the foreign-key column instead.");
         }
 
-        return entityType.FindProperty(name)
+        var property = entityType.FindProperty(name)
             ?? throw new ArgumentException(
                 $"MatchBy property '{name}' does not exist on entity type {typeof(TEntity).Name}.");
+
+        if (property.IsPrimaryKey())
+        {
+            throw new ArgumentException(
+                $"MatchBy property '{name}' is the primary key on {typeof(TEntity).Name}. " +
+                "Omit MatchBy to use default key-value detection.");
+        }
+
+        if (property.ValueGenerated != ValueGenerated.Never)
+        {
+            throw new ArgumentException(
+                $"MatchBy property '{name}' is store-generated on {typeof(TEntity).Name} and not safe to match on. " +
+                "Choose a stable, application-supplied column.");
+        }
+
+        return property;
     }
 
     private static Func<TEntity, object?[]> BuildExtractor<TEntity>(IReadOnlyList<string> memberNames)

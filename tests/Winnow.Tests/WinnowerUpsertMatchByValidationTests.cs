@@ -130,6 +130,55 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
             options.WithMatchBy<Product, object>(p => new { Lower = p.Name.ToLower() }));
     }
 
+    [Fact]
+    public void MatchBy_ReferencesPrimaryKey_Throws()
+    {
+        using var context = CreateContext();
+        var saver = new Winnower<Product, int>(context);
+
+        var options = new UpsertOptions().WithMatchBy<Product, int>(p => p.Id);
+
+        var ex = Should.Throw<ArgumentException>(() =>
+            saver.Upsert(new[] { NewProduct("X") }, options));
+        ex.Message.ShouldContain("primary key", Case.Insensitive);
+        ex.Message.ShouldContain(nameof(Product.Id));
+    }
+
+    [Fact]
+    public void MatchBy_ReferencesPrimaryKey_InCompositeProjection_Throws()
+    {
+        using var context = CreateContext();
+        var saver = new Winnower<Product, int>(context);
+
+        var options = new UpsertOptions().WithMatchBy<Product>(p => new { p.Id, p.Name });
+
+        Should.Throw<ArgumentException>(() =>
+            saver.Upsert(new[] { NewProduct("X") }, options));
+    }
+
+    [Fact]
+    public void UpsertOptions_MatchBy_Setter_IsNotPublic()
+    {
+        var setter = typeof(UpsertOptions).GetProperty(nameof(UpsertOptions.MatchBy))!.SetMethod!;
+        setter.IsPublic.ShouldBeFalse(
+            "MatchBy direct assignment would bypass shape validation; callers must use WithMatchBy.");
+    }
+
+    [Fact]
+    public void MatchBy_ReferencesStoreGeneratedColumn_Throws()
+    {
+        using var context = CreateContext();
+        var saver = new Winnower<Product, int>(context);
+
+        // Version is configured with IsRowVersion → ValueGenerated.OnAddOrUpdate; not safe to match on.
+        var options = new UpsertOptions().WithMatchBy<Product, byte[]>(p => p.Version);
+
+        var ex = Should.Throw<ArgumentException>(() =>
+            saver.Upsert(new[] { NewProduct("X") }, options));
+        ex.Message.ShouldContain("store-generated", Case.Insensitive);
+        ex.Message.ShouldContain(nameof(Product.Version));
+    }
+
     private static Product NewProduct(string name) => new()
     {
         Name = name,

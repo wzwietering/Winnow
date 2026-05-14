@@ -13,6 +13,14 @@ namespace Winnow.Internal.Services;
 /// </summary>
 internal class MatchExpressionQueryService
 {
+    // Why these values: SQL Server caps a single query at 2100 parameters. 1800 leaves
+    // ~300 of headroom for parameters the EF/query layer adds (concurrency tokens,
+    // ambient filters, takes/skips). PostgreSQL's practical bind limit is similar order
+    // of magnitude; SQLite is more permissive. 500 is a soft cap on OR-clause count —
+    // SQL Server's optimizer compiles each disjunct separately and plan-compilation
+    // cost dominates well before execution cost past a few hundred clauses. Both numbers
+    // are conservative rules of thumb; revisit with provider-specific benchmarks if a
+    // workload demonstrates a better split.
     private const int MaxChunkSize = 500;
     private const int SqlParameterBudget = 1800;
 
@@ -67,7 +75,7 @@ internal class MatchExpressionQueryService
         }
     }
 
-    private static int ChunkSizeFor(int columnsPerTuple)
+    internal static int ChunkSizeFor(int columnsPerTuple)
     {
         var budgetBased = SqlParameterBudget / Math.Max(1, columnsPerTuple);
         return Math.Max(1, Math.Min(MaxChunkSize, budgetBased));
@@ -94,7 +102,9 @@ internal class MatchExpressionQueryService
             var conjunction = BuildAndPredicate(entityParam, matchProperties, tuple);
             combined = combined is null ? conjunction : Expression.OrElse(combined, conjunction);
         }
-        return combined!;
+        return combined
+            ?? throw new InvalidOperationException(
+                "MatchBy predicate requires at least one tuple. Callers must filter empty tuple lists before building the query.");
     }
 
     private static Expression BuildAndPredicate(
@@ -111,7 +121,9 @@ internal class MatchExpressionQueryService
             var eq = Expression.Equal(efCall, valueExpr);
             combined = combined is null ? eq : Expression.AndAlso(combined, eq);
         }
-        return combined!;
+        return combined
+            ?? throw new InvalidOperationException(
+                "MatchBy predicate requires at least one property. Resolved match plan was empty.");
     }
 
     private static Expression BuildEfPropertyAccess(ParameterExpression entityParam, IProperty prop)
@@ -120,8 +132,19 @@ internal class MatchExpressionQueryService
         return Expression.Call(generic, entityParam, Expression.Constant(prop.Name));
     }
 
+    /// <summary>
+    /// Precondition: <paramref name="value"/> must be non-null. Callers must filter
+    /// null-containing tuples via <see cref="FilterNonNullTuples"/> first — passing null
+    /// here for a non-nullable value-type would surface as an opaque <see cref="MissingMethodException"/>
+    /// from <see cref="Activator.CreateInstance(Type, object?[])"/>.
+    /// </summary>
     private static Expression BuildParameterizedValue(object? value, Type targetType)
     {
+        if (value is null)
+        {
+            throw new InvalidOperationException(
+                "MatchBy match value was null. Callers must filter null tuples before building the query.");
+        }
         // Wrap the value in a holder so EF Core treats the access as a captured local and
         // parameterizes the SQL, rather than inlining constants and bloating the query plan.
         var holderType = typeof(ValueHolder<>).MakeGenericType(targetType);

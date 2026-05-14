@@ -26,7 +26,7 @@ public class WinnowerUpsertMatchByConcurrencyTests : TestBase
             OrderDate = DateTimeOffset.UtcNow
         };
 
-        InjectConflictingRowOnce(context, orderNumber: "RACE-1", customerName: "Concurrent");
+        MatchByTestHelpers.InjectConflictingRowOnce(context, "RACE-1", "Concurrent");
 
         var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate }
             .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
@@ -58,7 +58,7 @@ public class WinnowerUpsertMatchByConcurrencyTests : TestBase
             OrderDate = DateTimeOffset.UtcNow
         };
 
-        InjectConflictingRowOnce(context, orderNumber: "RACE-FAIL", customerName: "Concurrent");
+        MatchByTestHelpers.InjectConflictingRowOnce(context, "RACE-FAIL", "Concurrent");
 
         var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.Fail }
             .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
@@ -72,18 +72,4 @@ public class WinnowerUpsertMatchByConcurrencyTests : TestBase
         result.Failures[0].Reason.ShouldBe(FailureReason.DuplicateKey);
     }
 
-    private static void InjectConflictingRowOnce(TestDbContext context, string orderNumber, string customerName)
-    {
-        var fired = false;
-        context.SavingChanges += (_, _) =>
-        {
-            if (fired) return;
-            fired = true;
-            var rowsAffected = context.Database.ExecuteSqlInterpolated(
-                $@"INSERT INTO CustomerOrders (OrderNumber, CustomerId, CustomerName, Status, TotalAmount, OrderDate, Version)
-                   VALUES ({orderNumber}, 1, {customerName}, 0, 1.00, '2020-01-01 00:00:00', X'0000000000000001')");
-            // Guard against the test silently no-opping if a future schema change rejects this row.
-            rowsAffected.ShouldBe(1);
-        };
-    }
 }

@@ -41,11 +41,15 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
     {
         try
         {
-            PreparePrimaryKeyForRetry(entity, context, operation);
-            context.Context.Entry(entity).State = EntityState.Modified;
-            SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
-            context.IncrementRoundTrip();
-            operation.RecordSuccessAsUpdate(entity, index, context);
+            var matchByOp = operation as IMatchByCapableOperation<TEntity, TKey>;
+            var outcome = matchByOp?.TryRefreshFromMatchBy(entity, context) ?? MatchByRefreshOutcome.NotApplicable;
+            if (outcome == MatchByRefreshOutcome.NotFound)
+            {
+                context.IncrementRoundTrip();
+                matchByOp!.RecordMatchByRefreshNotFound(entity, index, context);
+                return;
+            }
+            SaveAsUpdate(entity, index, context, operation);
         }
         catch (Exception retryEx)
         {
@@ -67,11 +71,17 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
     {
         try
         {
-            await operation.TryRefreshFromMatchByAsync(entity, context, cancellationToken);
-            context.Context.Entry(entity).State = EntityState.Modified;
-            await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
-            context.IncrementRoundTrip();
-            operation.RecordSuccessAsUpdate(entity, index, context);
+            var matchByOp = operation as IMatchByCapableOperation<TEntity, TKey>;
+            var outcome = matchByOp is null
+                ? MatchByRefreshOutcome.NotApplicable
+                : await matchByOp.TryRefreshFromMatchByAsync(entity, context, cancellationToken);
+            if (outcome == MatchByRefreshOutcome.NotFound)
+            {
+                context.IncrementRoundTrip();
+                matchByOp!.RecordMatchByRefreshNotFound(entity, index, context);
+                return false;
+            }
+            await SaveAsUpdateAsync(entity, index, context, operation, cancellationToken);
             return false;
         }
         catch (OperationCanceledException)
@@ -87,16 +97,28 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
         }
     }
 
-    /// <summary>
-    /// When MatchBy is active, the original INSERT attempt may have used a default PK.
-    /// Re-query the row that now exists (a concurrent client just inserted it) and
-    /// copy its PK and concurrency-token values onto the entity so the upcoming
-    /// Modified+SaveChanges targets the right row with a valid optimistic-concurrency check.
-    /// No-op when MatchBy is not configured — falls back to today's behavior.
-    /// </summary>
-    private static void PreparePrimaryKeyForRetry(
+    private static void SaveAsUpdate(
         TEntity entity,
+        int index,
         StrategyContext<TEntity, TKey> context,
-        IUpsertOperation<TEntity, TKey> operation) =>
-        operation.TryRefreshFromMatchBy(entity, context);
+        IUpsertOperation<TEntity, TKey> operation)
+    {
+        context.Context.Entry(entity).State = EntityState.Modified;
+        SaveChangesRetryHandler.SaveWithRetry(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount);
+        context.IncrementRoundTrip();
+        operation.RecordSuccessAsUpdate(entity, index, context);
+    }
+
+    private static async Task SaveAsUpdateAsync(
+        TEntity entity,
+        int index,
+        StrategyContext<TEntity, TKey> context,
+        IUpsertOperation<TEntity, TKey> operation,
+        CancellationToken cancellationToken)
+    {
+        context.Context.Entry(entity).State = EntityState.Modified;
+        await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
+        context.IncrementRoundTrip();
+        operation.RecordSuccessAsUpdate(entity, index, context);
+    }
 }

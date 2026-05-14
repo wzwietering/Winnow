@@ -19,6 +19,7 @@ internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<T
     private int _insertedCount;
     private int _updatedCount;
     private int _failureCount;
+    private int _nullMatchKeyInsertCount;
 
     internal UpsertAccumulator(ResultDetail detail)
     {
@@ -134,6 +135,8 @@ internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<T
         });
     }
 
+    internal void RecordNullMatchKeyInsert() => _nullMatchKeyInsertCount++;
+
     internal int SuccessCount => _insertedCount + _updatedCount;
     internal int FailureCount => _failureCount;
 
@@ -149,6 +152,7 @@ internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<T
         FailureCount = _failureCount,
         InsertedCount = _insertedCount,
         UpdatedCount = _updatedCount,
+        NullMatchKeyInsertCount = _nullMatchKeyInsertCount,
         WasCancelled = wasCancelled,
         GraphHierarchy = graph?.Hierarchy,
         TraversalInfo = graph?.TraversalInfo

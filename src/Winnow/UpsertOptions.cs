@@ -36,9 +36,10 @@ public class UpsertOptions : WinnowOptions
     /// the input entity's PK on update. Null preserves legacy <c>HasDefaultKeyValue</c> behavior.
     /// </para>
     /// <para>
-    /// Use <see cref="UpsertOptionsExtensions.WithMatchBy{TEntity, TKey}"/> for a strongly-typed
-    /// fluent helper. Graph upsert (<c>UpsertGraph</c>) does not yet support MatchBy.
+    /// Assign via <see cref="UpsertOptionsExtensions.WithMatchBy{TEntity, TKey}"/> — the setter
+    /// is internal so the fluent helper is the only path, guaranteeing shape validation runs
+    /// at configuration time. Graph upsert (<c>UpsertGraph</c>) does not yet support MatchBy.
     /// </para>
     /// </remarks>
-    public LambdaExpression? MatchBy { get; set; }
+    public LambdaExpression? MatchBy { get; internal set; }
 }

@@ -175,6 +175,14 @@ public class UpsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, I
     public int UpdatedCount { get; init; }
 
     /// <summary>
+    /// Number of entities routed to INSERT because their <c>MatchBy</c> values contained
+    /// a null component. A non-zero value is a signal that some business-key columns
+    /// were unexpectedly null; callers may want to surface this as a data-quality warning
+    /// rather than rely on the silent insert. Zero when <c>MatchBy</c> is not configured.
+    /// </summary>
+    public int NullMatchKeyInsertCount { get; init; }
+
+    /// <summary>
     /// Details of each failed upsert operation. Throws when
     /// <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower than
     /// <see cref="ResultDetail.Minimal"/>. At <see cref="ResultDetail.Minimal"/>

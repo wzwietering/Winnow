@@ -29,7 +29,7 @@ public class WinnowerUpsertMatchByCancellationTests : TestBase
             OrderDate = DateTimeOffset.UtcNow
         };
 
-        InjectConflictingRowOnce(context, "RACE-1", "Concurrent");
+        MatchByTestHelpers.InjectConflictingRowOnce(context, "RACE-1", "Concurrent");
 
         var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate }
             .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
@@ -39,9 +39,8 @@ public class WinnowerUpsertMatchByCancellationTests : TestBase
 
         result.UpdatedCount.ShouldBe(1, "retry-as-update path must succeed for this test to be meaningful");
 
-        // BUG today: the duplicate-key retry path calls a synchronous TryRefreshFromMatchBy,
-        // issuing the refresh SELECT via blocking I/O from inside the async pipeline.
-        // FIXED: TryRefreshFromMatchByAsync is called and the SELECT goes through async I/O.
+        // Pins the async retry path: the SELECT must go through async I/O, not block on
+        // a sync TryRefreshFromMatchBy call inside the async pipeline.
         probe.SyncSelectsAgainstCustomerOrders.ShouldBe(0,
             "MatchBy retry path issued a sync SELECT inside an async pipeline (sync-over-async).");
     }
@@ -57,20 +56,6 @@ public class WinnowerUpsertMatchByCancellationTests : TestBase
         context.Database.OpenConnection();
         context.Database.EnsureCreated();
         return context;
-    }
-
-    private static void InjectConflictingRowOnce(TestDbContext context, string orderNumber, string customerName)
-    {
-        var fired = false;
-        context.SavingChanges += (_, _) =>
-        {
-            if (fired) return;
-            fired = true;
-            var rowsAffected = context.Database.ExecuteSqlInterpolated(
-                $@"INSERT INTO CustomerOrders (OrderNumber, CustomerId, CustomerName, Status, TotalAmount, OrderDate, Version)
-                   VALUES ({orderNumber}, 1, {customerName}, 0, 1.00, '2020-01-01 00:00:00', X'0000000000000001')");
-            rowsAffected.ShouldBe(1);
-        };
     }
 
     private sealed class ReaderModeProbe : DbCommandInterceptor

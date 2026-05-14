@@ -116,9 +116,21 @@ participate in the eventual INSERT/UPDATE statement. Combine freely.
 
 ### Performance
 
-`MatchBy` adds one round trip per `Upsert` call (the pre-SELECT). For composite
-match keys, the predicate is chunked at roughly 500 tuples per query to stay
-inside the database's parameter limit.
+`MatchBy` adds one or more batched `SELECT`s before `SaveChanges`. Winnow chunks
+the predicate to stay inside the database provider's per-query parameter limit:
+a batch larger than the chunk size produces multiple SELECTs, and wider composite
+match keys reduce the chunk size further (more parameters per row). For most
+workloads with simple keys and batches up to a few hundred rows this is a single
+SELECT. The retry path (`DuplicateKeyStrategy.RetryAsUpdate`) fires one additional
+SELECT per refreshed entity.
+
+### NullMatchKeyInsertCount
+
+If any component of an entity's `MatchBy` projection is null, the entity is
+routed to INSERT and counted via `UpsertResult.NullMatchKeyInsertCount`. A
+non-zero value typically indicates a data-quality issue upstream — the business
+key was expected but missing. Surface this signal in your application rather
+than relying on silent inserts.
 
 ## DuplicateKeyStrategy
 

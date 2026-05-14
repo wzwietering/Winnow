@@ -139,5 +139,12 @@ public enum FailureReason
     /// <summary>
     /// Failure could not be classified into a known category.
     /// </summary>
-    UnknownError
+    UnknownError,
+
+    /// <summary>
+    /// MatchBy retry refresh found no matching row. The row that caused the original
+    /// duplicate-key failure no longer exists, so the failed INSERT cannot be flipped
+    /// to an UPDATE.
+    /// </summary>
+    MatchByRefreshNotFound
 }

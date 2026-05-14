@@ -68,21 +68,6 @@ internal class UpsertGraphOperation<TEntity, TKey> : IUpsertOperation<TEntity, T
         }
     }
 
-    public void ResolveBatch(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
-    {
-    }
-
-    public Task ResolveBatchAsync(
-        List<TEntity> entities,
-        StrategyContext<TEntity, TKey> context,
-        CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public bool TryRefreshFromMatchBy(TEntity entity, StrategyContext<TEntity, TKey> context) => false;
-
-    public Task<bool> TryRefreshFromMatchByAsync(
-        TEntity entity, StrategyContext<TEntity, TKey> context, CancellationToken cancellationToken) =>
-        Task.FromResult(false);
-
     public void PrepareEntity(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
         var isInsert = context.HasDefaultKeyValue(entity);

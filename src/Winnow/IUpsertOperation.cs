@@ -4,6 +4,11 @@ namespace Winnow;
 /// Defines operation-specific behavior for upsert batch processing strategies.
 /// Uses index tracking (like IInsertOperation) since some entities may be new.
 /// </summary>
+/// <remarks>
+/// MatchBy-specific hooks (batch pre-SELECT, retry refresh) live on
+/// <see cref="IMatchByCapableOperation{TEntity, TKey}"/>; strategies branch via
+/// <c>as</c>-cast so operations without MatchBy support carry no no-op stubs.
+/// </remarks>
 internal interface IUpsertOperation<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
@@ -13,38 +18,6 @@ internal interface IUpsertOperation<TEntity, TKey>
     void RecordSuccess(TEntity entity, int index, StrategyContext<TEntity, TKey> context);
     void RecordFailure(TEntity entity, int index, Exception ex, StrategyContext<TEntity, TKey> context);
     void CleanupEntity(TEntity entity, StrategyContext<TEntity, TKey> context);
-
-    /// <summary>
-    /// Runs any pre-batch resolution that needs to happen before per-entity preparation
-    /// (e.g. MatchBy SELECT). Default for operations that have no pre-resolution is a no-op.
-    /// </summary>
-    void ResolveBatch(List<TEntity> entities, StrategyContext<TEntity, TKey> context);
-
-    /// <summary>
-    /// Async counterpart of <see cref="ResolveBatch"/>.
-    /// </summary>
-    Task ResolveBatchAsync(
-        List<TEntity> entities,
-        StrategyContext<TEntity, TKey> context,
-        CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Re-queries an existing row matching the entity's MatchBy values and, when found,
-    /// copies the primary key and any concurrency-token values from the row onto the entity.
-    /// Returns false when MatchBy is not configured or no row matches.
-    /// Used by the duplicate-key retry path so it can flip a failed INSERT to MODIFIED
-    /// even when the original detection was business-key based.
-    /// </summary>
-    bool TryRefreshFromMatchBy(TEntity entity, StrategyContext<TEntity, TKey> context);
-
-    /// <summary>
-    /// Async counterpart of <see cref="TryRefreshFromMatchBy"/>. Used by the async retry path
-    /// so the refresh SELECT goes through async I/O and observes the cancellation token.
-    /// </summary>
-    Task<bool> TryRefreshFromMatchByAsync(
-        TEntity entity,
-        StrategyContext<TEntity, TKey> context,
-        CancellationToken cancellationToken);
 
     /// <summary>
     /// Creates the final result from tracked successes and failures.
