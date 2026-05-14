@@ -10,18 +10,20 @@ namespace Winnow.Internal;
 /// </summary>
 internal static class MatchExpressionParser
 {
-    // Cache the parsed plan per (expression, entity type) so a streaming workload that
-    // reuses a single UpsertOptions doesn't pay Expression.Compile() cost on every batch.
+    // Cache the parsed plan per (expression, entity type, TEntity) so a streaming workload
+    // that reuses a single UpsertOptions doesn't pay Expression.Compile() cost on every batch.
     // Key uses reference equality of LambdaExpression — fluent helpers reuse the same
-    // instance across calls, so cache hits are the normal case.
-    private static readonly ConcurrentDictionary<(LambdaExpression, IEntityType), object> PlanCache = new();
+    // instance across calls, so cache hits are the normal case. typeof(TEntity) guards
+    // against the latent class of bug where a caller passes a TEntity that doesn't match
+    // the entityType, which would otherwise cast the cached plan to the wrong generic and NRE.
+    private static readonly ConcurrentDictionary<(LambdaExpression, IEntityType, Type), object> PlanCache = new();
 
     internal static MatchExpressionPlan<TEntity> Parse<TEntity>(
         LambdaExpression expression,
         IEntityType entityType) where TEntity : class
     {
         var cached = (MatchExpressionPlan<TEntity>?)PlanCache.GetOrAdd(
-            (expression, entityType),
+            (expression, entityType, typeof(TEntity)),
             static key => BuildPlan<TEntity>((LambdaExpression)key.Item1, (IEntityType)key.Item2));
         return cached!;
     }

@@ -1,3 +1,5 @@
+using System.Collections;
+
 namespace Winnow.Internal;
 
 /// <summary>
@@ -31,7 +33,7 @@ internal readonly struct MatchKey : IEquatable<MatchKey>
         var hc = new HashCode();
         foreach (var value in _values)
         {
-            hc.Add(value);
+            hc.Add(ValueHashCode(value));
         }
         return hc.ToHashCode();
     }
@@ -43,9 +45,34 @@ internal readonly struct MatchKey : IEquatable<MatchKey>
         if (left.Length != right.Length) return false;
         for (var i = 0; i < left.Length; i++)
         {
-            if (!Equals(left[i], right[i])) return false;
+            if (!ValueEquals(left[i], right[i])) return false;
         }
         return true;
+    }
+
+    // Equality and hashing for individual match-value slots. Arrays (notably byte[] used
+    // for hash/binary business keys) fall back to reference equality under object.Equals,
+    // which would silently misroute every entity to INSERT. Use structural comparison so
+    // two distinct array instances with identical contents are treated as equal.
+    private static bool ValueEquals(object? a, object? b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        if (a is IStructuralEquatable se && a.GetType() == b.GetType())
+        {
+            return se.Equals(b, StructuralComparisons.StructuralEqualityComparer);
+        }
+        return a.Equals(b);
+    }
+
+    private static int ValueHashCode(object? value)
+    {
+        if (value is null) return 0;
+        if (value is IStructuralEquatable se)
+        {
+            return se.GetHashCode(StructuralComparisons.StructuralEqualityComparer);
+        }
+        return value.GetHashCode();
     }
 
     public static bool operator ==(MatchKey left, MatchKey right) => left.Equals(right);

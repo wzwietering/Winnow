@@ -1,4 +1,4 @@
-using System.Linq.Expressions;
+using Winnow.Internal;
 
 namespace Winnow;
 
@@ -22,24 +22,12 @@ public class UpsertOptions : WinnowOptions
     public DuplicateKeyStrategy DuplicateKeyStrategy { get; set; } = DuplicateKeyStrategy.Fail;
 
     /// <summary>
-    /// Optional business-key expression used to look up existing rows in the database
-    /// instead of relying on primary-key default-value detection.
+    /// Internal carrier for a configured MatchBy expression. The public path is
+    /// <see cref="UpsertOptionsExtensions.WithMatchBy{TEntity, TKey}"/> (or the
+    /// single-type-argument overload), which performs shape validation before
+    /// storing the expression here. Wrapped so future configuration fields can
+    /// be added without breaking the public API. Graph upsert does not yet
+    /// support MatchBy.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Supports a single property (<c>e =&gt; e.ExternalId</c>) or an anonymous projection
-    /// (<c>e =&gt; new { e.TenantId, e.ExternalId }</c>) for composite match keys.
-    /// </para>
-    /// <para>
-    /// When set, upsert performs a single batched SELECT before SaveChanges to partition
-    /// entities into insert/update sets by business key. The resolved primary key replaces
-    /// the input entity's PK on update. Null preserves legacy <c>HasDefaultKeyValue</c> behavior.
-    /// </para>
-    /// <para>
-    /// Assign via <see cref="UpsertOptionsExtensions.WithMatchBy{TEntity, TKey}"/> — the setter
-    /// is internal so the fluent helper is the only path, guaranteeing shape validation runs
-    /// at configuration time. Graph upsert (<c>UpsertGraph</c>) does not yet support MatchBy.
-    /// </para>
-    /// </remarks>
-    public LambdaExpression? MatchBy { get; internal set; }
+    internal MatchByConfiguration? MatchBy { get; set; }
 }

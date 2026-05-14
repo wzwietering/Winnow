@@ -30,7 +30,6 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
 {
     private readonly UpsertOptions _options;
     private readonly UpsertAccumulator<TKey> _accumulator;
-    private MatchByResolution<TEntity>? _resolution;
 
     internal UpsertOperation(UpsertOptions options, UpsertAccumulator<TKey> accumulator)
     {
@@ -57,7 +56,7 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         var prepared = PrepareMatchBatch(entities, context);
         var service = new MatchExpressionQueryService(context.Context);
         var existing = service.QueryExisting<TEntity>(prepared.Plan.Properties, prepared.Values);
-        _resolution = BuildResolution(prepared, existing);
+        context.MatchByResolution = BuildResolution(prepared, existing);
     }
 
     public async Task ResolveBatchAsync(
@@ -70,7 +69,7 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         var service = new MatchExpressionQueryService(context.Context);
         var existing = await service.QueryExistingAsync<TEntity>(
             prepared.Plan.Properties, prepared.Values, cancellationToken);
-        _resolution = BuildResolution(prepared, existing);
+        context.MatchByResolution = BuildResolution(prepared, existing);
     }
 
     private PreparedMatchBatch PrepareMatchBatch(
@@ -79,7 +78,7 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         var entityType = context.Context.Model.FindEntityType(typeof(TEntity))
             ?? throw new InvalidOperationException(
                 $"Entity type {typeof(TEntity).Name} is not part of the DbContext model.");
-        var plan = MatchExpressionParser.Parse<TEntity>(_options.MatchBy!, entityType);
+        var plan = MatchExpressionParser.Parse<TEntity>(_options.MatchBy!.Expression, entityType);
         var values = ExtractMatchValues(entities, plan);
         RejectDuplicateMatchKeys(values);
         return new PreparedMatchBatch(plan, values, entityType);
@@ -102,6 +101,17 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         {
             if (property.IsConcurrencyToken && !property.IsPrimaryKey())
             {
+                // Shadow tokens cannot be copied via reflection because there is no CLR
+                // backing property. Reject at configuration time (here, called from
+                // ResolveBatch) so the caller fails before any entity has been touched,
+                // rather than as a per-entity failure mid-batch.
+                if (property.PropertyInfo is null)
+                {
+                    throw new InvalidOperationException(
+                        $"Concurrency token '{property.Name}' on {entityType.ClrType.Name} is a shadow property; " +
+                        $"MatchBy requires CLR-backed concurrency tokens. Map '{property.Name}' as a public property " +
+                        $"or remove its IsConcurrencyToken configuration.");
+                }
                 result.Add(property);
             }
         }
@@ -147,19 +157,20 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
 
     private bool DecideInsertOrUpdate(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
-        if (_resolution is null)
+        var resolution = context.MatchByResolution;
+        if (resolution is null)
         {
             return context.HasDefaultKeyValue(entity);
         }
 
-        var values = _resolution.EntityMatchValues[index];
+        var values = resolution.EntityMatchValues[index];
         if (MatchKey.ContainsNull(values))
         {
             _accumulator.RecordNullMatchKeyInsert();
             return true;
         }
 
-        if (!_resolution.ExistingByMatchKey.TryGetValue(new MatchKey(values), out var existing))
+        if (!resolution.ExistingByMatchKey.TryGetValue(new MatchKey(values), out var existing))
         {
             return true;
         }
@@ -168,52 +179,56 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         return false;
     }
 
-    private void ApplyExistingRowOnto(TEntity input, TEntity existing, StrategyContext<TEntity, TKey> context)
+    private static void ApplyExistingRowOnto(TEntity input, TEntity existing, StrategyContext<TEntity, TKey> context)
     {
         var pk = context.GetEntityIdFromInstance(existing);
         context.SetEntityId(input, pk);
-        CopyConcurrencyTokensFromExisting(input, existing);
+        CopyConcurrencyTokensFromExisting(input, existing, context);
     }
 
-    private void CopyConcurrencyTokensFromExisting(TEntity input, TEntity existing)
+    private static void CopyConcurrencyTokensFromExisting(
+        TEntity input, TEntity existing, StrategyContext<TEntity, TKey> context)
     {
-        if (_resolution is null) return;
-        foreach (var token in _resolution.ConcurrencyTokens)
+        var resolution = context.MatchByResolution;
+        if (resolution is null) return;
+        foreach (var token in resolution.ConcurrencyTokens)
         {
-            var propertyInfo = token.PropertyInfo
-                ?? throw new InvalidOperationException(
-                    $"Concurrency token '{token.Name}' is a shadow property; MatchBy requires CLR properties for concurrency tokens.");
+            // PropertyInfo is guaranteed non-null: CollectConcurrencyTokens rejects shadow
+            // tokens at ResolveBatch time.
+            var propertyInfo = token.PropertyInfo!;
             propertyInfo.SetValue(input, propertyInfo.GetValue(existing));
         }
     }
 
     public MatchByRefreshOutcome TryRefreshFromMatchBy(TEntity entity, StrategyContext<TEntity, TKey> context)
     {
-        if (_resolution is null) return MatchByRefreshOutcome.NotApplicable;
+        var resolution = context.MatchByResolution;
+        if (resolution is null) return MatchByRefreshOutcome.NotApplicable;
 
-        var values = _resolution.Plan.Extractor(entity);
+        var values = resolution.Plan.Extractor(entity);
         if (MatchKey.ContainsNull(values)) return MatchByRefreshOutcome.NotFound;
 
         var service = new MatchExpressionQueryService(context.Context);
-        var dict = service.QueryExisting<TEntity>(_resolution.Plan.Properties, new[] { values });
+        var dict = service.QueryExisting<TEntity>(resolution.Plan.Properties, new[] { values });
         return ApplyRefreshResult(entity, values, dict, context);
     }
 
     public async Task<MatchByRefreshOutcome> TryRefreshFromMatchByAsync(
         TEntity entity, StrategyContext<TEntity, TKey> context, CancellationToken cancellationToken)
     {
-        if (_resolution is null) return MatchByRefreshOutcome.NotApplicable;
+        var resolution = context.MatchByResolution;
+        if (resolution is null) return MatchByRefreshOutcome.NotApplicable;
 
-        var values = _resolution.Plan.Extractor(entity);
+        var values = resolution.Plan.Extractor(entity);
         if (MatchKey.ContainsNull(values)) return MatchByRefreshOutcome.NotFound;
 
         var service = new MatchExpressionQueryService(context.Context);
         var dict = await service.QueryExistingAsync<TEntity>(
-            _resolution.Plan.Properties, new[] { values }, cancellationToken);
+            resolution.Plan.Properties, new[] { values }, cancellationToken);
         return ApplyRefreshResult(entity, values, dict, context);
     }
 
-    private MatchByRefreshOutcome ApplyRefreshResult(
+    private static MatchByRefreshOutcome ApplyRefreshResult(
         TEntity entity, object?[] values, Dictionary<MatchKey, TEntity> dict,
         StrategyContext<TEntity, TKey> context)
     {

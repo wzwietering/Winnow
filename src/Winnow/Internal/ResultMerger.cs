@@ -82,6 +82,7 @@ internal static class ResultMerger
             FailureCount = partitions.Sum(p => p.Result.FailureCount),
             InsertedCount = partitions.Sum(p => p.Result.InsertedCount),
             UpdatedCount = partitions.Sum(p => p.Result.UpdatedCount),
+            InsertedWithNullMatchKeyCount = partitions.Sum(p => p.Result.InsertedWithNullMatchKeyCount),
             Duration = duration,
             DatabaseRoundTrips = totalRoundTrips,
             WasCancelled = partitions.Any(p => p.Result.WasCancelled),

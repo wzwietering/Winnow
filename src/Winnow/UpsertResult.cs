@@ -50,7 +50,9 @@ public class UpsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, I
     private IReadOnlyList<TKey>? _successfulIdsCache;
 
     /// <summary>
-    /// Entities that were inserted (had default key values).
+    /// Entities that were inserted — either because they had a default primary key,
+    /// or (when <c>MatchBy</c> is configured) because no existing row matched the
+    /// configured business key.
     /// Throws when <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower
     /// than <see cref="ResultDetail.Full"/>.
     /// </summary>
@@ -66,7 +68,9 @@ public class UpsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, I
     internal IReadOnlyList<UpsertedEntity<TKey>> InsertedEntitiesRaw => _insertedEntities;
 
     /// <summary>
-    /// Entities that were updated (had non-default key values).
+    /// Entities that were updated — either because they had a non-default primary
+    /// key, or (when <c>MatchBy</c> is configured) because an existing row matched
+    /// the configured business key.
     /// Throws when <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower
     /// than <see cref="ResultDetail.Full"/>.
     /// </summary>
@@ -180,7 +184,7 @@ public class UpsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, I
     /// were unexpectedly null; callers may want to surface this as a data-quality warning
     /// rather than rely on the silent insert. Zero when <c>MatchBy</c> is not configured.
     /// </summary>
-    public int NullMatchKeyInsertCount { get; init; }
+    public int InsertedWithNullMatchKeyCount { get; init; }
 
     /// <summary>
     /// Details of each failed upsert operation. Throws when

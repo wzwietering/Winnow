@@ -1,4 +1,5 @@
 using Shouldly;
+using Winnow.Internal;
 using Winnow.Tests.Entities;
 using Winnow.Tests.Infrastructure;
 
@@ -51,7 +52,9 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
         var member = System.Linq.Expressions.Expression.PropertyOrField(p, nameof(Product.DisplayId));
         var lambda = System.Linq.Expressions.Expression.Lambda<Func<Product, string>>(member, p);
 
-        var options = new UpsertOptions { MatchBy = lambda };
+        // Bypass the public WithMatchBy shape validation to verify that the runtime
+        // parser still rejects an unmapped property when the model is consulted.
+        var options = new UpsertOptions { MatchBy = new MatchByConfiguration(lambda) };
 
         Should.Throw<ArgumentException>(() =>
             saver.Upsert(new[] { NewProduct("X") }, options));
@@ -157,11 +160,19 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
     }
 
     [Fact]
-    public void UpsertOptions_MatchBy_Setter_IsNotPublic()
+    public void UpsertOptions_MatchBy_IsNotPubliclyVisible()
     {
-        var setter = typeof(UpsertOptions).GetProperty(nameof(UpsertOptions.MatchBy))!.SetMethod!;
-        setter.IsPublic.ShouldBeFalse(
-            "MatchBy direct assignment would bypass shape validation; callers must use WithMatchBy.");
+        // MatchBy carries an internal-only configuration object; both the getter
+        // and the setter must be non-public so the public API surface exposes
+        // only WithMatchBy. Locking this in protects future shape evolution.
+        var property = typeof(UpsertOptions).GetProperty(
+            "MatchBy",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        property.ShouldNotBeNull("MatchBy should exist as a non-public member.");
+        property!.GetMethod!.IsPublic.ShouldBeFalse();
+        property.SetMethod!.IsPublic.ShouldBeFalse();
+        typeof(UpsertOptions).GetProperty("MatchBy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public)
+            .ShouldBeNull("MatchBy must not be visible on the public API surface.");
     }
 
     [Fact]

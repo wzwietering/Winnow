@@ -236,7 +236,7 @@ public class WinnowerUpsertMatchByTests : TestBase
     }
 
     [Fact]
-    public void Upsert_MatchBy_WithNullMatchValue_RoutesToInsert_AndReportsNullMatchKeyInsertCount()
+    public void Upsert_MatchBy_WithNullMatchValue_RoutesToInsert_AndReportsInsertedWithNullMatchKeyCount()
     {
         using var context = CreateContext();
 
@@ -255,7 +255,7 @@ public class WinnowerUpsertMatchByTests : TestBase
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedCount.ShouldBe(2);
         result.UpdatedCount.ShouldBe(0);
-        result.NullMatchKeyInsertCount.ShouldBe(2,
+        result.InsertedWithNullMatchKeyCount.ShouldBe(2,
             "entities whose MatchBy values contain null are routed to INSERT — the count surfaces that fact for observability.");
     }
 

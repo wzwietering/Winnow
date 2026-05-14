@@ -23,21 +23,24 @@ Upsert operations perform INSERT or UPDATE based on key detection:
 By default, upsert routes entities by checking whether the primary key holds its
 default value. For data sync scenarios where the primary key is database-generated
 and you want to match on a business key (e.g. `ExternalId`, `Email`, `Sku`),
-set `UpsertOptions.MatchBy` to an expression that selects that key.
+use `WithMatchBy` to configure the lookup:
 
 ```csharp
 // Single business key:
 saver.Upsert(products, new UpsertOptions()
-    .WithMatchBy<Product, string>(p => p.Sku));
+    .WithMatchBy<Product>(p => p.Sku));
 
-// Composite business key (preferred, no TKey needed):
+// Composite business key:
 saver.Upsert(items, new UpsertOptions()
     .WithMatchBy<Item>(i => new { i.TenantId, i.ExternalId }));
 ```
 
-> **Tip:** Use the single-type-argument overload (`WithMatchBy<TEntity>`) for
-> composite keys. The two-argument form (`WithMatchBy<TEntity, TKey>`) requires
-> spelling out `TKey = object` for anonymous projections, which is unintuitive.
+> **Tip:** The single-type-argument overload (`WithMatchBy<TEntity>`) shown above
+> is the preferred form — it accepts both simple properties and anonymous
+> projections. The two-argument overload (`WithMatchBy<TEntity, TKey>`) exists
+> for callers that need to bind `TKey` explicitly (e.g. storing the expression
+> in a typed variable); avoid it for composite keys, where it requires the
+> awkward `TKey = object` spelling.
 
 ### How it works
 
@@ -84,7 +87,7 @@ as an UPDATE.
 
 ```csharp
 var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate }
-    .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
+    .WithMatchBy<CustomerOrder>(o => o.OrderNumber);
 saver.Upsert(orders, options);
 ```
 
@@ -124,10 +127,10 @@ workloads with simple keys and batches up to a few hundred rows this is a single
 SELECT. The retry path (`DuplicateKeyStrategy.RetryAsUpdate`) fires one additional
 SELECT per refreshed entity.
 
-### NullMatchKeyInsertCount
+### InsertedWithNullMatchKeyCount
 
 If any component of an entity's `MatchBy` projection is null, the entity is
-routed to INSERT and counted via `UpsertResult.NullMatchKeyInsertCount`. A
+routed to INSERT and counted via `UpsertResult.InsertedWithNullMatchKeyCount`. A
 non-zero value typically indicates a data-quality issue upstream — the business
 key was expected but missing. Surface this signal in your application rather
 than relying on silent inserts.

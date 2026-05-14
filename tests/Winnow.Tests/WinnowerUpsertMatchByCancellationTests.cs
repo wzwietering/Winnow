@@ -45,6 +45,38 @@ public class WinnowerUpsertMatchByCancellationTests : TestBase
             "MatchBy retry path issued a sync SELECT inside an async pipeline (sync-over-async).");
     }
 
+    [Fact]
+    public async Task UpsertAsync_MatchBy_CancellationDuringPreSelect_ThrowsOperationCancelled()
+    {
+        // Existing cancellation tests only cover pre-cancelled tokens. This test cancels
+        // mid-flight (inside ReaderExecutingAsync), verifying that the pre-SELECT honours
+        // the cancellation token threaded through QueryExistingAsync rather than completing
+        // and silently swallowing the cancel.
+        using var cts = new CancellationTokenSource();
+        var interceptor = new CancelDuringSelectInterceptor(cts, "CANCEL-PRE-SELECT");
+        using var context = CreateContextWithInterceptor(interceptor);
+
+        var batch = new[]
+        {
+            new CustomerOrder
+            {
+                OrderNumber = "CANCEL-PRE-SELECT",
+                CustomerId = 1,
+                CustomerName = "Pre-select cancel",
+                TotalAmount = 1m,
+                OrderDate = DateTimeOffset.UtcNow
+            }
+        };
+
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var options = new UpsertOptions().WithMatchBy<CustomerOrder>(o => o.OrderNumber);
+
+        await Should.ThrowAsync<OperationCanceledException>(async () =>
+            await saver.UpsertAsync(batch, options, cts.Token));
+
+        interceptor.SawSelect.ShouldBeTrue("Test setup: the pre-SELECT must have been intercepted.");
+    }
+
     private static TestDbContext CreateContextWithInterceptor(IInterceptor interceptor)
     {
         var options = new DbContextOptionsBuilder<TestDbContext>()
@@ -56,6 +88,46 @@ public class WinnowerUpsertMatchByCancellationTests : TestBase
         context.Database.OpenConnection();
         context.Database.EnsureCreated();
         return context;
+    }
+
+    private sealed class CancelDuringSelectInterceptor : DbCommandInterceptor
+    {
+        private readonly CancellationTokenSource _cts;
+        private readonly string _matchValueMarker;
+
+        public CancelDuringSelectInterceptor(CancellationTokenSource cts, string matchValueMarker)
+        {
+            _cts = cts;
+            _matchValueMarker = matchValueMarker;
+        }
+
+        public bool SawSelect { get; private set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (IsSelectMatchingMarker(command))
+            {
+                SawSelect = true;
+                _cts.Cancel();
+            }
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        private bool IsSelectMatchingMarker(DbCommand command)
+        {
+            var trimmed = command.CommandText.AsSpan().TrimStart();
+            if (!trimmed.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)) return false;
+            if (!command.CommandText.Contains("CustomerOrders", StringComparison.Ordinal)) return false;
+            foreach (DbParameter p in command.Parameters)
+            {
+                if (p.Value is string s && s == _matchValueMarker) return true;
+            }
+            return false;
+        }
     }
 
     private sealed class ReaderModeProbe : DbCommandInterceptor

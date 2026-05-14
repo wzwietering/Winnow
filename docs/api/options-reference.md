@@ -90,7 +90,11 @@ Used with `Upsert`.
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `DuplicateKeyStrategy` | `DuplicateKeyStrategy` | `Fail` | How to handle duplicate key errors during INSERT |
-| `MatchBy` | `LambdaExpression?` | `null` | Optional business-key expression that overrides default-PK detection. See [Upsert Operations → Custom Match Expressions](../upsert-operations.md#custom-match-expressions-matchby). Use `UpsertOptionsExtensions.WithMatchBy<TEntity, TKey>` for type-safe construction. |
+
+To configure a business-key match expression (overriding the default primary-key
+detection), use `options.WithMatchBy<TEntity>(e => e.Sku)` for a single property or
+`options.WithMatchBy<TEntity>(e => new { e.TenantId, e.ExternalId })` for a composite.
+See [Upsert Operations → Custom Match Expressions](../upsert-operations.md#custom-match-expressions-matchby).
 
 ## UpsertGraphOptions
 
@@ -194,6 +198,7 @@ var result = saver.Update(entities, new WinnowOptions
 | `DuplicateKey` | Primary key or unique constraint violation. |
 | `Cancelled` | Operation was cancelled via CancellationToken. |
 | `UnknownError` | Unclassified error. |
+| `MatchByRefreshNotFound` | `DuplicateKeyStrategy.RetryAsUpdate` fired under `MatchBy`, but the re-query found no row matching the business key (typically a concurrent INSERT-then-DELETE between the original failure and our retry). The entity is not persisted; inspect `UpsertFailure.EntityIndex` and decide whether to discard or re-queue. |
 
 ### ResultDetail
 

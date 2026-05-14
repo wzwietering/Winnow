@@ -152,7 +152,7 @@ internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<T
         FailureCount = _failureCount,
         InsertedCount = _insertedCount,
         UpdatedCount = _updatedCount,
-        NullMatchKeyInsertCount = _nullMatchKeyInsertCount,
+        InsertedWithNullMatchKeyCount = _nullMatchKeyInsertCount,
         WasCancelled = wasCancelled,
         GraphHierarchy = graph?.Hierarchy,
         TraversalInfo = graph?.TraversalInfo

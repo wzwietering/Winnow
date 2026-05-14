@@ -55,6 +55,13 @@ internal class StrategyContext<TEntity, TKey>
     internal DbContext Context => _context;
     internal ILogger? Logger { get; init; }
     internal RetryOptions? RetryOptions { get; init; }
+
+    /// <summary>
+    /// Per-execution MatchBy resolution slot. Strategies populate this before processing
+    /// entities; operations read from it during routing decisions. Lives here (not on the
+    /// operation) so per-batch state cannot leak across invocations or threads.
+    /// </summary>
+    internal MatchByResolution<TEntity>? MatchByResolution { get; set; }
     internal int RoundTripCounter => _roundTripCounter;
     internal void IncrementRoundTrip() => _roundTripCounter++;
 

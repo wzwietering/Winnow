@@ -92,7 +92,7 @@ public class WinnowerUpsertMatchByCoverageGapTests : TestBase
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedCount.ShouldBe(2);
-        result.NullMatchKeyInsertCount.ShouldBe(2);
+        result.InsertedWithNullMatchKeyCount.ShouldBe(2);
     }
 
     [Fact]
@@ -130,6 +130,30 @@ public class WinnowerUpsertMatchByCoverageGapTests : TestBase
         context.Database.OpenConnection();
         context.Database.EnsureCreated();
         return context;
+    }
+
+    [Fact]
+    public void UpsertOperation_DoesNotCarryPerBatchMatchByResolutionAsInstanceState()
+    {
+        // Per-batch MatchBy resolution must flow through StrategyContext (which has the
+        // correct per-execution lifetime) and not as a mutable field on UpsertOperation.
+        // Holding resolution on the operation type leaks state between batches if the
+        // operation is ever reused, and would silently corrupt routing if the type is
+        // shared across concurrent invocations. This is a design-contract test.
+        var opType = typeof(Winnow.Operations.UpsertOperation<CustomerOrder, int>);
+        var leakingFields = opType
+            .GetFields(System.Reflection.BindingFlags.Instance
+                | System.Reflection.BindingFlags.NonPublic
+                | System.Reflection.BindingFlags.Public)
+            .Where(f => f.FieldType.IsGenericType
+                && f.FieldType.GetGenericTypeDefinition() == typeof(MatchByResolution<>))
+            .Select(f => f.Name)
+            .ToList();
+
+        leakingFields.ShouldBeEmpty(
+            "UpsertOperation must not hold MatchByResolution as instance state. " +
+            $"Found leaking field(s): {string.Join(", ", leakingFields)}. " +
+            "Move per-batch resolution onto StrategyContext.");
     }
 
     private sealed class SelectProbe : DbCommandInterceptor

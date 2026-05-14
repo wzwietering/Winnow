@@ -171,7 +171,7 @@ primary-key default-value check, use `MatchBy`:
 
 ```csharp
 saver.Upsert(products, new UpsertOptions()
-    .WithMatchBy<Product, string>(p => p.Sku));
+    .WithMatchBy<Product>(p => p.Sku));
 ```
 
 See [Custom Match Expressions](docs/upsert-operations.md#custom-match-expressions-matchby) for composite keys, race-condition behavior, and limitations.
@@ -403,7 +403,7 @@ saver.Upsert(products);
 
 // Better: identify entities by a unique business key
 saver.Upsert(products, new UpsertOptions()
-    .WithMatchBy<Product, string>(p => p.Sku));
+    .WithMatchBy<Product>(p => p.Sku));
 
 // Best for high-concurrency: combine MatchBy with RetryAsUpdate.
 // See docs/upsert-operations.md for race condition details.
