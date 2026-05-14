@@ -18,11 +18,12 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         IOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
-        operation.ValidateAll(entities, context);
-        context.DetachAllEntities(entities);
+        var survivors = operation.ApplyPreValidation(entities, context, cancellationToken);
+        operation.ValidateAll(survivors, context);
+        context.DetachAllEntities(survivors);
 
         var wasCancelled = false;
-        foreach (var entity in entities)
+        foreach (var entity in survivors)
         {
             if (cancellationToken.IsCancellationRequested)
             {
@@ -42,11 +43,12 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         IInsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
-        operation.ValidateAll(entities, context);
-        context.DetachAllEntities(entities);
+        var preValidated = operation.ApplyPreValidation(entities, context, cancellationToken);
+        operation.ValidateAll(preValidated.Survivors, context);
+        context.DetachAllEntities(preValidated.Survivors);
 
         var wasCancelled = false;
-        for (var i = 0; i < entities.Count; i++)
+        for (var i = 0; i < preValidated.Survivors.Count; i++)
         {
             if (cancellationToken.IsCancellationRequested)
             {
@@ -54,7 +56,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
                 break;
             }
 
-            await ProcessSingleInsertAsync(entities[i], i, context, operation, cancellationToken);
+            await ProcessSingleInsertAsync(
+                preValidated.Survivors[i], preValidated.GetOriginalIndex(i), context, operation, cancellationToken);
         }
 
         return operation.CreateResult(wasCancelled);
@@ -66,18 +69,19 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         IUpsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
-        operation.ValidateAll(entities, context);
+        var preValidated = operation.ApplyPreValidation(entities, context, cancellationToken);
+        operation.ValidateAll(preValidated.Survivors, context);
         // MatchBy pre-SELECT fires once per batch here, before per-entity processing.
         // New upsert strategies must mirror this call at their batch entry, otherwise
         // MatchBy silently skips and routing falls back to PK default-value detection.
         if (operation is IMatchByCapableOperation<TEntity, TKey> matchByOp)
         {
-            await matchByOp.ResolveBatchAsync(entities, context, cancellationToken);
+            await matchByOp.ResolveBatchAsync(preValidated.Survivors, context, cancellationToken);
         }
-        context.DetachAllEntities(entities);
+        context.DetachAllEntities(preValidated.Survivors);
 
         var wasCancelled = false;
-        for (var i = 0; i < entities.Count; i++)
+        for (var i = 0; i < preValidated.Survivors.Count; i++)
         {
             if (cancellationToken.IsCancellationRequested)
             {
@@ -85,7 +89,8 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
                 break;
             }
 
-            await ProcessSingleUpsertAsync(entities[i], i, context, operation, cancellationToken);
+            await ProcessSingleUpsertAsync(
+                preValidated.Survivors[i], preValidated.GetOriginalIndex(i), context, operation, cancellationToken);
         }
 
         return operation.CreateResult(wasCancelled);
@@ -206,10 +211,11 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         StrategyContext<TEntity, TKey> context,
         IOperation<TEntity, TKey> operation)
     {
-        operation.ValidateAll(entities, context);
-        context.DetachAllEntities(entities);
+        var survivors = operation.ApplyPreValidation(entities, context, CancellationToken.None);
+        operation.ValidateAll(survivors, context);
+        context.DetachAllEntities(survivors);
 
-        foreach (var entity in entities)
+        foreach (var entity in survivors)
         {
             ProcessSingleEntity(entity, context, operation);
         }
@@ -222,12 +228,13 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         StrategyContext<TEntity, TKey> context,
         IInsertOperation<TEntity, TKey> operation)
     {
-        operation.ValidateAll(entities, context);
-        context.DetachAllEntities(entities);
+        var preValidated = operation.ApplyPreValidation(entities, context, CancellationToken.None);
+        operation.ValidateAll(preValidated.Survivors, context);
+        context.DetachAllEntities(preValidated.Survivors);
 
-        for (var i = 0; i < entities.Count; i++)
+        for (var i = 0; i < preValidated.Survivors.Count; i++)
         {
-            ProcessSingleInsert(entities[i], i, context, operation);
+            ProcessSingleInsert(preValidated.Survivors[i], preValidated.GetOriginalIndex(i), context, operation);
         }
 
         return operation.CreateResult();
@@ -238,18 +245,19 @@ internal class GenericOneByOneStrategy<TEntity, TKey>
         StrategyContext<TEntity, TKey> context,
         IUpsertOperation<TEntity, TKey> operation)
     {
-        operation.ValidateAll(entities, context);
+        var preValidated = operation.ApplyPreValidation(entities, context, CancellationToken.None);
+        operation.ValidateAll(preValidated.Survivors, context);
         // MatchBy pre-SELECT fires once per batch here, before per-entity processing.
         // New upsert strategies must mirror this call at their batch entry.
         if (operation is IMatchByCapableOperation<TEntity, TKey> matchByOp)
         {
-            matchByOp.ResolveBatch(entities, context);
+            matchByOp.ResolveBatch(preValidated.Survivors, context);
         }
-        context.DetachAllEntities(entities);
+        context.DetachAllEntities(preValidated.Survivors);
 
-        for (var i = 0; i < entities.Count; i++)
+        for (var i = 0; i < preValidated.Survivors.Count; i++)
         {
-            ProcessSingleUpsert(entities[i], i, context, operation);
+            ProcessSingleUpsert(preValidated.Survivors[i], preValidated.GetOriginalIndex(i), context, operation);
         }
 
         return operation.CreateResult();

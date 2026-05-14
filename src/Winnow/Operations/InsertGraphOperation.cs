@@ -1,5 +1,6 @@
 using Winnow.Internal;
 using Winnow.Internal.Accumulators;
+using Winnow.Internal.Validation;
 
 namespace Winnow.Operations;
 
@@ -22,6 +23,12 @@ internal class InsertGraphOperation<TEntity, TKey> : IInsertOperation<TEntity, T
         _graph = graph;
         _tc = TraversalContext.FromOptions(options);
     }
+
+    public PreValidationResult<TEntity> ApplyPreValidation(
+        List<TEntity> entities,
+        StrategyContext<TEntity, TKey> context,
+        CancellationToken cancellationToken) =>
+        OperationPreValidationHelper.RunIndexed(_options.Validation, entities, context, _accumulator, cancellationToken);
 
     public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {

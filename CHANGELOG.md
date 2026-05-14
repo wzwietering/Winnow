@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Pre-validation pipeline — attach a `ValidatorDelegate<TEntity>` via `WinnowOptions.WithValidation<TEntity>(...)` (or the matching extension on `GraphOptionsBase`) to reject entities in-process before any database round trip. Invalid entities are recorded as failures with `FailureReason.ValidationError` and never reach the strategy, restoring `DivideAndConquer`'s speed advantage at moderate-to-high failure rates. See [docs/pre-validation.md](docs/pre-validation.md).
+- Built-in `WithDataAnnotations<TEntity>()` adapter that drives pre-validation from `System.ComponentModel.DataAnnotations` attributes declared on the entity. Per-type reflection cost is paid once and cached via `FrozenDictionary`; the hot path is a linear walk over cached `(getter, ValidationAttribute[])` pairs.
+- `ValidationOptions`, `ValidationError` (readonly record struct), `ValidationCollector` (ref struct with pooled buffer), `ValidationFailureBehavior` (`RecordAsFailure` / `Throw`), and `ValidationException` carrying aggregated failures when `Throw` is selected.
+- `PreValidationBenchmarks` mirroring `FailureRateBenchmarks`'s entity shape so pre-validation overhead and recovered throughput compare directly against the existing failure-rate table.
+
 ## [1.2.0] - 2026-05-14
 
 ### Added

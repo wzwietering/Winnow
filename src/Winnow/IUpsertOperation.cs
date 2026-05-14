@@ -13,6 +13,17 @@ internal interface IUpsertOperation<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
+    /// <summary>
+    /// Runs the configured pre-validation pipeline (if any). Returns the
+    /// survivors plus an optional original-index map; the caller uses
+    /// <see cref="Winnow.Internal.Validation.PreValidationResult{TEntity}.GetOriginalIndex"/>
+    /// to record results against the user-visible input position.
+    /// </summary>
+    Winnow.Internal.Validation.PreValidationResult<TEntity> ApplyPreValidation(
+        List<TEntity> entities,
+        StrategyContext<TEntity, TKey> context,
+        CancellationToken cancellationToken);
+
     void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context);
     void PrepareEntity(TEntity entity, int index, StrategyContext<TEntity, TKey> context);
     void RecordSuccess(TEntity entity, int index, StrategyContext<TEntity, TKey> context);

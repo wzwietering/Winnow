@@ -56,6 +56,18 @@ public abstract class GraphOptionsBase
     public RetryOptions? Retry { get; set; }
 
     /// <summary>
+    /// When set, runs a pre-validation pipeline over each batch before any
+    /// database round trip. Invalid top-level entities are recorded as failures
+    /// with <see cref="FailureReason.ValidationError"/> and are not sent to the
+    /// strategy. By default only the top-level entities are validated; set
+    /// <see cref="ValidationOptions.IncludeNavigations"/> to also walk
+    /// navigation children visible to the configured <see cref="NavigationFilter"/>.
+    /// Configure via the <c>WithValidation</c> or <c>WithDataAnnotations</c>
+    /// extension methods on this options object.
+    /// </summary>
+    public ValidationOptions? Validation { get; set; }
+
+    /// <summary>
     /// Controls how much per-entity detail the result captures. Default: <see cref="Winnow.ResultDetail.Full"/>.
     /// For graph operations, reducing detail also drops the graph hierarchy tree and traversal statistics,
     /// which are typically the dominant memory cost. <see cref="WinnowResultBase{TKey}.SuccessCount"/>

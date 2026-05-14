@@ -22,6 +22,15 @@ public class WinnowOptions
     public RetryOptions? Retry { get; set; }
 
     /// <summary>
+    /// When set, runs a pre-validation pipeline over each batch before any
+    /// database round trip. Invalid entities are recorded as failures with
+    /// <see cref="FailureReason.ValidationError"/> and are not sent to the strategy.
+    /// Configure via the <c>WithValidation</c> or <c>WithDataAnnotations</c>
+    /// extension methods on this options object.
+    /// </summary>
+    public ValidationOptions? Validation { get; set; }
+
+    /// <summary>
     /// Controls how much per-entity detail the result captures. Default: <see cref="Winnow.ResultDetail.Full"/>.
     /// Lower levels (<see cref="Winnow.ResultDetail.Minimal"/>, <see cref="Winnow.ResultDetail.None"/>) reduce memory at the cost
     /// of dropping reporting-only collections. <see cref="WinnowResultBase{TKey}.SuccessCount"/> and

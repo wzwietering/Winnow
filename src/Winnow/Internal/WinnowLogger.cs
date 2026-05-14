@@ -51,6 +51,13 @@ internal static partial class WinnowLogger
         MatchByPreSelect(logger, entityType, tupleCount, columnCount);
     }
 
+    internal static void LogPreValidationFiltered(
+        ILogger? logger, string entityType, int inputCount, int survivorCount)
+    {
+        if (logger is null) return;
+        PreValidationFiltered(logger, entityType, inputCount, survivorCount, inputCount - survivorCount);
+    }
+
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{Operation} starting for {EntityType}: {Count} entities using {Strategy}")]
     private static partial void BatchStarting(
@@ -81,4 +88,9 @@ internal static partial class WinnowLogger
         Message = "MatchBy pre-SELECT for {EntityType}: {TupleCount} tuples × {ColumnCount} columns")]
     private static partial void MatchByPreSelect(
         ILogger logger, string entityType, int tupleCount, int columnCount);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Pre-validation for {EntityType}: {SurvivorCount}/{InputCount} entities passed ({RejectedCount} rejected)")]
+    private static partial void PreValidationFiltered(
+        ILogger logger, string entityType, int inputCount, int survivorCount, int rejectedCount);
 }

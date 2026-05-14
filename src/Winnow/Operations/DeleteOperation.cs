@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Winnow.Internal;
 using Winnow.Internal.Accumulators;
+using Winnow.Internal.Validation;
 
 namespace Winnow.Operations;
 
@@ -20,6 +21,12 @@ internal class DeleteOperation<TEntity, TKey> : IOperation<TEntity, TKey>
         _options = options;
         _accumulator = accumulator;
     }
+
+    public List<TEntity> ApplyPreValidation(
+        List<TEntity> entities,
+        StrategyContext<TEntity, TKey> context,
+        CancellationToken cancellationToken) =>
+        OperationPreValidationHelper.Run(_options.Validation, entities, context, _accumulator, cancellationToken);
 
     public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {

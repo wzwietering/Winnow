@@ -10,6 +10,17 @@ internal interface IOperation<TEntity, TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     /// <summary>
+    /// Runs the configured pre-validation pipeline (if any) and returns the
+    /// entities that should continue into the strategy. Failures are recorded
+    /// into the operation's accumulator; survivors keep their order.
+    /// When no validation is configured, returns the input list unchanged.
+    /// </summary>
+    List<TEntity> ApplyPreValidation(
+        List<TEntity> entities,
+        StrategyContext<TEntity, TKey> context,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Validates all entities before processing. Called once at the start.
     /// </summary>
     void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context);
@@ -49,6 +60,17 @@ internal interface IInsertOperation<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
+    /// <summary>
+    /// Runs the configured pre-validation pipeline (if any). Returns the
+    /// survivors plus an optional original-index map; the caller uses
+    /// <see cref="Winnow.Internal.Validation.PreValidationResult{TEntity}.GetOriginalIndex"/>
+    /// to record results against the user-visible input position.
+    /// </summary>
+    Winnow.Internal.Validation.PreValidationResult<TEntity> ApplyPreValidation(
+        List<TEntity> entities,
+        StrategyContext<TEntity, TKey> context,
+        CancellationToken cancellationToken);
+
     /// <summary>
     /// Validates all entities before processing. Called once at the start.
     /// </summary>

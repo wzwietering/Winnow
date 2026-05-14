@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Winnow.Internal;
 using Winnow.Internal.Accumulators;
 using Winnow.Internal.Services;
+using Winnow.Internal.Validation;
 
 namespace Winnow.Operations;
 
@@ -36,6 +37,12 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         _options = options;
         _accumulator = accumulator;
     }
+
+    public PreValidationResult<TEntity> ApplyPreValidation(
+        List<TEntity> entities,
+        StrategyContext<TEntity, TKey> context,
+        CancellationToken cancellationToken) =>
+        OperationPreValidationHelper.RunIndexed(_options.Validation, entities, context, _accumulator, cancellationToken);
 
     public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {

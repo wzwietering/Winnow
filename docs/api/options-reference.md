@@ -11,9 +11,10 @@ Used with `Update`.
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `ValidateNavigationProperties` | `bool` | `true` | When true, validates navigation properties are not modified |
 | `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff for transient failures |
+| `Validation` | `ValidationOptions?` | `null` | Pre-validation pipeline — set via `WithValidation<T>(...)` or `WithDataAnnotations<T>()`. Invalid entities are recorded as failures with `FailureReason.ValidationError` and never reach the strategy. See [Pre-Validation](../pre-validation.md) |
 | `ResultDetail` | `ResultDetail` | `Full` | How much per-entity detail the result captures. Lower levels reduce memory; see [ResultDetail](#resultdetail) |
 
-All options classes that inherit from `WinnowOptions` also support `Strategy`, `ValidateNavigationProperties`, `Retry`, and `ResultDetail`. All options classes that inherit from `GraphOptionsBase` also support `Retry` and `ResultDetail`.
+All options classes that inherit from `WinnowOptions` also support `Strategy`, `ValidateNavigationProperties`, `Retry`, `Validation`, and `ResultDetail`. All options classes that inherit from `GraphOptionsBase` also support `Retry`, `Validation`, and `ResultDetail`.
 
 ## InsertOptions
 

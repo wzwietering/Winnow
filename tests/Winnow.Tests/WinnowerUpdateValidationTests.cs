@@ -1,0 +1,54 @@
+using Microsoft.EntityFrameworkCore;
+using Shouldly;
+using Winnow.Tests.Entities;
+using Winnow.Tests.Infrastructure;
+
+namespace Winnow.Tests;
+
+public class WinnowerUpdateValidationTests : TestBase
+{
+    [Fact]
+    public void Update_PreValidation_RecordsFailureByEntityId()
+    {
+        using var context = CreateContext();
+        SeedData(context, 3);
+        var products = context.Products.AsNoTracking().ToList();
+        products[1].Price = -1m; // mark as invalid
+
+        var options = new WinnowOptions();
+        options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
+        {
+            if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive");
+        });
+
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Update(products, options);
+
+        result.SuccessCount.ShouldBe(2);
+        result.FailureCount.ShouldBe(1);
+        var failure = result.Failures.ShouldHaveSingleItem();
+        failure.EntityId.ShouldBe(products[1].Id);
+        failure.Reason.ShouldBe(FailureReason.ValidationError);
+    }
+
+    [Fact]
+    public void Update_AllValid_NoFailures()
+    {
+        using var context = CreateContext();
+        SeedData(context, 3);
+        var products = context.Products.AsNoTracking().ToList();
+        foreach (var p in products) p.Stock += 1;
+
+        var options = new WinnowOptions();
+        options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
+        {
+            if (p.Price <= 0) c.Add("Price", "Must be positive");
+        });
+
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Update(products, options);
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.SuccessCount.ShouldBe(3);
+    }
+}

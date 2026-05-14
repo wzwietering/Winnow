@@ -18,10 +18,11 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         IOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
-        operation.ValidateAll(entities, context);
-        context.DetachAllEntities(entities);
+        var survivors = operation.ApplyPreValidation(entities, context, cancellationToken);
+        operation.ValidateAll(survivors, context);
+        context.DetachAllEntities(survivors);
 
-        var wasCancelled = await ProcessBatchAsync(entities, context, operation, cancellationToken);
+        var wasCancelled = await ProcessBatchAsync(survivors, context, operation, cancellationToken);
 
         return operation.CreateResult(wasCancelled);
     }
@@ -32,10 +33,11 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         IInsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
-        operation.ValidateAll(entities, context);
-        context.DetachAllEntities(entities);
+        var preValidated = operation.ApplyPreValidation(entities, context, cancellationToken);
+        operation.ValidateAll(preValidated.Survivors, context);
+        context.DetachAllEntities(preValidated.Survivors);
 
-        var indexedEntities = entities.Select((e, i) => (Entity: e, Index: i)).ToList();
+        var indexedEntities = BuildIndexedSurvivors(preValidated);
         var wasCancelled = await ProcessInsertAsync(indexedEntities, context, operation, cancellationToken);
 
         return operation.CreateResult(wasCancelled);
@@ -47,20 +49,32 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         IUpsertOperation<TEntity, TKey> operation,
         CancellationToken cancellationToken)
     {
-        operation.ValidateAll(entities, context);
+        var preValidated = operation.ApplyPreValidation(entities, context, cancellationToken);
+        operation.ValidateAll(preValidated.Survivors, context);
         // MatchBy resolution lives here at the batch entry — must fire BEFORE ProcessUpsertAsync
         // so the pre-SELECT runs once per batch, not once per entity. Adding a new upsert
         // strategy? Make the same call here at your batch entry point.
         if (operation is IMatchByCapableOperation<TEntity, TKey> matchByOp)
         {
-            await matchByOp.ResolveBatchAsync(entities, context, cancellationToken);
+            await matchByOp.ResolveBatchAsync(preValidated.Survivors, context, cancellationToken);
         }
-        context.DetachAllEntities(entities);
+        context.DetachAllEntities(preValidated.Survivors);
 
-        var indexedEntities = entities.Select((e, i) => (Entity: e, Index: i)).ToList();
+        var indexedEntities = BuildIndexedSurvivors(preValidated);
         var wasCancelled = await ProcessUpsertAsync(indexedEntities, context, operation, cancellationToken);
 
         return operation.CreateResult(wasCancelled);
+    }
+
+    private static List<(TEntity Entity, int Index)> BuildIndexedSurvivors(
+        Winnow.Internal.Validation.PreValidationResult<TEntity> preValidated)
+    {
+        var list = new List<(TEntity, int)>(preValidated.Survivors.Count);
+        for (int i = 0; i < preValidated.Survivors.Count; i++)
+        {
+            list.Add((preValidated.Survivors[i], preValidated.GetOriginalIndex(i)));
+        }
+        return list;
     }
 
     private async Task<bool> ProcessBatchAsync(
@@ -429,10 +443,11 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         StrategyContext<TEntity, TKey> context,
         IOperation<TEntity, TKey> operation)
     {
-        operation.ValidateAll(entities, context);
-        context.DetachAllEntities(entities);
+        var survivors = operation.ApplyPreValidation(entities, context, CancellationToken.None);
+        operation.ValidateAll(survivors, context);
+        context.DetachAllEntities(survivors);
 
-        ProcessBatch(entities, context, operation);
+        ProcessBatch(survivors, context, operation);
 
         return operation.CreateResult();
     }
@@ -442,10 +457,11 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         StrategyContext<TEntity, TKey> context,
         IInsertOperation<TEntity, TKey> operation)
     {
-        operation.ValidateAll(entities, context);
-        context.DetachAllEntities(entities);
+        var preValidated = operation.ApplyPreValidation(entities, context, CancellationToken.None);
+        operation.ValidateAll(preValidated.Survivors, context);
+        context.DetachAllEntities(preValidated.Survivors);
 
-        var indexedEntities = entities.Select((e, i) => (Entity: e, Index: i)).ToList();
+        var indexedEntities = BuildIndexedSurvivors(preValidated);
         ProcessInsert(indexedEntities, context, operation);
 
         return operation.CreateResult();
@@ -456,17 +472,18 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         StrategyContext<TEntity, TKey> context,
         IUpsertOperation<TEntity, TKey> operation)
     {
-        operation.ValidateAll(entities, context);
+        var preValidated = operation.ApplyPreValidation(entities, context, CancellationToken.None);
+        operation.ValidateAll(preValidated.Survivors, context);
         // MatchBy resolution must fire here, ONCE per batch, before ProcessUpsert iterates.
         // Adding a new upsert strategy? Mirror this call at your batch entry point so
         // MatchBy still routes correctly.
         if (operation is IMatchByCapableOperation<TEntity, TKey> matchByOp)
         {
-            matchByOp.ResolveBatch(entities, context);
+            matchByOp.ResolveBatch(preValidated.Survivors, context);
         }
-        context.DetachAllEntities(entities);
+        context.DetachAllEntities(preValidated.Survivors);
 
-        var indexedEntities = entities.Select((e, i) => (Entity: e, Index: i)).ToList();
+        var indexedEntities = BuildIndexedSurvivors(preValidated);
         ProcessUpsert(indexedEntities, context, operation);
 
         return operation.CreateResult();

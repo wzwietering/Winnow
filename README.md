@@ -37,6 +37,7 @@ dotnet add package Winnow
 - [Choosing Your Operation](#choosing-your-operation)
 - [Basic Operations](#basic-operations)
 - [Strategies](#strategies)
+- [Pre-Validation](#pre-validation)
 - [Handling Results](#handling-results)
 - [When to Use What](#when-to-use-what)
 - [When NOT to Use This](#when-not-to-use-this)
@@ -245,13 +246,39 @@ DivideAndConquer's advantage erodes sharply when entities fail validation:
 | 10% | 2,643 ms (2.9x) | 1,750 ms (3.4x) | 333 ms (1.5x) |
 | 25% | 3,794 ms (1.8x) | 2,299 ms (1.9x) | 381 ms (1.1x) |
 
-At 25% failures, the strategies perform nearly the same. **Pre-validate your entities** if you expect failures above ~5% — this preserves DivideAndConquer's speed advantage.
+At 25% failures, the strategies perform nearly the same. **Pre-validate your entities** if you expect failures above ~5% — this preserves DivideAndConquer's speed advantage. Winnow ships a built-in pre-validation pipeline; see [Pre-Validation](#pre-validation).
 
 ### Graph and Memory
 
 Graph operations (parent + children) use 2-3x more memory per entity (~20-31 KB vs ~9-11 KB for flat). UpsertGraph is the most expensive due to loading existing entities and tracking changes. DivideAndConquer speedups are compressed but still significant (2-76x depending on provider).
 
 For full results, see [SQLite](docs/benchmarks/sqlite.md), [PostgreSQL](docs/benchmarks/postgresql.md), and [SQL Server](docs/benchmarks/sqlserver.md) benchmarks.
+
+## Pre-Validation
+
+When your batches contain invalid entities, `DivideAndConquer` recursively binary-splits to isolate each failure — one extra round trip per split. Pre-validation rejects invalid entities in-process **before** the strategy runs, so D&C only ever sees valid entities and keeps its speed advantage.
+
+```csharp
+var options = new InsertOptions { Strategy = BatchStrategy.DivideAndConquer };
+options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
+{
+    if (p.Price <= 0)
+        c.Add(nameof(Product.Price), "Must be positive");
+});
+
+var result = saver.Insert(products, options);
+// Invalid entities appear in result.Failures with FailureReason.ValidationError.
+```
+
+The validator delegate writes to a `ref ValidationCollector` — a stack-only buffer with a 4-slot inline capacity, so the happy path allocates nothing. Multiple errors per entity are supported.
+
+If your entities already carry `[Required]`, `[Range]`, or other DataAnnotations attributes, drive validation from them directly:
+
+```csharp
+options.WithDataAnnotations<Product>();
+```
+
+Reflection cost is paid once per entity type (cached via `FrozenDictionary`); the per-entity hot path is a linear walk over cached attribute arrays. See [Pre-Validation](docs/pre-validation.md) for the failure-behaviour toggle (`RecordAsFailure` vs `Throw`), graph-operation handling, and full performance characteristics.
 
 ## Handling Results
 
@@ -296,7 +323,7 @@ For full result type documentation, see [Results Reference](docs/results-referen
 | Delete parent + children | `DeleteGraph` | Set `CascadeBehavior` explicitly |
 | Many-to-one references | `*Graph` | Set `IncludeReferences = true` |
 | Many-to-many relationships | `*Graph` | Set `IncludeManyToMany = true` |
-| High failure rate (>5%) | Any | Pre-validate, then DivideAndConquer |
+| High failure rate (>5%) | Any | Pre-validate via `WithValidation`/`WithDataAnnotations`, then DivideAndConquer |
 | Per-entity error isolation needed | Any | OneByOne |
 
 ## When NOT to Use This
@@ -350,6 +377,7 @@ Detailed documentation for complex scenarios:
 - [Self-Referencing Hierarchies](docs/self-referencing.md) - Recursive entity structures
 - [Upsert Operations](docs/upsert-operations.md) - Insert-or-update with race condition handling
 - [Results Reference](docs/results-reference.md) - Full result type API
+- [Pre-Validation](docs/pre-validation.md) - Reject invalid entities before they reach the database
 - [Options Reference](docs/api/options-reference.md) - All configuration options
 - [SQLite Benchmarks](docs/benchmarks/sqlite.md) - Performance data and strategy guidance
 - [PostgreSQL Benchmarks](docs/benchmarks/postgresql.md) - Network database performance
@@ -418,9 +446,14 @@ saver.Insert(untrustedData, new InsertOptions
     Strategy = BatchStrategy.DivideAndConquer
 });
 
-// Better: Use OneByOne for untrusted/validation-heavy data
-saver.Insert(untrustedData, new InsertOptions
+// Best: Pre-validate so D&C only sees valid entities, keeping its speedup.
+var options = new InsertOptions { Strategy = BatchStrategy.DivideAndConquer };
+options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
 {
-    Strategy = BatchStrategy.OneByOne
+    if (p.Price <= 0) c.Add("Price", "Must be positive");
 });
+saver.Insert(untrustedData, options);
+
+// Alternative: Use OneByOne if pre-validation isn't possible.
+saver.Insert(untrustedData, new InsertOptions { Strategy = BatchStrategy.OneByOne });
 ```
