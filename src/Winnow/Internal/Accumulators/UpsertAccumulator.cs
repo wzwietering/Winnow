@@ -117,7 +117,8 @@ internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<T
         string errorMessage,
         FailureReason reason,
         Exception? exception,
-        UpsertOperationType attemptedOperation)
+        UpsertOperationType attemptedOperation,
+        IReadOnlyList<ValidationError>? validationErrors = null)
     {
         _failureCount++;
         if (_detail < ResultDetail.Minimal)
@@ -132,7 +133,8 @@ internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<T
             Reason = reason,
             Exception = _detail >= ResultDetail.Full ? exception : null,
             AttemptedOperation = attemptedOperation,
-            IsDefaultKey = attemptedOperation == UpsertOperationType.Insert
+            IsDefaultKey = attemptedOperation == UpsertOperationType.Insert,
+            ValidationErrors = validationErrors
         });
     }
 

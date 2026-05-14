@@ -17,9 +17,12 @@ internal static class PreValidationRunner
     /// Hot-path discipline:
     /// <list type="bullet">
     ///   <item>One delegate cast, captured before the loop.</item>
-    ///   <item>Per-entity validator gets a stack-allocated 4-slot
-    ///   <see cref="ValidationCollector"/>. The collector only rents from the array
-    ///   pool when a single entity emits more than 4 errors.</item>
+    ///   <item>One 4-slot inline buffer allocated per batch and reused across every
+    ///   entity. The buffer is heap-allocated because <see cref="ValidationError"/>
+    ///   contains managed references and cannot live on the stack; the per-batch
+    ///   amortisation keeps the cost well below one allocation per entity. The
+    ///   collector only rents from <see cref="System.Buffers.ArrayPool{T}"/> when a
+    ///   single entity emits more than 4 errors.</item>
     ///   <item><c>for</c> loop indexed against <see cref="List{T}"/> — no enumerator,
     ///   no LINQ.</item>
     ///   <item>Cancellation token is polled every
@@ -28,33 +31,32 @@ internal static class PreValidationRunner
     ///   <item>The survivor list is sized to the input count, so it never
     ///   reallocates in the all-valid case.</item>
     /// </list>
+    /// Navigation walking is enabled when <paramref name="validation"/> is a
+    /// <see cref="GraphValidationOptions"/> with
+    /// <see cref="GraphValidationOptions.IncludeNavigations"/> set — the type
+    /// itself encodes the flat-vs-graph distinction.
     /// </remarks>
     internal static PreValidationResult<TEntity> Run<TEntity>(
         List<TEntity> entities,
         ValidationOptions validation,
         Action<int, string, IReadOnlyList<ValidationError>> recordFailure,
-        bool isGraphOperation,
         NavigationFilter? navigationFilter,
         CancellationToken cancellationToken)
         where TEntity : class
     {
         EnsureEntityTypeMatches<TEntity>(validation);
-        // IncludeNavigations is documented as a no-op on flat operations; the
-        // typed-delegate compatibility check then also only fires for the graph
-        // path where the walker can actually be invoked.
-        var effectiveIncludeNavigations = validation.IncludeNavigations && isGraphOperation;
-        EnsureIncludeNavigationsCompatible(validation, effectiveIncludeNavigations);
+        var includeNavigations = validation is GraphValidationOptions { IncludeNavigations: true };
+        EnsureIncludeNavigationsCompatible(validation, includeNavigations);
         var validator = (ValidatorDelegate<TEntity>)validation.Validator;
         var throwOnAny = validation.FailureBehavior == ValidationFailureBehavior.Throw;
         var survivors = new List<TEntity>(entities.Count);
         var indices = new int[entities.Count];
-        // Only allocate the throw-mode collector lazily; RecordAsFailure mode never writes here.
         List<EntityValidationFailure>? thrownFailures = null;
         var inlineBuffer = new ValidationError[ValidationCollector.InlineCapacity];
         int survivorCount = 0;
 
         ScanEntities(entities, validator, recordFailure, validation.CancellationCheckInterval,
-            cancellationToken, throwOnAny, effectiveIncludeNavigations, navigationFilter,
+            cancellationToken, throwOnAny, includeNavigations, navigationFilter,
             inlineBuffer, survivors, indices, ref thrownFailures, ref survivorCount);
 
         ThrowIfAnyFailed(thrownFailures);
@@ -131,9 +133,9 @@ internal static class PreValidationRunner
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void EnsureIncludeNavigationsCompatible(ValidationOptions validation, bool effectiveIncludeNavigations)
+    private static void EnsureIncludeNavigationsCompatible(ValidationOptions validation, bool includeNavigations)
     {
-        if (!effectiveIncludeNavigations) return;
+        if (!includeNavigations) return;
         if (validation.IsDataAnnotationsValidator) return;
         throw new InvalidOperationException(
             "IncludeNavigations only supports validators built by WithDataAnnotations. " +
@@ -172,8 +174,6 @@ internal static class PreValidationRunner
         int inputCount, List<TEntity> survivors, int[] indices, int survivorCount)
         where TEntity : class
     {
-        // Trim indices array to actual survivor count so callers don't see
-        // padding from skipped invalid entries.
         int[] trimmed = survivorCount switch
         {
             0 => Array.Empty<int>(),

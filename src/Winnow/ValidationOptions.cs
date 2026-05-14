@@ -12,7 +12,7 @@ namespace Winnow;
 /// methods rather than directly — those carry the type information needed to wire
 /// the validator to a specific <c>TEntity</c>.
 /// </remarks>
-public sealed class ValidationOptions
+public class ValidationOptions
 {
     private int _cancellationCheckInterval = DefaultCancellationCheckInterval;
 
@@ -41,8 +41,8 @@ public sealed class ValidationOptions
     /// <summary>
     /// True when the validator was built by the DataAnnotations adapter
     /// (<c>WithDataAnnotations</c>). Only DataAnnotations validators can be applied
-    /// polymorphically to child entities, so this is the gate for
-    /// <see cref="IncludeNavigations"/>.
+    /// polymorphically to child entities, so this gates navigation walking on
+    /// <see cref="GraphValidationOptions"/>.
     /// </summary>
     internal bool IsDataAnnotationsValidator { get; }
 
@@ -51,17 +51,6 @@ public sealed class ValidationOptions
     /// Default: <see cref="ValidationFailureBehavior.RecordAsFailure"/>.
     /// </summary>
     public ValidationFailureBehavior FailureBehavior { get; set; } = ValidationFailureBehavior.RecordAsFailure;
-
-    /// <summary>
-    /// When set to <c>true</c> on a graph operation's <see cref="GraphOptionsBase.Validation"/>,
-    /// pre-validation descends into navigation properties and validates each reachable
-    /// entity (DataAnnotations only). Cycle protection is reference-based; failures are
-    /// surfaced on the top-level entity with a property path locating the offending child.
-    /// The walk honours <see cref="GraphOptionsBase.NavigationFilter"/> — excluded
-    /// navigations are skipped. Default: <c>false</c> — only the top-level entities are
-    /// validated. Has no effect on flat (non-graph) operations.
-    /// </summary>
-    public bool IncludeNavigations { get; set; }
 
     /// <summary>
     /// How often the validation pipeline checks the cancellation token, measured
@@ -79,10 +68,13 @@ public sealed class ValidationOptions
         }
     }
 
-    internal ValidationOptions(Type entityType, object validator, bool isDataAnnotationsValidator = false)
+    private protected ValidationOptions(Type entityType, object validator, bool isDataAnnotationsValidator)
     {
         EntityType = entityType;
         Validator = validator;
         IsDataAnnotationsValidator = isDataAnnotationsValidator;
     }
+
+    internal static ValidationOptions CreateFlat(Type entityType, object validator, bool isDataAnnotationsValidator = false) =>
+        new(entityType, validator, isDataAnnotationsValidator);
 }

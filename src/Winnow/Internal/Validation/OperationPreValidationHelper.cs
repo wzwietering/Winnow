@@ -17,7 +17,6 @@ internal static class OperationPreValidationHelper
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
         WinnowAccumulator<TKey> accumulator,
-        bool isGraphOperation,
         NavigationFilter? navigationFilter,
         CancellationToken cancellationToken)
         where TEntity : class
@@ -27,12 +26,13 @@ internal static class OperationPreValidationHelper
         {
             return entities;
         }
-        var result = RunCore(validation, entities, context.Logger, isGraphOperation, navigationFilter, cancellationToken,
-            (originalIndex, message, _) => accumulator.RecordFailure(
+        var result = RunCore(validation, entities, context.Logger, navigationFilter, cancellationToken,
+            (originalIndex, message, errors) => accumulator.RecordFailure(
                 ReadIdOrDefault(context, entities[originalIndex]),
                 message,
                 FailureReason.ValidationError,
-                exception: null));
+                exception: null,
+                validationErrors: errors));
         return result.Survivors;
     }
 
@@ -41,7 +41,6 @@ internal static class OperationPreValidationHelper
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
         InsertAccumulator<TKey> accumulator,
-        bool isGraphOperation,
         NavigationFilter? navigationFilter,
         CancellationToken cancellationToken)
         where TEntity : class
@@ -51,12 +50,13 @@ internal static class OperationPreValidationHelper
         {
             return PreValidationResult<TEntity>.Passthrough(entities);
         }
-        return RunCore(validation, entities, context.Logger, isGraphOperation, navigationFilter, cancellationToken,
-            (originalIndex, message, _) => accumulator.RecordFailure(
+        return RunCore(validation, entities, context.Logger, navigationFilter, cancellationToken,
+            (originalIndex, message, errors) => accumulator.RecordFailure(
                 originalIndex,
                 message,
                 FailureReason.ValidationError,
-                exception: null));
+                exception: null,
+                validationErrors: errors));
     }
 
     internal static PreValidationResult<TEntity> RunIndexed<TEntity, TKey>(
@@ -64,7 +64,6 @@ internal static class OperationPreValidationHelper
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
         UpsertAccumulator<TKey> accumulator,
-        bool isGraphOperation,
         NavigationFilter? navigationFilter,
         CancellationToken cancellationToken)
         where TEntity : class
@@ -74,14 +73,15 @@ internal static class OperationPreValidationHelper
         {
             return PreValidationResult<TEntity>.Passthrough(entities);
         }
-        return RunCore(validation, entities, context.Logger, isGraphOperation, navigationFilter, cancellationToken,
-            (originalIndex, message, _) => RecordUpsertFailure(
-                originalIndex, message, entities, context, accumulator));
+        return RunCore(validation, entities, context.Logger, navigationFilter, cancellationToken,
+            (originalIndex, message, errors) => RecordUpsertFailure(
+                originalIndex, message, errors, entities, context, accumulator));
     }
 
     private static void RecordUpsertFailure<TEntity, TKey>(
         int originalIndex,
         string message,
+        IReadOnlyList<ValidationError> errors,
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
         UpsertAccumulator<TKey> accumulator)
@@ -96,20 +96,20 @@ internal static class OperationPreValidationHelper
             message,
             FailureReason.ValidationError,
             exception: null,
-            isInsert ? UpsertOperationType.Insert : UpsertOperationType.Update);
+            isInsert ? UpsertOperationType.Insert : UpsertOperationType.Update,
+            validationErrors: errors);
     }
 
     private static PreValidationResult<TEntity> RunCore<TEntity>(
         ValidationOptions validation,
         List<TEntity> entities,
         ILogger? logger,
-        bool isGraphOperation,
         NavigationFilter? navigationFilter,
         CancellationToken cancellationToken,
         Action<int, string, IReadOnlyList<ValidationError>> recordFailure)
         where TEntity : class
     {
-        var result = PreValidationRunner.Run<TEntity>(entities, validation, recordFailure, isGraphOperation, navigationFilter, cancellationToken);
+        var result = PreValidationRunner.Run<TEntity>(entities, validation, recordFailure, navigationFilter, cancellationToken);
         LogIfFiltered(logger, typeof(TEntity), entities.Count, result.Survivors.Count);
         return result;
     }
@@ -133,13 +133,11 @@ internal static class OperationPreValidationHelper
     }
 
     /// <summary>
-    /// Reads a key value, suppressing only expected pre-validation failures
-    /// (e.g. shadow PKs, model misconfiguration). Fatal exceptions (<see cref="OutOfMemoryException"/>,
-    /// <see cref="StackOverflowException"/>) and cooperative cancellation
-    /// (<see cref="OperationCanceledException"/>) propagate so the caller can tear down
-    /// the operation properly. Pre-validation runs before any tracker work, so
-    /// expected failures fall back to <c>default(TKey)</c> and rely on the failure
-    /// message to identify the entity.
+    /// Reads a key value, suppressing only the <see cref="InvalidOperationException"/>
+    /// EF Core raises for shadow primary keys or model misconfiguration during the
+    /// pre-validation phase (before tracker work). All other exceptions — including
+    /// programmer errors such as <see cref="NullReferenceException"/> — propagate
+    /// so they surface as the real bug rather than collapsing to <c>default(TKey)</c>.
     /// </summary>
     internal static TKey SuppressKeyReadFailures<TKey>(Func<TKey> reader)
         where TKey : notnull, IEquatable<TKey>
@@ -148,9 +146,7 @@ internal static class OperationPreValidationHelper
         {
             return reader();
         }
-        catch (Exception ex) when (ex is not OutOfMemoryException
-                                   and not StackOverflowException
-                                   and not OperationCanceledException)
+        catch (InvalidOperationException)
         {
             return default!;
         }

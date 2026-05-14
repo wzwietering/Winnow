@@ -50,7 +50,12 @@ internal sealed class InsertAccumulator<TKey> where TKey : notnull, IEquatable<T
         }
     }
 
-    internal void RecordFailure(int index, string errorMessage, FailureReason reason, Exception? exception)
+    internal void RecordFailure(
+        int index,
+        string errorMessage,
+        FailureReason reason,
+        Exception? exception,
+        IReadOnlyList<ValidationError>? validationErrors = null)
     {
         _failureCount++;
         if (_detail < ResultDetail.Minimal)
@@ -62,7 +67,8 @@ internal sealed class InsertAccumulator<TKey> where TKey : notnull, IEquatable<T
             EntityIndex = index,
             ErrorMessage = errorMessage,
             Reason = reason,
-            Exception = _detail >= ResultDetail.Full ? exception : null
+            Exception = _detail >= ResultDetail.Full ? exception : null,
+            ValidationErrors = validationErrors
         });
     }
 

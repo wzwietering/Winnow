@@ -359,17 +359,14 @@ public class WinnowerInsertValidationTests : TestBase
             new AnnotatedProduct { Name = "B", Quantity = -1 },
         };
 
-        var options = new ValidationOptions[1];
-        options[0] = new ValidationOptions(typeof(AnnotatedProduct),
-            Winnow.Internal.Validation.DataAnnotationsValidatorFactory.Create<AnnotatedProduct>());
+        var options = new InsertOptions().WithDataAnnotations<AnnotatedProduct>();
 
         // Drive through the public pipeline via the runner directly (no DbContext registration needed).
         var failures = new List<(int Index, string Message, IReadOnlyList<ValidationError> Errors)>();
         Winnow.Internal.Validation.PreValidationRunner.Run(
             products.ToList(),
-            options[0],
+            options.Validation!,
             (idx, msg, errs) => failures.Add((idx, msg, errs)),
-            isGraphOperation: false,
             navigationFilter: null,
             CancellationToken.None);
 

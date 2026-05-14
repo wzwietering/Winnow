@@ -25,9 +25,6 @@ public class IncludeNavigationsTests
         public List<OrderItem> Items { get; set; } = [];
     }
 
-    // Bug 5 scaffold: intermediate type has no annotations, leaf does. Before the
-    // fix, the walker excluded Mid from BuildNavigations because Mid was
-    // "unannotated" and never recursed into Leaf.
     private sealed class GrandchildLeaf
     {
         [Required]
@@ -46,20 +43,24 @@ public class IncludeNavigationsTests
         public GrandchildMid? Mid { get; set; }
     }
 
-    private static void Run(List<Order> entities, ValidationOptions options,
+    private static void Run<TEntity>(List<TEntity> entities, ValidationOptions validation,
         Action<int, string, IReadOnlyList<ValidationError>> recordFailure,
-        bool isGraphOperation = true,
-        NavigationFilter? navigationFilter = null)
+        NavigationFilter? navigationFilter = null) where TEntity : class
     {
-        PreValidationRunner.Run(entities, options, recordFailure, isGraphOperation, navigationFilter, CancellationToken.None);
+        PreValidationRunner.Run(entities, validation, recordFailure, navigationFilter, CancellationToken.None);
+    }
+
+    private static InsertGraphOptions BuildGraphOptions<TEntity>(bool includeNavigations) where TEntity : class
+    {
+        var options = new InsertGraphOptions().WithDataAnnotations<TEntity>();
+        options.Validation!.IncludeNavigations = includeNavigations;
+        return options;
     }
 
     [Fact]
     public void IncludeNavigationsTrue_ChildValidationFailureIsReported()
     {
-        var options = new WinnowOptions();
-        options.WithDataAnnotations<Order>();
-        options.Validation!.IncludeNavigations = true;
+        var options = BuildGraphOptions<Order>(includeNavigations: true);
 
         var order = new Order
         {
@@ -83,9 +84,7 @@ public class IncludeNavigationsTests
     [Fact]
     public void IncludeNavigationsFalse_ChildValidationIsSkipped()
     {
-        var options = new WinnowOptions();
-        options.WithDataAnnotations<Order>();
-        options.Validation!.IncludeNavigations = false;
+        var options = BuildGraphOptions<Order>(includeNavigations: false);
 
         var order = new Order
         {
@@ -102,7 +101,7 @@ public class IncludeNavigationsTests
     [Fact]
     public void IncludeNavigationsTrue_WithTypedDelegate_ThrowsInvalidOperationException()
     {
-        var options = new WinnowOptions();
+        var options = new InsertGraphOptions();
         options.WithValidation<Order>((Order o, ref ValidationCollector c) => { });
         options.Validation!.IncludeNavigations = true;
 
@@ -116,9 +115,7 @@ public class IncludeNavigationsTests
     [Fact]
     public void IncludeNavigationsTrue_CycleInGraph_DoesNotInfiniteLoop()
     {
-        var options = new WinnowOptions();
-        options.WithDataAnnotations<Order>();
-        options.Validation!.IncludeNavigations = true;
+        var options = BuildGraphOptions<Order>(includeNavigations: true);
 
         var order = new Order { Number = "ABC" };
         var item = new OrderItem { Sku = "X", Quantity = 1, Parent = order };
@@ -130,51 +127,14 @@ public class IncludeNavigationsTests
         failures.ShouldBeEmpty();
     }
 
-    // Bug 3 proof: ValidationOptions.IncludeNavigations doc says "Has no effect on
-    // flat (non-graph) operations." Before the fix, the runner unconditionally walked
-    // navigations whenever the flag was true, regardless of operation kind.
-    [Fact]
-    public void IncludeNavigationsTrue_FlatOperation_DoesNotWalkChildren()
-    {
-        var options = new WinnowOptions();
-        options.WithDataAnnotations<Order>();
-        options.Validation!.IncludeNavigations = true;
+    // GraphValidationOptions lives only on GraphOptionsBase, so the compile-time
+    // type system prevents IncludeNavigations from being attached to a flat
+    // operation. The "silent no-op on flat" footgun no longer exists.
 
-        var order = new Order
-        {
-            Number = "ABC",
-            Items = { new OrderItem { Sku = null, Quantity = 5 } }
-        };
-
-        var failures = new List<(int Index, string Message, IReadOnlyList<ValidationError> Errors)>();
-        Run([order], options.Validation!, (i, m, e) => failures.Add((i, m, e)), isGraphOperation: false);
-
-        failures.ShouldBeEmpty();
-    }
-
-    // Bug 3 corollary: IncludeNavigations on a typed delegate normally throws to
-    // signal misconfiguration, but on a flat operation the flag is silently ignored
-    // so the throw should also be skipped — a typed-delegate config that "accidentally"
-    // has IncludeNavigations=true should not fail when used on a flat operation.
-    [Fact]
-    public void IncludeNavigationsTrue_FlatOperationWithTypedDelegate_DoesNotThrow()
-    {
-        var options = new WinnowOptions();
-        options.WithValidation<Order>((Order o, ref ValidationCollector c) => { });
-        options.Validation!.IncludeNavigations = true;
-
-        Should.NotThrow(() => Run([new Order { Number = "x" }], options.Validation!, (_, _, _) => { }, isGraphOperation: false));
-    }
-
-    // Bug 4 proof: GraphOptionsBase.Validation doc claims the walk respects
-    // NavigationFilter. Before the fix NavigationWalker performed pure reflection
-    // and ignored the filter, so excluded navigations were still validated.
     [Fact]
     public void IncludeNavigationsTrue_NavigationFilterExcludesItems_ChildrenAreNotValidated()
     {
-        var options = new WinnowOptions();
-        options.WithDataAnnotations<Order>();
-        options.Validation!.IncludeNavigations = true;
+        var options = BuildGraphOptions<Order>(includeNavigations: true);
 
         var filter = NavigationFilter.Exclude()
             .Navigation<Order>(o => o.Items)
@@ -188,7 +148,7 @@ public class IncludeNavigationsTests
 
         var failures = new List<(int Index, string Message, IReadOnlyList<ValidationError> Errors)>();
         Run([order], options.Validation!, (i, m, e) => failures.Add((i, m, e)),
-            isGraphOperation: true, navigationFilter: filter);
+            navigationFilter: filter);
 
         failures.ShouldBeEmpty();
     }
@@ -196,9 +156,7 @@ public class IncludeNavigationsTests
     [Fact]
     public void IncludeNavigationsTrue_IncludeFilterListsItems_OtherNavigationsSkipped()
     {
-        var options = new WinnowOptions();
-        options.WithDataAnnotations<Order>();
-        options.Validation!.IncludeNavigations = true;
+        var options = BuildGraphOptions<Order>(includeNavigations: true);
 
         var filter = NavigationFilter.Include()
             .Navigation<Order>(o => o.Items)
@@ -212,22 +170,16 @@ public class IncludeNavigationsTests
 
         var failures = new List<(int, string, IReadOnlyList<ValidationError>)>();
         Run([order], options.Validation!, (i, m, e) => failures.Add((i, m, e)),
-            isGraphOperation: true, navigationFilter: filter);
+            navigationFilter: filter);
 
         var (_, _, errors) = failures.ShouldHaveSingleItem();
         errors.ShouldContain(err => err.PropertyName == "Items[0].Sku");
     }
 
-    // Bug 5 proof: the walker treats a navigation as "skip" when its element type
-    // has no DataAnnotations of its own — but that skip silently drops every
-    // annotation reachable through that intermediate. The reachable annotations
-    // on GrandchildLeaf.Name must still be evaluated.
     [Fact]
     public void IncludeNavigationsTrue_AnnotatedGrandchildBehindUnannotatedIntermediate_StillValidated()
     {
-        var options = new WinnowOptions();
-        options.WithDataAnnotations<GrandchildRoot>();
-        options.Validation!.IncludeNavigations = true;
+        var options = BuildGraphOptions<GrandchildRoot>(includeNavigations: true);
 
         var root = new GrandchildRoot
         {
@@ -236,9 +188,7 @@ public class IncludeNavigationsTests
         };
 
         var failures = new List<(int Index, string Message, IReadOnlyList<ValidationError> Errors)>();
-        PreValidationRunner.Run([root], options.Validation!,
-            (i, m, e) => failures.Add((i, m, e)),
-            isGraphOperation: true, navigationFilter: null, CancellationToken.None);
+        Run([root], options.Validation!, (i, m, e) => failures.Add((i, m, e)));
 
         var (_, _, errors) = failures.ShouldHaveSingleItem();
         errors.ShouldContain(err => err.PropertyName == "Mid.Leaf.Name");
@@ -247,9 +197,7 @@ public class IncludeNavigationsTests
     [Fact]
     public void IncludeNavigationsTrue_RootValidationStillRuns()
     {
-        var options = new WinnowOptions();
-        options.WithDataAnnotations<Order>();
-        options.Validation!.IncludeNavigations = true;
+        var options = BuildGraphOptions<Order>(includeNavigations: true);
 
         var order = new Order { Number = null, Items = { new OrderItem { Sku = "OK", Quantity = 1 } } };
 

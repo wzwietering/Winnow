@@ -9,7 +9,7 @@ namespace Winnow.Internal.Validation;
 /// Walks an entity's reference and collection navigation properties, applying
 /// the cached DataAnnotations validator to each reachable child whose type has
 /// any annotated properties. Used by <see cref="PreValidationRunner"/> when
-/// <see cref="ValidationOptions.IncludeNavigations"/> is set on a
+/// <see cref="GraphValidationOptions.IncludeNavigations"/> is set on a
 /// DataAnnotations-built validator.
 /// </summary>
 /// <remarks>
@@ -110,31 +110,36 @@ internal static class NavigationWalker
     private static NavigationProperty? ClassifyNavigation(PropertyInfo property)
     {
         var elementType = TryGetCollectionElementType(property.PropertyType);
-        if (elementType is not null)
-        {
-            return TypeHasReachableAnnotations(elementType, new HashSet<Type>())
-                ? new NavigationProperty(property.Name, BuildGetter(property), IsCollection: true)
-                : null;
-        }
-        return TypeHasReachableAnnotations(property.PropertyType, new HashSet<Type>())
-            ? new NavigationProperty(property.Name, BuildGetter(property), IsCollection: false)
+        var childType = elementType ?? property.PropertyType;
+        return HasAnyReachableAnnotation(childType)
+            ? new NavigationProperty(property.Name, BuildGetter(property), IsCollection: elementType is not null)
             : null;
     }
 
+    // Cache only positive ("has reachable annotations") results. Negative results
+    // discovered through a cycle bail-out are not authoritative — a non-cyclic
+    // visit through a different ancestor could still find an annotation — so
+    // caching them risks permanently masking children that should be validated.
+    // Recomputing the negative case stays cheap because _navCache memoises the
+    // outer BuildNavigations result, so each type is walked once per process.
     private static readonly ConcurrentDictionary<Type, bool> _reachableCache = new();
+
+    private static bool HasAnyReachableAnnotation(Type type) =>
+        TypeHasReachableAnnotations(type, new HashSet<Type>());
 
     /// <summary>
     /// True if <paramref name="type"/> has its own DataAnnotations OR any class-typed
     /// navigation reachable from it transitively does. The intermediate type itself
     /// need not be annotated — failing to recurse through it would silently drop the
-    /// reachable leaf's failures.
+    /// reachable leaf's failures. Only positive results are cached; see
+    /// <see cref="_reachableCache"/>.
     /// </summary>
     private static bool TypeHasReachableAnnotations(Type type, HashSet<Type> inProgress)
     {
         if (_reachableCache.TryGetValue(type, out var cached)) return cached;
         if (TypeHasAnnotations(type))
         {
-            _reachableCache[type] = true;
+            _reachableCache.TryAdd(type, true);
             return true;
         }
         if (!inProgress.Add(type)) return false;
@@ -146,11 +151,10 @@ internal static class NavigationWalker
                 var childType = TryGetCollectionElementType(property.PropertyType) ?? property.PropertyType;
                 if (TypeHasReachableAnnotations(childType, inProgress))
                 {
-                    _reachableCache[type] = true;
+                    _reachableCache.TryAdd(type, true);
                     return true;
                 }
             }
-            _reachableCache[type] = false;
             return false;
         }
         finally

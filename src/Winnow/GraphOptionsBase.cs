@@ -60,12 +60,12 @@ public abstract class GraphOptionsBase
     /// database round trip. Invalid top-level entities are recorded as failures
     /// with <see cref="FailureReason.ValidationError"/> and are not sent to the
     /// strategy. By default only the top-level entities are validated; set
-    /// <see cref="ValidationOptions.IncludeNavigations"/> to also walk
+    /// <see cref="GraphValidationOptions.IncludeNavigations"/> to also walk
     /// navigation children visible to the configured <see cref="NavigationFilter"/>.
     /// Configure via the <c>WithValidation</c> or <c>WithDataAnnotations</c>
     /// extension methods on this options object.
     /// </summary>
-    public ValidationOptions? Validation { get; set; }
+    public GraphValidationOptions? Validation { get; set; }
 
     /// <summary>
     /// Controls how much per-entity detail the result captures. Default: <see cref="Winnow.ResultDetail.Full"/>.

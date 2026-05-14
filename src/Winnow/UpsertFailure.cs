@@ -40,4 +40,12 @@ public class UpsertFailure<TKey> where TKey : notnull, IEquatable<TKey>
     /// When true, EntityId will be default(TKey) and EntityIndex should be used to identify the entity.
     /// </summary>
     public bool IsDefaultKey { get; init; }
+
+    /// <summary>
+    /// Structured per-property errors recorded by pre-validation. Populated only
+    /// when <see cref="Reason"/> is <see cref="FailureReason.ValidationError"/>;
+    /// <c>null</c> otherwise. Use this to drive structured UI / API responses
+    /// instead of parsing <see cref="ErrorMessage"/>.
+    /// </summary>
+    public IReadOnlyList<ValidationError>? ValidationErrors { get; init; }
 }

@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Winnow.Tests.Entities;
 
 public class OrderItem
@@ -5,6 +7,7 @@ public class OrderItem
     public int Id { get; set; }
     public int CustomerOrderId { get; set; }
     public int ProductId { get; set; }
+    [Required]
     public string ProductName { get; set; } = string.Empty;
     public int Quantity { get; set; }
     public decimal UnitPrice { get; set; }

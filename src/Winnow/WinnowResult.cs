@@ -104,6 +104,14 @@ public class WinnowFailure<TKey> where TKey : notnull, IEquatable<TKey>
     /// The original exception, if available. Null when ResultDetail is Minimal.
     /// </summary>
     public Exception? Exception { get; init; }
+
+    /// <summary>
+    /// Structured per-property errors recorded by pre-validation. Populated only
+    /// when <see cref="Reason"/> is <see cref="FailureReason.ValidationError"/>;
+    /// <c>null</c> otherwise. Use this to drive structured UI / API responses
+    /// instead of parsing <see cref="ErrorMessage"/>.
+    /// </summary>
+    public IReadOnlyList<ValidationError>? ValidationErrors { get; init; }
 }
 
 /// <summary>

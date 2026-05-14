@@ -33,7 +33,12 @@ internal sealed class WinnowAccumulator<TKey> where TKey : notnull, IEquatable<T
         _successfulIds!.Add(id);
     }
 
-    internal void RecordFailure(TKey id, string errorMessage, FailureReason reason, Exception? exception)
+    internal void RecordFailure(
+        TKey id,
+        string errorMessage,
+        FailureReason reason,
+        Exception? exception,
+        IReadOnlyList<ValidationError>? validationErrors = null)
     {
         _failureCount++;
         if (_detail < ResultDetail.Minimal)
@@ -45,7 +50,8 @@ internal sealed class WinnowAccumulator<TKey> where TKey : notnull, IEquatable<T
             EntityId = id,
             ErrorMessage = errorMessage,
             Reason = reason,
-            Exception = _detail >= ResultDetail.Full ? exception : null
+            Exception = _detail >= ResultDetail.Full ? exception : null,
+            ValidationErrors = validationErrors
         });
     }
 

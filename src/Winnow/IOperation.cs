@@ -19,13 +19,6 @@ internal interface IOperation<TEntity, TKey>
     WinnowAccumulator<TKey> Accumulator { get; }
 
     /// <summary>
-    /// True for the four graph operations. Used to gate
-    /// <see cref="ValidationOptions.IncludeNavigations"/>, which is documented as
-    /// having no effect on flat operations.
-    /// </summary>
-    bool IsGraphOperation => false;
-
-    /// <summary>
     /// Optional navigation filter forwarded to the pre-validation navigation walk
     /// so excluded navigations are not validated, matching the scope of the graph
     /// operation. Always <c>null</c> for flat operations.
@@ -42,7 +35,7 @@ internal interface IOperation<TEntity, TKey>
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
         CancellationToken cancellationToken) =>
-        OperationPreValidationHelper.Run(Validation, entities, context, Accumulator, IsGraphOperation, NavigationFilter, cancellationToken);
+        OperationPreValidationHelper.Run(Validation, entities, context, Accumulator, NavigationFilter, cancellationToken);
 
     /// <summary>
     /// Validates all entities before processing. Called once at the start.
@@ -91,13 +84,6 @@ internal interface IInsertOperation<TEntity, TKey>
     InsertAccumulator<TKey> Accumulator { get; }
 
     /// <summary>
-    /// True for the four graph operations. Used to gate
-    /// <see cref="ValidationOptions.IncludeNavigations"/>, which is documented as
-    /// having no effect on flat operations.
-    /// </summary>
-    bool IsGraphOperation => false;
-
-    /// <summary>
     /// Optional navigation filter forwarded to the pre-validation navigation walk
     /// so excluded navigations are not validated, matching the scope of the graph
     /// operation. Always <c>null</c> for flat operations.
@@ -114,7 +100,7 @@ internal interface IInsertOperation<TEntity, TKey>
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
         CancellationToken cancellationToken) =>
-        OperationPreValidationHelper.RunIndexed(Validation, entities, context, Accumulator, IsGraphOperation, NavigationFilter, cancellationToken);
+        OperationPreValidationHelper.RunIndexed(Validation, entities, context, Accumulator, NavigationFilter, cancellationToken);
 
     /// <summary>
     /// Validates all entities before processing. Called once at the start.

@@ -26,7 +26,7 @@ foreach (var failure in result.Failures.Where(f => f.Reason == FailureReason.Val
 }
 ```
 
-The delegate receives a `ref ValidationCollector` — a stack-only buffer with a 4-slot inline capacity. Emit zero, one, or many `ValidationError` instances per entity. Zero allocation in the all-valid case; pooled allocation only when one entity emits more errors than the inline capacity.
+The delegate receives a `ref ValidationCollector` — a `ref struct` buffer with a 4-slot inline capacity. Emit zero, one, or many `ValidationError` instances per entity. The pipeline allocates one 4-slot buffer per batch (not per entity) and reuses it; the collector only rents from `ArrayPool<T>.Shared` when a single entity emits more than the inline capacity.
 
 ## DataAnnotations Adapter
 
@@ -96,12 +96,12 @@ options.Validation!.CancellationCheckInterval = 32;
 
 ## Graph Operations
 
-By default, pre-validation walks only the top-level entities passed to `InsertGraph`, `UpdateGraph`, `DeleteGraph`, or `UpsertGraph` — navigation children are not validated. `IncludeNavigations` only affects graph operations; setting it on a flat `InsertOptions`/`UpdateOptions`/`DeleteOptions`/`UpsertOptions` is a no-op. Set `IncludeNavigations = true` to opt into walking the entity's reference and collection navigations and applying DataAnnotations to each reachable child:
+By default, pre-validation walks only the top-level entities passed to `InsertGraph`, `UpdateGraph`, `DeleteGraph`, or `UpsertGraph` — navigation children are not validated. `IncludeNavigations` lives on `GraphValidationOptions` (a subtype of `ValidationOptions`) and is only accessible when validation is attached to a graph options object — the type system makes it impossible to set on a flat `InsertOptions`/`DeleteOptions`/`UpsertOptions`. Set `IncludeNavigations = true` to opt into walking the entity's reference and collection navigations and applying DataAnnotations to each reachable child:
 
 ```csharp
 var options = new InsertGraphOptions();
 options.WithDataAnnotations<Order>();
-options.Validation!.IncludeNavigations = true;
+options.Validation!.IncludeNavigations = true;   // GraphValidationOptions
 ```
 
 Child failures are reported on the parent's failure record with a property path that locates the offending value, for example `"Items[2].Sku"`. Cycle protection is reference-based: if a child links back to an already-visited parent it is skipped, so self-referencing graphs terminate cleanly. The walk also honours `GraphOptionsBase.NavigationFilter` — navigations excluded by the filter are not validated, matching the scope of the graph operation that owns the walk. Validation also recurses through unannotated intermediate types when a deeper child has DataAnnotations, so a `Root → Mid (no annotations) → Leaf [Required]` graph still surfaces leaf failures.
@@ -121,12 +121,33 @@ Pre-validation failures appear in `result.Failures` exactly like any other failu
 - **Update / Delete / UpdateGraph / DeleteGraph**: failures are keyed by `EntityId` (read via reflection from the entity's primary-key property).
 - **Upsert / UpsertGraph**: failures carry both `EntityIndex` and `EntityId`. `AttemptedOperation` is set heuristically by checking `HasDefaultKeyValue(entity)` — default key → `Insert`, otherwise `Update`.
 
+Each failure also exposes the structured `ValidationErrors` list — the same `ValidationError` instances the validator emitted. Drive UI / API responses off this list rather than parsing `ErrorMessage`:
+
+```csharp
+foreach (var failure in result.Failures.Where(f => f.Reason == FailureReason.ValidationError))
+{
+    foreach (var error in failure.ValidationErrors!)
+    {
+        _logger.LogWarning("Entity {Index} property {Property}: {Code} {Message}",
+            failure.EntityIndex, error.PropertyName, error.Code, error.Message);
+    }
+}
+```
+
+`ValidationErrors` is `null` on every non-validation failure, so checking `Reason == FailureReason.ValidationError` (or just `ValidationErrors is not null`) is enough to gate the structured access.
+
 `SuccessCount`, `FailureCount`, and `DatabaseRoundTrips` remain accurate at every `ResultDetail` level.
+
+## ParallelWinnower
+
+`ParallelWinnower<TEntity, TKey>` partitions the input list across multiple `DbContext` instances. Pre-validation runs inside each partition's strategy — there is no shared validator state, so a `ValidatorDelegate<TEntity>` (or `WithDataAnnotations`) can rely on the same single-threaded guarantees the synchronous path provides. The reflection cache used by `WithDataAnnotations` is thread-safe (`ConcurrentDictionary`) so configuring the same options across partitions has no observable effect on correctness or throughput.
+
+`EntityIndex` on failures is reported relative to the **partition's** input, not the caller's global list. Use `ParallelWinnower`'s aggregated result accessors if you need global indexing; pre-validation does not change that contract.
 
 ## Performance Notes
 
 - **Hot path**: one delegate cast per batch, then a tight `for` loop over the entity list. No LINQ, no enumerator allocation.
-- **Allocations**: zero on the all-valid happy path beyond a single `ValidationError[4]` buffer reused across the whole batch. Invalid entities trigger an `ArrayPool` rental only when one entity emits more errors than the inline capacity (rare).
+- **Allocations**: one 4-slot `ValidationError[]` buffer allocated per batch and reused across every entity. The collector only rents from `ArrayPool<T>.Shared` when a single entity emits more errors than the inline capacity (rare). The buffer is heap-allocated rather than stack-allocated because `ValidationError` contains string references and is not an `unmanaged` type — the per-batch amortisation keeps the cost well below one allocation per entity.
 - **DataAnnotations adapter**: reflection cost is paid once per type via a `ConcurrentDictionary` cache; each annotated property's getter is compiled to a direct expression delegate so the per-entity hot path is a linear walk over cached `(compiled getter, ValidationAttribute[])` pairs with no `PropertyInfo.GetValue` reflection per entity.
 - **Cancellation poll**: one volatile read every 256 entities by default; branch-predictable and rounded to a power of two for the modulo to optimise to a bitmask under JIT inlining.
 

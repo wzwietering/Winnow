@@ -30,8 +30,15 @@ public class ValidationOptionsValidationTests
 
         options.Validation.ShouldNotBeNull();
         options.Validation!.FailureBehavior.ShouldBe(ValidationFailureBehavior.RecordAsFailure);
-        options.Validation.IncludeNavigations.ShouldBeFalse();
         options.Validation.CancellationCheckInterval.ShouldBe(ValidationOptions.DefaultCancellationCheckInterval);
+    }
+
+    [Fact]
+    public void WithDataAnnotations_OnGraphOptions_DefaultsIncludeNavigationsToFalse()
+    {
+        var options = new InsertGraphOptions().WithDataAnnotations<Product>();
+        options.Validation.ShouldNotBeNull();
+        options.Validation!.IncludeNavigations.ShouldBeFalse();
     }
 
     [Fact]
@@ -65,11 +72,10 @@ public class ValidationOptionsValidationTests
     [Fact]
     public void CancellationCheckInterval_NegativeOrZero_Throws()
     {
-        var options = new ValidationOptions(typeof(Product),
-            (ValidatorDelegate<Product>)((Product _, ref ValidationCollector _) => { }));
+        var options = new WinnowOptions().WithValidation<Product>((Product _, ref ValidationCollector _) => { });
 
-        Should.Throw<ArgumentOutOfRangeException>(() => options.CancellationCheckInterval = 0);
-        Should.Throw<ArgumentOutOfRangeException>(() => options.CancellationCheckInterval = -1);
+        Should.Throw<ArgumentOutOfRangeException>(() => options.Validation!.CancellationCheckInterval = 0);
+        Should.Throw<ArgumentOutOfRangeException>(() => options.Validation!.CancellationCheckInterval = -1);
     }
 
     [Fact]
