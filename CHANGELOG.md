@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-14
+
 ### Added
 
 - `UpsertOptionsExtensions.WithMatchBy<TEntity>` — route upsert by a business-key expression (single property or anonymous projection for composite keys) instead of the primary-key default-value check. See [docs/upsert-operations.md](docs/upsert-operations.md#custom-match-expressions-matchby).
