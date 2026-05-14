@@ -11,11 +11,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `UpsertOptions.MatchBy` — optional `LambdaExpression` that overrides primary-key default-value detection with a custom business-key lookup. Supports single-property (`e => e.ExternalId`) and anonymous composite (`e => new { e.TenantId, e.ExternalId }`) shapes. Winnow performs one batched `SELECT` (`AsNoTracking`, chunked, parameter-budget-aware) before `SaveChanges` to partition the input batch into insert/update sets. On update, the resolved row's primary key and concurrency-token values are copied onto the input entity so the subsequent `Modified` flip generates a correct UPDATE under optimistic concurrency.
 - `UpsertOptionsExtensions.WithMatchBy<TEntity, TKey>` — fluent helper for type-safe construction of the `MatchBy` expression.
-- `DuplicateKeyStrategy.RetryAsUpdate` is now MatchBy-aware: when a concurrent INSERT lands between the pre-SELECT and our save, the retry path re-queries by business key, copies the now-existing row's primary key + concurrency tokens, and re-issues as UPDATE.
+- `UpsertOptionsExtensions.WithMatchBy<TEntity>` — single-type-argument overload for composite keys, removing the awkward `TKey = object` requirement when supplying an anonymous projection.
+- `DuplicateKeyStrategy.RetryAsUpdate` is now MatchBy-aware: when a concurrent INSERT lands between the pre-SELECT and our save, the retry path re-queries by business key (via async I/O when called from `UpsertAsync`), copies the now-existing row's primary key + concurrency tokens, and re-issues as UPDATE.
+
+### Changed
+
+- `WithMatchBy` now performs eager shape validation: invalid expression shapes (method calls, nested member access, complex projections) throw `ArgumentException` at the call site instead of when the upsert later runs.
 
 ### Notes
 
-- Graph upsert (`UpsertGraph`) does not yet support `MatchBy`; the property is exposed on `UpsertOptions` only.
+- Graph upsert (`UpsertGraph`) does not support `MatchBy`; the property is exposed on `UpsertOptions` only.
 - Ambiguous matches (multiple existing rows for the same match key) and duplicate match keys within a single input batch are rejected with `InvalidOperationException` — Winnow does not silently pick a winner.
 
 ## [1.1.0] - 2026-05-08

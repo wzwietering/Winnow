@@ -20,6 +20,17 @@ internal static class MatchExpressionParser
         return new MatchExpressionPlan<TEntity>(properties, extractor);
     }
 
+    /// <summary>
+    /// Runs only the model-independent shape checks (parameter shape + member access form).
+    /// Used by <see cref="UpsertOptionsExtensions.WithMatchBy{TEntity, TKey}"/> to fail fast
+    /// before <see cref="Parse{TEntity}"/> resolves properties against the EF Core model.
+    /// </summary>
+    internal static void ValidateShape<TEntity>(LambdaExpression expression) where TEntity : class
+    {
+        ValidateLambdaShape<TEntity>(expression);
+        ExtractMemberNames(expression);
+    }
+
     private static void ValidateLambdaShape<TEntity>(LambdaExpression expression)
     {
         if (expression.Parameters.Count != 1 || expression.Parameters[0].Type != typeof(TEntity))

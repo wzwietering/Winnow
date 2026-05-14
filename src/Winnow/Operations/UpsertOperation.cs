@@ -30,11 +30,7 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
 {
     private readonly UpsertOptions _options;
     private readonly UpsertAccumulator<TKey> _accumulator;
-    private MatchExpressionPlan<TEntity>? _matchPlan;
-    private Dictionary<MatchKey, TEntity>? _existingByMatchKey;
-    private object?[][]? _entityMatchValues;
-    private DbContext? _dbContext;
-    private IReadOnlyList<IProperty>? _concurrencyTokens;
+    private MatchByResolution<TEntity>? _resolution;
 
     internal UpsertOperation(UpsertOptions options, UpsertAccumulator<TKey> accumulator)
     {
@@ -58,10 +54,10 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
     public void ResolveBatch(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {
         if (_options.MatchBy is null) return;
-        var (plan, values, entityType) = PrepareMatchBatch(entities, context);
+        var prepared = PrepareMatchBatch(entities, context);
         var service = new MatchExpressionQueryService(context.Context);
-        StoreMatchState(plan, values, context.Context, entityType,
-            service.QueryExisting<TEntity>(plan.Properties, values));
+        var existing = service.QueryExisting<TEntity>(prepared.Plan.Properties, prepared.Values);
+        _resolution = BuildResolution(prepared, context.Context, existing);
     }
 
     public async Task ResolveBatchAsync(
@@ -70,14 +66,14 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
         CancellationToken cancellationToken)
     {
         if (_options.MatchBy is null) return;
-        var (plan, values, entityType) = PrepareMatchBatch(entities, context);
+        var prepared = PrepareMatchBatch(entities, context);
         var service = new MatchExpressionQueryService(context.Context);
         var existing = await service.QueryExistingAsync<TEntity>(
-            plan.Properties, values, cancellationToken);
-        StoreMatchState(plan, values, context.Context, entityType, existing);
+            prepared.Plan.Properties, prepared.Values, cancellationToken);
+        _resolution = BuildResolution(prepared, context.Context, existing);
     }
 
-    private (MatchExpressionPlan<TEntity> plan, object?[][] values, IEntityType entityType) PrepareMatchBatch(
+    private PreparedMatchBatch PrepareMatchBatch(
         List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {
         var entityType = context.Context.Model.FindEntityType(typeof(TEntity))
@@ -86,22 +82,19 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
         var plan = MatchExpressionParser.Parse<TEntity>(_options.MatchBy!, entityType);
         var values = ExtractMatchValues(entities, plan);
         RejectDuplicateMatchKeys(values);
-        return (plan, values, entityType);
+        return new PreparedMatchBatch(plan, values, entityType);
     }
 
-    private void StoreMatchState(
-        MatchExpressionPlan<TEntity> plan,
-        object?[][] values,
-        DbContext dbContext,
-        IEntityType entityType,
-        Dictionary<MatchKey, TEntity> existing)
-    {
-        _matchPlan = plan;
-        _entityMatchValues = values;
-        _dbContext = dbContext;
-        _existingByMatchKey = existing;
-        _concurrencyTokens = CollectConcurrencyTokens(entityType);
-    }
+    private static MatchByResolution<TEntity> BuildResolution(
+        PreparedMatchBatch prepared, DbContext dbContext, Dictionary<MatchKey, TEntity> existing) =>
+        new(prepared.Plan,
+            prepared.Values,
+            dbContext,
+            CollectConcurrencyTokens(prepared.EntityType),
+            existing);
+
+    private sealed record PreparedMatchBatch(
+        MatchExpressionPlan<TEntity> Plan, object?[][] Values, IEntityType EntityType);
 
     private static IReadOnlyList<IProperty> CollectConcurrencyTokens(IEntityType entityType)
     {
@@ -122,7 +115,7 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
         var values = new object?[entities.Count][];
         for (var i = 0; i < entities.Count; i++)
         {
-            values[i] = plan.ExtractValues(entities[i]);
+            values[i] = plan.Extractor(entities[i]);
         }
         return values;
     }
@@ -132,7 +125,7 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
         var seen = new Dictionary<MatchKey, int>();
         for (var i = 0; i < values.Length; i++)
         {
-            if (HasAnyNull(values[i])) continue;
+            if (MatchKey.ContainsNull(values[i])) continue;
             var key = new MatchKey(values[i]);
             if (seen.TryGetValue(key, out var firstIndex))
             {
@@ -142,15 +135,6 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
             }
             seen[key] = i;
         }
-    }
-
-    private static bool HasAnyNull(object?[] tuple)
-    {
-        foreach (var v in tuple)
-        {
-            if (v is null) return true;
-        }
-        return false;
     }
 
     public void PrepareEntity(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
@@ -164,18 +148,18 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
 
     private bool DecideInsertOrUpdate(TEntity entity, int index, StrategyContext<TEntity, TKey> context)
     {
-        if (_existingByMatchKey is null)
+        if (_resolution is null)
         {
             return context.HasDefaultKeyValue(entity);
         }
 
-        var values = _entityMatchValues![index];
-        if (HasAnyNull(values))
+        var values = _resolution.EntityMatchValues[index];
+        if (MatchKey.ContainsNull(values))
         {
             return true;
         }
 
-        if (!_existingByMatchKey.TryGetValue(new MatchKey(values), out var existing))
+        if (!_resolution.ExistingByMatchKey.TryGetValue(new MatchKey(values), out var existing))
         {
             return true;
         }
@@ -193,8 +177,8 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
 
     private void CopyConcurrencyTokensFromExisting(TEntity input, TEntity existing)
     {
-        if (_concurrencyTokens is null) return;
-        foreach (var token in _concurrencyTokens)
+        if (_resolution is null) return;
+        foreach (var token in _resolution.ConcurrencyTokens)
         {
             var propertyInfo = token.PropertyInfo
                 ?? throw new InvalidOperationException(
@@ -205,15 +189,37 @@ internal class UpsertOperation<TEntity, TKey> : IUpsertOperation<TEntity, TKey>
 
     public bool TryRefreshFromMatchBy(TEntity entity, StrategyContext<TEntity, TKey> context)
     {
-        if (_matchPlan is null || _dbContext is null) return false;
+        if (!TryPrepareRefresh(entity, out var values)) return false;
 
-        var values = _matchPlan.ExtractValues(entity);
-        if (HasAnyNull(values)) return false;
+        var service = new MatchExpressionQueryService(_resolution!.DbContext);
+        var dict = service.QueryExisting<TEntity>(_resolution.Plan.Properties, new[] { values });
+        return TryApplyRefreshResult(entity, values, dict, context);
+    }
 
-        var service = new MatchExpressionQueryService(_dbContext);
-        var dict = service.QueryExisting<TEntity>(_matchPlan.Properties, new[] { values });
+    public async Task<bool> TryRefreshFromMatchByAsync(
+        TEntity entity, StrategyContext<TEntity, TKey> context, CancellationToken cancellationToken)
+    {
+        if (!TryPrepareRefresh(entity, out var values)) return false;
+
+        var service = new MatchExpressionQueryService(_resolution!.DbContext);
+        var dict = await service.QueryExistingAsync<TEntity>(
+            _resolution.Plan.Properties, new[] { values }, cancellationToken);
+        return TryApplyRefreshResult(entity, values, dict, context);
+    }
+
+    private bool TryPrepareRefresh(TEntity entity, out object?[] values)
+    {
+        values = Array.Empty<object?>();
+        if (_resolution is null) return false;
+        values = _resolution.Plan.Extractor(entity);
+        return !MatchKey.ContainsNull(values);
+    }
+
+    private bool TryApplyRefreshResult(
+        TEntity entity, object?[] values, Dictionary<MatchKey, TEntity> dict,
+        StrategyContext<TEntity, TKey> context)
+    {
         if (!dict.TryGetValue(new MatchKey(values), out var existing)) return false;
-
         ApplyExistingRowOnto(entity, existing, context);
         return true;
     }

@@ -67,7 +67,7 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
     {
         try
         {
-            PreparePrimaryKeyForRetry(entity, context, operation);
+            await operation.TryRefreshFromMatchByAsync(entity, context, cancellationToken);
             context.Context.Entry(entity).State = EntityState.Modified;
             await SaveChangesRetryHandler.SaveWithRetryAsync(context.Context, context.RetryOptions, context.Logger, context.IncrementRetryCount, cancellationToken);
             context.IncrementRoundTrip();

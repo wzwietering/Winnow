@@ -79,9 +79,11 @@ public class WinnowerUpsertMatchByConcurrencyTests : TestBase
         {
             if (fired) return;
             fired = true;
-            context.Database.ExecuteSqlInterpolated(
+            var rowsAffected = context.Database.ExecuteSqlInterpolated(
                 $@"INSERT INTO CustomerOrders (OrderNumber, CustomerId, CustomerName, Status, TotalAmount, OrderDate, Version)
-                   VALUES ({orderNumber}, 99, {customerName}, 0, 1.00, '2020-01-01 00:00:00', X'0000000000000001')");
+                   VALUES ({orderNumber}, 1, {customerName}, 0, 1.00, '2020-01-01 00:00:00', X'0000000000000001')");
+            // Guard against the test silently no-opping if a future schema change rejects this row.
+            rowsAffected.ShouldBe(1);
         };
     }
 }

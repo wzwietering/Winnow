@@ -10,13 +10,13 @@ namespace Winnow.Internal;
 internal sealed class MatchExpressionPlan<TEntity> where TEntity : class
 {
     internal IReadOnlyList<IProperty> Properties { get; }
-    internal Func<TEntity, object?[]> ExtractValues { get; }
+    internal Func<TEntity, object?[]> Extractor { get; }
 
     internal MatchExpressionPlan(
         IReadOnlyList<IProperty> properties,
-        Func<TEntity, object?[]> extractValues)
+        Func<TEntity, object?[]> extractor)
     {
         Properties = properties;
-        ExtractValues = extractValues;
+        Extractor = extractor;
     }
 }

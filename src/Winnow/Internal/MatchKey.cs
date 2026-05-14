@@ -17,12 +17,9 @@ internal readonly struct MatchKey : IEquatable<MatchKey>
         _values = values ?? throw new ArgumentNullException(nameof(values));
     }
 
-    internal int Length => _values?.Length ?? 0;
+    internal int Length => _values!.Length;
 
-    internal object? GetValue(int index) =>
-        _values is null
-            ? throw new InvalidOperationException("MatchKey was not initialised with values.")
-            : _values[index];
+    internal object? GetValue(int index) => _values![index];
 
     public bool Equals(MatchKey other) => HaveSameValues(_values, other._values);
 
@@ -53,4 +50,17 @@ internal readonly struct MatchKey : IEquatable<MatchKey>
 
     public static bool operator ==(MatchKey left, MatchKey right) => left.Equals(right);
     public static bool operator !=(MatchKey left, MatchKey right) => !left.Equals(right);
+
+    /// <summary>
+    /// Returns true if any element of <paramref name="tuple"/> is null. Match-value tuples
+    /// containing nulls are treated as "no business key" and routed to insert.
+    /// </summary>
+    internal static bool ContainsNull(object?[] tuple)
+    {
+        foreach (var v in tuple)
+        {
+            if (v is null) return true;
+        }
+        return false;
+    }
 }

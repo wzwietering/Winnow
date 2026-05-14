@@ -67,14 +67,19 @@ internal class EntityKeyService<TEntity, TKey>
         var values = new object[keyProperties.Count];
         for (var i = 0; i < keyProperties.Count; i++)
         {
-            var propertyInfo = keyProperties[i].PropertyInfo
-                ?? throw new InvalidOperationException(
-                    $"Primary key '{keyProperties[i].Name}' is a shadow property; MatchBy requires CLR properties.");
-            values[i] = propertyInfo.GetValue(entity)
-                ?? throw new InvalidOperationException(
-                    $"Entity {typeof(TEntity).Name} has null primary key column '{keyProperties[i].Name}'.");
+            values[i] = ReadCompositeKeyComponent(entity, keyProperties[i]);
         }
         return (TKey)(object)new CompositeKey(values);
+    }
+
+    private static object ReadCompositeKeyComponent(TEntity entity, IProperty keyProperty)
+    {
+        var propertyInfo = keyProperty.PropertyInfo
+            ?? throw new InvalidOperationException(
+                $"Primary key '{keyProperty.Name}' is a shadow property; MatchBy requires CLR properties.");
+        return propertyInfo.GetValue(entity)
+            ?? throw new InvalidOperationException(
+                $"Entity {typeof(TEntity).Name} has null primary key column '{keyProperty.Name}'.");
     }
 
     internal void SetEntityId(TEntity entity, TKey value)
@@ -106,6 +111,15 @@ internal class EntityKeyService<TEntity, TKey>
 
     private static void SetCompositeKey(TEntity entity, IReadOnlyList<IProperty> keyProperties, TKey value)
     {
+        var composite = EnsureCompositeKeyShape(value, keyProperties);
+        for (var i = 0; i < keyProperties.Count; i++)
+        {
+            SetCompositeKeyComponent(entity, keyProperties[i], composite[i]);
+        }
+    }
+
+    private static CompositeKey EnsureCompositeKeyShape(TKey value, IReadOnlyList<IProperty> keyProperties)
+    {
         if (value is not CompositeKey composite)
         {
             throw new InvalidOperationException(
@@ -118,13 +132,15 @@ internal class EntityKeyService<TEntity, TKey>
                 $"CompositeKey has {composite.Count} component(s) but entity {typeof(TEntity).Name} " +
                 $"has {keyProperties.Count} primary key column(s).");
         }
-        for (var i = 0; i < keyProperties.Count; i++)
-        {
-            var propertyInfo = keyProperties[i].PropertyInfo
-                ?? throw new InvalidOperationException(
-                    $"Primary key '{keyProperties[i].Name}' is a shadow property; MatchBy does not support this.");
-            propertyInfo.SetValue(entity, composite[i]);
-        }
+        return composite;
+    }
+
+    private static void SetCompositeKeyComponent(TEntity entity, IProperty keyProperty, object componentValue)
+    {
+        var propertyInfo = keyProperty.PropertyInfo
+            ?? throw new InvalidOperationException(
+                $"Primary key '{keyProperty.Name}' is a shadow property; MatchBy does not support this.");
+        propertyInfo.SetValue(entity, componentValue);
     }
 
     internal TKey GetEntityIdFromEntry(EntityEntry entry)

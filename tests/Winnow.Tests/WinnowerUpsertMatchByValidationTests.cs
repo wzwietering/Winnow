@@ -9,25 +9,20 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
     [Fact]
     public void MatchBy_MethodCallExpression_Throws()
     {
-        using var context = CreateContext();
-        var saver = new Winnower<Product, int>(context);
-        var options = new UpsertOptions().WithMatchBy<Product, string>(p => p.Name.ToLower());
+        var options = new UpsertOptions();
 
         Should.Throw<ArgumentException>(() =>
-            saver.Upsert(new[] { NewProduct("X") }, options));
+            options.WithMatchBy<Product, string>(p => p.Name.ToLower()));
     }
 
     [Fact]
     public void MatchBy_NestedMemberAccess_Throws()
     {
-        using var context = CreateContext();
-        var saver = new Winnower<Product, int>(context);
+        var options = new UpsertOptions();
 
         // p => p.Category.Id — Category is a navigation, the lambda body is a nested MemberExpression.
-        var options = new UpsertOptions().WithMatchBy<Product, int?>(p => p.Category!.Id);
-
         Should.Throw<ArgumentException>(() =>
-            saver.Upsert(new[] { NewProduct("X") }, options));
+            options.WithMatchBy<Product, int?>(p => p.Category!.Id));
     }
 
     [Fact]
@@ -109,6 +104,30 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
         var options = new UpsertOptions();
         Should.Throw<ArgumentNullException>(() =>
             options.WithMatchBy<Product, string>(null!));
+    }
+
+    [Fact]
+    public void WithMatchBy_MethodCallExpression_ThrowsAtCallSite()
+    {
+        var options = new UpsertOptions();
+        Should.Throw<ArgumentException>(() =>
+            options.WithMatchBy<Product, string>(p => p.Name.ToLower()));
+    }
+
+    [Fact]
+    public void WithMatchBy_NestedMemberAccess_ThrowsAtCallSite()
+    {
+        var options = new UpsertOptions();
+        Should.Throw<ArgumentException>(() =>
+            options.WithMatchBy<Product, int?>(p => p.Category!.Id));
+    }
+
+    [Fact]
+    public void WithMatchBy_AnonymousProjectionWithMethodCall_ThrowsAtCallSite()
+    {
+        var options = new UpsertOptions();
+        Should.Throw<ArgumentException>(() =>
+            options.WithMatchBy<Product, object>(p => new { Lower = p.Name.ToLower() }));
     }
 
     private static Product NewProduct(string name) => new()

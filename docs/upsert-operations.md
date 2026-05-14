@@ -30,10 +30,14 @@ set `UpsertOptions.MatchBy` to an expression that selects that key.
 saver.Upsert(products, new UpsertOptions()
     .WithMatchBy<Product, string>(p => p.Sku));
 
-// Composite business key:
+// Composite business key (preferred, no TKey needed):
 saver.Upsert(items, new UpsertOptions()
-    .WithMatchBy<Item, object>(i => new { i.TenantId, i.ExternalId }));
+    .WithMatchBy<Item>(i => new { i.TenantId, i.ExternalId }));
 ```
+
+> **Tip:** Use the single-type-argument overload (`WithMatchBy<TEntity>`) for
+> composite keys. The two-argument form (`WithMatchBy<TEntity, TKey>`) requires
+> spelling out `TKey = object` for anonymous projections, which is unintuitive.
 
 ### How it works
 
@@ -55,9 +59,18 @@ or affect entities the caller has already loaded.
 - A single property: `e => e.ExternalId`
 - An anonymous projection: `e => new { e.TenantId, e.ExternalId }`
 
-Method calls, nested member access (`e => e.Address.City`), and references to
-navigation properties are rejected at runtime with a descriptive
-`ArgumentException`.
+Method calls, nested member access (`e => e.Address.City`), and complex
+expressions are rejected **at the `WithMatchBy` call site** with a descriptive
+`ArgumentException`. Property mapping errors (referencing an unmapped property
+or a navigation property) are surfaced when the upsert runs against the
+configured `DbContext`.
+
+### Match-by primary key
+
+`MatchBy` is intended for business keys, not primary keys. Selecting the PK
+column (`o => o.Id` on a database-generated PK) works mechanically — the SELECT
+will match by PK and copy the PK back onto itself — but adds an unnecessary
+round trip. Use the default behavior (omit `MatchBy`) when matching on PK.
 
 ### Race conditions
 
@@ -89,10 +102,17 @@ correct under concurrent inserts.
 
 ### Limitations
 
-- Graph upsert (`UpsertGraph`) does not support `MatchBy` in this release.
+- Graph upsert (`UpsertGraph`) does not support `MatchBy`. `UpsertGraphOptions`
+  is a separate type and does not expose a `MatchBy` property.
 - `MatchBy` properties must be CLR properties; shadow properties are not
   supported.
 - Concurrency tokens copied during the merge must also be CLR properties.
+
+### Interaction with other UpsertOptions
+
+`MatchBy` decides only whether each entity routes to INSERT or UPDATE. It does
+not affect property-level options such as those that govern which properties
+participate in the eventual INSERT/UPDATE statement. Combine freely.
 
 ### Performance
 

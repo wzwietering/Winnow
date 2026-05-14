@@ -135,19 +135,10 @@ internal class MatchExpressionQueryService
         var result = new List<object?[]>(tuples.Count);
         foreach (var tuple in tuples)
         {
-            if (HasAnyNull(tuple)) continue;
+            if (MatchKey.ContainsNull(tuple)) continue;
             result.Add(tuple);
         }
         return result;
-    }
-
-    private static bool HasAnyNull(object?[] tuple)
-    {
-        foreach (var v in tuple)
-        {
-            if (v is null) return true;
-        }
-        return false;
     }
 
     private static void Accumulate<TEntity>(

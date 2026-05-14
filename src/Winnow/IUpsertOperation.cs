@@ -38,6 +38,15 @@ internal interface IUpsertOperation<TEntity, TKey>
     bool TryRefreshFromMatchBy(TEntity entity, StrategyContext<TEntity, TKey> context);
 
     /// <summary>
+    /// Async counterpart of <see cref="TryRefreshFromMatchBy"/>. Used by the async retry path
+    /// so the refresh SELECT goes through async I/O and observes the cancellation token.
+    /// </summary>
+    Task<bool> TryRefreshFromMatchByAsync(
+        TEntity entity,
+        StrategyContext<TEntity, TKey> context,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Creates the final result from tracked successes and failures.
     /// </summary>
     /// <param name="wasCancelled">Whether the operation was cancelled before completing.</param>
