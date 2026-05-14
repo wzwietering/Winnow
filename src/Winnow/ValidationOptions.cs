@@ -39,6 +39,14 @@ public sealed class ValidationOptions
     internal object Validator { get; }
 
     /// <summary>
+    /// True when the validator was built by the DataAnnotations adapter
+    /// (<c>WithDataAnnotations</c>). Only DataAnnotations validators can be applied
+    /// polymorphically to child entities, so this is the gate for
+    /// <see cref="IncludeNavigations"/>.
+    /// </summary>
+    internal bool IsDataAnnotationsValidator { get; }
+
+    /// <summary>
     /// Controls what happens when at least one entity fails validation.
     /// Default: <see cref="ValidationFailureBehavior.RecordAsFailure"/>.
     /// </summary>
@@ -69,9 +77,10 @@ public sealed class ValidationOptions
         }
     }
 
-    internal ValidationOptions(Type entityType, object validator)
+    internal ValidationOptions(Type entityType, object validator, bool isDataAnnotationsValidator = false)
     {
         EntityType = entityType;
         Validator = validator;
+        IsDataAnnotationsValidator = isDataAnnotationsValidator;
     }
 }

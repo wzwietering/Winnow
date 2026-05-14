@@ -59,7 +59,7 @@ public static class ValidationOptionsExtensions
     {
         ArgumentNullException.ThrowIfNull(options);
         var validator = DataAnnotationsValidatorFactory.Create<TEntity>();
-        options.Validation = new ValidationOptions(typeof(TEntity), validator);
+        options.Validation = new ValidationOptions(typeof(TEntity), validator, isDataAnnotationsValidator: true);
         return options;
     }
 
@@ -71,7 +71,7 @@ public static class ValidationOptionsExtensions
     {
         ArgumentNullException.ThrowIfNull(options);
         var validator = DataAnnotationsValidatorFactory.Create<TEntity>();
-        options.Validation = new ValidationOptions(typeof(TEntity), validator);
+        options.Validation = new ValidationOptions(typeof(TEntity), validator, isDataAnnotationsValidator: true);
         return options;
     }
 }

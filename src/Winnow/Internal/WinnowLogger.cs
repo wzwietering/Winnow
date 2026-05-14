@@ -89,7 +89,7 @@ internal static partial class WinnowLogger
     private static partial void MatchByPreSelect(
         ILogger logger, string entityType, int tupleCount, int columnCount);
 
-    [LoggerMessage(Level = LogLevel.Information,
+    [LoggerMessage(Level = LogLevel.Debug,
         Message = "Pre-validation for {EntityType}: {SurvivorCount}/{InputCount} entities passed ({RejectedCount} rejected)")]
     private static partial void PreValidationFiltered(
         ILogger logger, string entityType, int inputCount, int survivorCount, int rejectedCount);

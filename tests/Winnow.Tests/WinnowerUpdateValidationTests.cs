@@ -32,6 +32,28 @@ public class WinnowerUpdateValidationTests : TestBase
     }
 
     [Fact]
+    public void Update_FailureBehaviorThrow_ThrowsWinnowValidationException()
+    {
+        using var context = CreateContext();
+        SeedData(context, 2);
+        var products = context.Products.AsNoTracking().ToList();
+        products[0].Price = -1m;
+
+        var options = new WinnowOptions();
+        options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
+        {
+            if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive");
+        });
+        options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+
+        var saver = new Winnower<Product, int>(context);
+        var ex = Should.Throw<WinnowValidationException>(() => saver.Update(products, options));
+
+        ex.Failures.Count.ShouldBe(1);
+        ex.Failures[0].EntityIndex.ShouldBe(0);
+    }
+
+    [Fact]
     public void Update_AllValid_NoFailures()
     {
         using var context = CreateContext();

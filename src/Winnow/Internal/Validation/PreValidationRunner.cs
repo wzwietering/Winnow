@@ -37,69 +37,156 @@ internal static class PreValidationRunner
         where TEntity : class
     {
         EnsureEntityTypeMatches<TEntity>(validation);
+        EnsureIncludeNavigationsCompatible(validation);
         var validator = (ValidatorDelegate<TEntity>)validation.Validator;
-        var interval = validation.CancellationCheckInterval;
         var throwOnAny = validation.FailureBehavior == ValidationFailureBehavior.Throw;
         var survivors = new List<TEntity>(entities.Count);
         var indices = new int[entities.Count];
-        int survivorCount = 0;
-        List<EntityValidationFailure>? thrownFailures = throwOnAny ? [] : null;
-
-        // ValidationError holds string references and so cannot be stackalloc'd.
-        // Allocate the inline buffer once per batch on the heap (~192 bytes) and
-        // reuse it across every entity; the collector resets its count per entity,
-        // and the pool only kicks in when a single entity emits >4 errors.
+        var thrownFailures = new List<EntityValidationFailure>();
         var inlineBuffer = new ValidationError[ValidationCollector.InlineCapacity];
+        int survivorCount = 0;
 
+        ScanEntities(entities, validator, recordFailure, validation.CancellationCheckInterval,
+            cancellationToken, throwOnAny, validation.IncludeNavigations,
+            inlineBuffer, survivors, indices, thrownFailures, ref survivorCount);
+
+        ThrowIfAnyFailed(throwOnAny, thrownFailures);
+        return BuildResult(entities.Count, survivors, indices, survivorCount);
+    }
+
+    private static void ScanEntities<TEntity>(
+        List<TEntity> entities,
+        ValidatorDelegate<TEntity> validator,
+        Action<int, string, IReadOnlyList<ValidationError>> recordFailure,
+        int interval,
+        CancellationToken cancellationToken,
+        bool throwOnAny,
+        bool includeNavigations,
+        ValidationError[] inlineBuffer,
+        List<TEntity> survivors,
+        int[] indices,
+        List<EntityValidationFailure> thrownFailures,
+        ref int survivorCount)
+        where TEntity : class
+    {
         for (int i = 0; i < entities.Count; i++)
         {
             if ((i % interval) == 0)
             {
                 cancellationToken.ThrowIfCancellationRequested();
             }
-            var entity = entities[i];
-            if (entity is null)
-            {
-                AddSurvivor(survivors, indices, ref survivorCount, entity!, i);
-                continue;
-            }
-
-            var collector = new ValidationCollector(inlineBuffer);
-            try
-            {
-                validator(entity, ref collector);
-                if (collector.IsValid)
-                {
-                    AddSurvivor(survivors, indices, ref survivorCount, entity, i);
-                    continue;
-                }
-
-                var errors = collector.AsSpan().ToArray();
-                var message = BuildMessage(errors);
-                if (throwOnAny)
-                {
-                    thrownFailures!.Add(new EntityValidationFailure(i, message, errors));
-                }
-                else
-                {
-                    recordFailure(i, message, errors);
-                }
-            }
-            finally
-            {
-                collector.Dispose();
-            }
+            ProcessEntity(entities[i], i, validator, recordFailure, throwOnAny, includeNavigations,
+                inlineBuffer, survivors, indices, thrownFailures, ref survivorCount);
         }
+    }
 
-        if (throwOnAny && thrownFailures!.Count > 0)
+    private static void ProcessEntity<TEntity>(
+        TEntity? entity,
+        int index,
+        ValidatorDelegate<TEntity> validator,
+        Action<int, string, IReadOnlyList<ValidationError>> recordFailure,
+        bool throwOnAny,
+        bool includeNavigations,
+        ValidationError[] inlineBuffer,
+        List<TEntity> survivors,
+        int[] indices,
+        List<EntityValidationFailure> thrownFailures,
+        ref int survivorCount)
+        where TEntity : class
+    {
+        if (entity is null)
         {
-            throw new ValidationException(thrownFailures);
+            RecordNullEntity(index, recordFailure, thrownFailures, throwOnAny);
+            return;
         }
 
+        var collector = new ValidationCollector(inlineBuffer);
+        try
+        {
+            validator(entity, ref collector);
+            if (includeNavigations)
+            {
+                NavigationWalker.Walk(entity, ref collector);
+            }
+            if (collector.IsValid)
+            {
+                AddSurvivor(survivors, indices, ref survivorCount, entity, index);
+                return;
+            }
+            DispatchFailure(index, collector.AsSpan().ToArray(), recordFailure, throwOnAny, thrownFailures);
+        }
+        finally
+        {
+            collector.Dispose();
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void EnsureIncludeNavigationsCompatible(ValidationOptions validation)
+    {
+        if (!validation.IncludeNavigations) return;
+        if (validation.IsDataAnnotationsValidator) return;
+        throw new InvalidOperationException(
+            "IncludeNavigations only supports validators built by WithDataAnnotations. " +
+            "Typed ValidatorDelegate<TEntity> cannot be applied polymorphically to children " +
+            "of differing types — wire WithDataAnnotations<TEntity>() instead, or set " +
+            "IncludeNavigations = false and validate children with a separate options instance.");
+    }
+
+    private static void DispatchFailure(
+        int index,
+        ValidationError[] errors,
+        Action<int, string, IReadOnlyList<ValidationError>> recordFailure,
+        bool throwOnAny,
+        List<EntityValidationFailure> thrownFailures)
+    {
+        var message = BuildMessage(errors);
+        if (throwOnAny)
+        {
+            thrownFailures.Add(new EntityValidationFailure(index, message, errors));
+        }
+        else
+        {
+            recordFailure(index, message, errors);
+        }
+    }
+
+    private static void ThrowIfAnyFailed(bool throwOnAny, List<EntityValidationFailure> thrownFailures)
+    {
+        if (throwOnAny && thrownFailures.Count > 0)
+        {
+            throw new WinnowValidationException(thrownFailures);
+        }
+    }
+
+    private static PreValidationResult<TEntity> BuildResult<TEntity>(
+        int inputCount, List<TEntity> survivors, int[] indices, int survivorCount)
+        where TEntity : class
+    {
         // Trim indices array to actual survivor count so callers don't see
         // padding from skipped invalid entries.
-        var trimmedIndices = survivorCount == entities.Count ? indices : indices.AsSpan(0, survivorCount).ToArray();
-        return new PreValidationResult<TEntity>(survivors, trimmedIndices);
+        var trimmed = survivorCount == inputCount ? indices : indices.AsSpan(0, survivorCount).ToArray();
+        return new PreValidationResult<TEntity>(survivors, trimmed);
+    }
+
+    private const string NullEntityMessage = "Entity was null.";
+    private const string NullEntityCode = "WINNOW_NULL_ENTITY";
+
+    private static void RecordNullEntity(
+        int index,
+        Action<int, string, IReadOnlyList<ValidationError>> recordFailure,
+        List<EntityValidationFailure> thrownFailures,
+        bool throwOnAny)
+    {
+        var errors = new[] { new ValidationError(string.Empty, NullEntityMessage, NullEntityCode) };
+        if (throwOnAny)
+        {
+            thrownFailures.Add(new EntityValidationFailure(index, NullEntityMessage, errors));
+        }
+        else
+        {
+            recordFailure(index, NullEntityMessage, errors);
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

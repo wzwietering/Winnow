@@ -42,6 +42,29 @@ public class WinnowerUpsertValidationTests : TestBase
     }
 
     [Fact]
+    public void Upsert_FailureBehaviorThrow_ThrowsWinnowValidationException()
+    {
+        using var context = CreateContext();
+        var products = new[]
+        {
+            new Product { Id = 0, Name = "bad", Price = -1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+        };
+
+        var options = new UpsertOptions();
+        options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
+        {
+            if (p.Price <= 0) c.Add("Price", "Must be positive");
+        });
+        options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+
+        var saver = new Winnower<Product, int>(context);
+        var ex = Should.Throw<WinnowValidationException>(() => saver.Upsert(products, options));
+
+        ex.Failures.Count.ShouldBe(1);
+        ex.Failures[0].EntityIndex.ShouldBe(0);
+    }
+
+    [Fact]
     public void Upsert_PreValidationFailsExistingEntity_AttemptedOperationIsUpdate()
     {
         using var context = CreateContext();

@@ -31,4 +31,27 @@ public class WinnowerDeleteValidationTests : TestBase
         context.ChangeTracker.Clear();
         context.Products.Find(products[1].Id).ShouldNotBeNull();
     }
+
+    [Fact]
+    public void Delete_FailureBehaviorThrow_ThrowsWinnowValidationException()
+    {
+        using var context = CreateContext();
+        SeedData(context, 2);
+        var products = context.Products.AsNoTracking().ToList();
+
+        var options = new DeleteOptions();
+        options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
+        {
+            if (p.Id == products[0].Id) c.Add("Id", "Refusing");
+        });
+        options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+
+        var saver = new Winnower<Product, int>(context);
+        var ex = Should.Throw<WinnowValidationException>(() => saver.Delete(products, options));
+
+        ex.Failures.Count.ShouldBe(1);
+        ex.Failures[0].EntityIndex.ShouldBe(0);
+        context.ChangeTracker.Clear();
+        context.Products.Count().ShouldBe(2);
+    }
 }

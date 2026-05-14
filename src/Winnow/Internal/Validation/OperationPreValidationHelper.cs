@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Winnow.Internal.Accumulators;
 
 namespace Winnow.Internal.Validation;
@@ -24,17 +25,12 @@ internal static class OperationPreValidationHelper
         {
             return entities;
         }
-        var result = PreValidationRunner.Run<TEntity>(
-            entities,
-            validation,
-            (originalIndex, message, _) =>
-                accumulator.RecordFailure(
-                    ReadIdOrDefault(context, entities[originalIndex]),
-                    message,
-                    FailureReason.ValidationError,
-                    exception: null),
-            cancellationToken);
-        LogIfFiltered(context, entities.Count, result.Survivors.Count);
+        var result = RunCore(validation, entities, context.Logger, cancellationToken,
+            (originalIndex, message, _) => accumulator.RecordFailure(
+                ReadIdOrDefault(context, entities[originalIndex]),
+                message,
+                FailureReason.ValidationError,
+                exception: null));
         return result.Survivors;
     }
 
@@ -51,18 +47,12 @@ internal static class OperationPreValidationHelper
         {
             return PreValidationResult<TEntity>.Passthrough(entities);
         }
-        var result = PreValidationRunner.Run<TEntity>(
-            entities,
-            validation,
-            (originalIndex, message, _) =>
-                accumulator.RecordFailure(
-                    originalIndex,
-                    message,
-                    FailureReason.ValidationError,
-                    exception: null),
-            cancellationToken);
-        LogIfFiltered(context, entities.Count, result.Survivors.Count);
-        return result;
+        return RunCore(validation, entities, context.Logger, cancellationToken,
+            (originalIndex, message, _) => accumulator.RecordFailure(
+                originalIndex,
+                message,
+                FailureReason.ValidationError,
+                exception: null));
     }
 
     internal static PreValidationResult<TEntity> RunIndexed<TEntity, TKey>(
@@ -78,50 +68,82 @@ internal static class OperationPreValidationHelper
         {
             return PreValidationResult<TEntity>.Passthrough(entities);
         }
-        var result = PreValidationRunner.Run<TEntity>(
-            entities,
-            validation,
-            (originalIndex, message, _) =>
-            {
-                var entity = entities[originalIndex];
-                var isInsert = context.HasDefaultKeyValue(entity);
-                accumulator.RecordFailure(
-                    originalIndex,
-                    isInsert ? default : ReadIdOrDefault(context, entity),
-                    message,
-                    FailureReason.ValidationError,
-                    exception: null,
-                    isInsert ? UpsertOperationType.Insert : UpsertOperationType.Update);
-            },
-            cancellationToken);
-        LogIfFiltered(context, entities.Count, result.Survivors.Count);
-        return result;
+        return RunCore(validation, entities, context.Logger, cancellationToken,
+            (originalIndex, message, _) => RecordUpsertFailure(
+                originalIndex, message, entities, context, accumulator));
     }
 
-    private static void LogIfFiltered<TEntity, TKey>(
-        StrategyContext<TEntity, TKey> context, int inputCount, int survivorCount)
+    private static void RecordUpsertFailure<TEntity, TKey>(
+        int originalIndex,
+        string message,
+        List<TEntity> entities,
+        StrategyContext<TEntity, TKey> context,
+        UpsertAccumulator<TKey> accumulator)
         where TEntity : class
         where TKey : notnull, IEquatable<TKey>
     {
+        var entity = entities[originalIndex];
+        var isInsert = entity is null || context.HasDefaultKeyValue(entity);
+        accumulator.RecordFailure(
+            originalIndex,
+            isInsert ? default : ReadIdOrDefault(context, entity),
+            message,
+            FailureReason.ValidationError,
+            exception: null,
+            isInsert ? UpsertOperationType.Insert : UpsertOperationType.Update);
+    }
+
+    private static PreValidationResult<TEntity> RunCore<TEntity>(
+        ValidationOptions validation,
+        List<TEntity> entities,
+        ILogger? logger,
+        CancellationToken cancellationToken,
+        Action<int, string, IReadOnlyList<ValidationError>> recordFailure)
+        where TEntity : class
+    {
+        var result = PreValidationRunner.Run<TEntity>(entities, validation, recordFailure, cancellationToken);
+        LogIfFiltered(logger, typeof(TEntity), entities.Count, result.Survivors.Count);
+        return result;
+    }
+
+    private static void LogIfFiltered(ILogger? logger, Type entityType, int inputCount, int survivorCount)
+    {
         if (inputCount == survivorCount) return;
-        WinnowLogger.LogPreValidationFiltered(
-            context.Logger, typeof(TEntity).Name, inputCount, survivorCount);
+        WinnowLogger.LogPreValidationFiltered(logger, entityType.Name, inputCount, survivorCount);
     }
 
     private static TKey ReadIdOrDefault<TEntity, TKey>(
-        StrategyContext<TEntity, TKey> context, TEntity entity)
+        StrategyContext<TEntity, TKey> context, TEntity? entity)
         where TEntity : class
+        where TKey : notnull, IEquatable<TKey>
+    {
+        if (entity is null)
+        {
+            return default!;
+        }
+        return SuppressKeyReadFailures(() => context.GetEntityIdFromInstance(entity));
+    }
+
+    /// <summary>
+    /// Reads a key value, suppressing only expected pre-validation failures
+    /// (e.g. shadow PKs, model misconfiguration). Fatal exceptions (<see cref="OutOfMemoryException"/>,
+    /// <see cref="StackOverflowException"/>) and cooperative cancellation
+    /// (<see cref="OperationCanceledException"/>) propagate so the caller can tear down
+    /// the operation properly. Pre-validation runs before any tracker work, so
+    /// expected failures fall back to <c>default(TKey)</c> and rely on the failure
+    /// message to identify the entity.
+    /// </summary>
+    internal static TKey SuppressKeyReadFailures<TKey>(Func<TKey> reader)
         where TKey : notnull, IEquatable<TKey>
     {
         try
         {
-            return context.GetEntityIdFromInstance(entity);
+            return reader();
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException
+                                   and not StackOverflowException
+                                   and not OperationCanceledException)
         {
-            // Pre-validation runs before any tracker work, so a missing/shadow PK
-            // shouldn't poison the failure record. Fall back to default(TKey)
-            // and rely on the message to identify the entity.
             return default!;
         }
     }

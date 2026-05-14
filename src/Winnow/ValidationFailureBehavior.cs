@@ -14,7 +14,7 @@ public enum ValidationFailureBehavior
     RecordAsFailure = 0,
 
     /// <summary>
-    /// Throw a <see cref="ValidationException"/> as soon as the validator finishes
+    /// Throw a <see cref="WinnowValidationException"/> as soon as the validator finishes
     /// running across the batch and any failures were reported. The exception
     /// carries the aggregated failures so callers can inspect them. No database
     /// round trips occur in this mode when any entity is invalid.

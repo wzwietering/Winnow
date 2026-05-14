@@ -1,3 +1,6 @@
+using Winnow.Internal.Accumulators;
+using Winnow.Internal.Validation;
+
 namespace Winnow;
 
 /// <summary>
@@ -13,16 +16,23 @@ internal interface IUpsertOperation<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
+    /// <summary>The configured pre-validation options (or null if none).</summary>
+    ValidationOptions? Validation { get; }
+
+    /// <summary>The accumulator used to record per-entity upsert outcomes.</summary>
+    UpsertAccumulator<TKey> Accumulator { get; }
+
     /// <summary>
     /// Runs the configured pre-validation pipeline (if any). Returns the
     /// survivors plus an optional original-index map; the caller uses
     /// <see cref="Winnow.Internal.Validation.PreValidationResult{TEntity}.GetOriginalIndex"/>
     /// to record results against the user-visible input position.
     /// </summary>
-    Winnow.Internal.Validation.PreValidationResult<TEntity> ApplyPreValidation(
+    PreValidationResult<TEntity> ApplyPreValidation(
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken) =>
+        OperationPreValidationHelper.RunIndexed(Validation, entities, context, Accumulator, cancellationToken);
 
     void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context);
     void PrepareEntity(TEntity entity, int index, StrategyContext<TEntity, TKey> context);

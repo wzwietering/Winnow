@@ -29,11 +29,8 @@ internal class DeleteGraphOperation<TEntity, TKey> : IOperation<TEntity, TKey>
         _tc = TraversalContext.FromOptions(options);
     }
 
-    public List<TEntity> ApplyPreValidation(
-        List<TEntity> entities,
-        StrategyContext<TEntity, TKey> context,
-        CancellationToken cancellationToken) =>
-        OperationPreValidationHelper.Run(_options.Validation, entities, context, _accumulator, cancellationToken);
+    public ValidationOptions? Validation => _options.Validation;
+    public WinnowAccumulator<TKey> Accumulator => _accumulator;
 
     public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {

@@ -104,9 +104,54 @@ public class WinnowerInsertValidationTests : TestBase
         options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
 
         var saver = new Winnower<Product, int>(context);
-        var ex = Should.Throw<ValidationException>(() => saver.Insert(products, options));
+        var ex = Should.Throw<WinnowValidationException>(() => saver.Insert(products, options));
         ex.Failures.Count.ShouldBe(1);
         ex.Failures[0].EntityIndex.ShouldBe(0);
+    }
+
+    [Fact]
+    public void Throw_WithMultipleFailures_MessageIncludesFailingIndices()
+    {
+        using var context = CreateContext();
+        var products = new List<Product>();
+        for (int i = 0; i < 5; i++)
+        {
+            products.Add(new Product
+            {
+                Name = $"p{i}",
+                Price = (i == 1 || i == 3) ? -1m : 1m,
+                Stock = 1,
+                LastModified = DateTimeOffset.UtcNow
+            });
+        }
+
+        var options = new InsertOptions();
+        options.WithValidation(RejectNonPositivePrice());
+        options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+
+        var saver = new Winnower<Product, int>(context);
+        var ex = Should.Throw<WinnowValidationException>(() => saver.Insert(products, options));
+
+        ex.Failures.Count.ShouldBe(2);
+        ex.Message.ShouldContain("1");
+        ex.Message.ShouldContain("3");
+    }
+
+    [Fact]
+    public void WinnowValidationException_HasStandardConstructors()
+    {
+        var defaultCtor = new WinnowValidationException();
+        defaultCtor.Failures.ShouldBeEmpty();
+
+        var messageCtor = new WinnowValidationException("custom message");
+        messageCtor.Message.ShouldBe("custom message");
+        messageCtor.Failures.ShouldBeEmpty();
+
+        var inner = new InvalidOperationException("inner");
+        var withInner = new WinnowValidationException("wrapped", inner);
+        withInner.Message.ShouldBe("wrapped");
+        withInner.InnerException.ShouldBe(inner);
+        withInner.Failures.ShouldBeEmpty();
     }
 
     [Fact]
@@ -139,6 +184,53 @@ public class WinnowerInsertValidationTests : TestBase
     }
 
     [Fact]
+    public void Insert_NullEntityInList_RecordsValidationFailureAndDoesNotReachDatabase()
+    {
+        using var context = CreateContext();
+        var products = new Product[]
+        {
+            new() { Name = "A", Price = 10m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+            null!,
+            new() { Name = "C", Price = 5m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+        };
+
+        var options = new InsertOptions();
+        options.WithValidation(RejectNonPositivePrice());
+
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Insert(products, options);
+
+        result.SuccessCount.ShouldBe(2);
+        result.FailureCount.ShouldBe(1);
+        var failure = result.Failures.ShouldHaveSingleItem();
+        failure.EntityIndex.ShouldBe(1);
+        failure.Reason.ShouldBe(FailureReason.ValidationError);
+
+        products[0].Id.ShouldBeGreaterThan(0);
+        products[2].Id.ShouldBeGreaterThan(0);
+    }
+
+    [Fact]
+    public void Insert_ValidationOptionsForWrongEntityType_ThrowsInvalidOperationException()
+    {
+        using var context = CreateContext();
+        var products = new[]
+        {
+            new Product { Name = "A", Price = 10m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+        };
+
+        // Configure validation for Order, then apply to a Product insert.
+        var options = new InsertOptions();
+        options.WithValidation<Order>((Order _, ref ValidationCollector _) => { });
+
+        var saver = new Winnower<Product, int>(context);
+
+        var ex = Should.Throw<InvalidOperationException>(() => saver.Insert(products, options));
+        ex.Message.ShouldContain("Order");
+        ex.Message.ShouldContain("Product");
+    }
+
+    [Fact]
     public void Insert_DataAnnotations_AttributeFreeEntity_Passthrough()
     {
         // Product carries no DataAnnotations attributes; the cached adapter
@@ -155,5 +247,149 @@ public class WinnowerInsertValidationTests : TestBase
         var saver = new Winnower<Product, int>(context);
         var result = saver.Insert(products, options);
         result.IsCompleteSuccess.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void Insert_OneByOneStrategy_MixedValidity_PreservesOriginalIndices()
+    {
+        using var context = CreateContext();
+        var products = new List<Product>();
+        for (int i = 0; i < 6; i++)
+        {
+            products.Add(new Product
+            {
+                Name = $"p{i}",
+                Price = (i % 2 == 0) ? 1m : -1m,
+                Stock = 1,
+                LastModified = DateTimeOffset.UtcNow,
+            });
+        }
+
+        var options = new InsertOptions { Strategy = BatchStrategy.OneByOne };
+        options.WithValidation(RejectNonPositivePrice());
+
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Insert(products, options);
+
+        result.SuccessCount.ShouldBe(3);
+        result.FailureCount.ShouldBe(3);
+        result.Failures.Select(f => f.EntityIndex).OrderBy(x => x).ShouldBe([1, 3, 5]);
+    }
+
+    [Fact]
+    public void Insert_EmptyList_NoFailuresNoSurvivors()
+    {
+        using var context = CreateContext();
+        var options = new InsertOptions();
+        options.WithValidation(RejectNonPositivePrice());
+
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Insert(Array.Empty<Product>(), options);
+
+        result.SuccessCount.ShouldBe(0);
+        result.FailureCount.ShouldBe(0);
+    }
+
+    [Fact]
+    public void Insert_ValidatorThrows_PropagatesException()
+    {
+        using var context = CreateContext();
+        var products = new[]
+        {
+            new Product { Name = "A", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+        };
+
+        var options = new InsertOptions();
+        options.WithValidation<Product>((Product _, ref ValidationCollector _) =>
+            throw new InvalidOperationException("validator misconfigured"));
+
+        var saver = new Winnower<Product, int>(context);
+        var ex = Should.Throw<InvalidOperationException>(() => saver.Insert(products, options));
+        ex.Message.ShouldBe("validator misconfigured");
+    }
+
+    [Fact]
+    public void Throw_EntityValidationFailure_CarriesStructuredErrors()
+    {
+        using var context = CreateContext();
+        var products = new[]
+        {
+            new Product { Name = "A", Price = -1m, Stock = -5, LastModified = DateTimeOffset.UtcNow },
+        };
+
+        var options = new InsertOptions();
+        options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
+        {
+            if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
+            if (p.Stock < 0) c.Add(nameof(Product.Stock), "Cannot be negative", "RANGE");
+        });
+        options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+
+        var saver = new Winnower<Product, int>(context);
+        var ex = Should.Throw<WinnowValidationException>(() => saver.Insert(products, options));
+
+        var failure = ex.Failures.ShouldHaveSingleItem();
+        failure.Errors.Count.ShouldBe(2);
+        failure.Errors.ShouldContain(e => e.PropertyName == nameof(Product.Price) && e.Code == "RANGE");
+        failure.Errors.ShouldContain(e => e.PropertyName == nameof(Product.Stock) && e.Code == "RANGE");
+    }
+
+    [Fact]
+    public void Insert_EntityLevelError_FormatsWithoutPropertyPrefix()
+    {
+        using var context = CreateContext();
+        var products = new[]
+        {
+            new Product { Name = "A", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+        };
+
+        var options = new InsertOptions();
+        options.WithValidation<Product>((Product _, ref ValidationCollector c) =>
+            c.Add(string.Empty, "Cross-field rule rejected"));
+
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Insert(products, options);
+
+        var failure = result.Failures.ShouldHaveSingleItem();
+        failure.ErrorMessage.ShouldBe("Cross-field rule rejected");
+        failure.ErrorMessage.ShouldNotContain(":");
+    }
+
+    [Fact]
+    public void Insert_DataAnnotations_AnnotatedEntity_RejectsInvalidAndSucceedsValid()
+    {
+        using var context = CreateContext();
+        var products = new[]
+        {
+            new AnnotatedProduct { Name = "A", Quantity = 5 },
+            new AnnotatedProduct { Name = null, Quantity = 5 },
+            new AnnotatedProduct { Name = "B", Quantity = -1 },
+        };
+
+        var options = new ValidationOptions[1];
+        options[0] = new ValidationOptions(typeof(AnnotatedProduct),
+            Winnow.Internal.Validation.DataAnnotationsValidatorFactory.Create<AnnotatedProduct>());
+
+        // Drive through the public pipeline via the runner directly (no DbContext registration needed).
+        var failures = new List<(int Index, string Message, IReadOnlyList<ValidationError> Errors)>();
+        Winnow.Internal.Validation.PreValidationRunner.Run(
+            products.ToList(),
+            options[0],
+            (idx, msg, errs) => failures.Add((idx, msg, errs)),
+            CancellationToken.None);
+
+        failures.Count.ShouldBe(2);
+        failures.Select(f => f.Index).OrderBy(x => x).ShouldBe([1, 2]);
+        failures.ShouldContain(f => f.Errors.Any(e => e.PropertyName == nameof(AnnotatedProduct.Name)));
+        failures.ShouldContain(f => f.Errors.Any(e => e.PropertyName == nameof(AnnotatedProduct.Quantity)));
+    }
+
+    private sealed class AnnotatedProduct
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string? Name { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Range(0, 100)]
+        public int Quantity { get; set; }
     }
 }

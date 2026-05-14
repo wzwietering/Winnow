@@ -24,11 +24,8 @@ internal class InsertGraphOperation<TEntity, TKey> : IInsertOperation<TEntity, T
         _tc = TraversalContext.FromOptions(options);
     }
 
-    public PreValidationResult<TEntity> ApplyPreValidation(
-        List<TEntity> entities,
-        StrategyContext<TEntity, TKey> context,
-        CancellationToken cancellationToken) =>
-        OperationPreValidationHelper.RunIndexed(_options.Validation, entities, context, _accumulator, cancellationToken);
+    public ValidationOptions? Validation => _options.Validation;
+    public InsertAccumulator<TKey> Accumulator => _accumulator;
 
     public void ValidateAll(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {

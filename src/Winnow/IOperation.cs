@@ -1,3 +1,6 @@
+using Winnow.Internal.Accumulators;
+using Winnow.Internal.Validation;
+
 namespace Winnow;
 
 /// <summary>
@@ -9,6 +12,12 @@ internal interface IOperation<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
+    /// <summary>The configured pre-validation options (or null if none).</summary>
+    ValidationOptions? Validation { get; }
+
+    /// <summary>The accumulator used to record per-entity outcomes.</summary>
+    WinnowAccumulator<TKey> Accumulator { get; }
+
     /// <summary>
     /// Runs the configured pre-validation pipeline (if any) and returns the
     /// entities that should continue into the strategy. Failures are recorded
@@ -18,7 +27,8 @@ internal interface IOperation<TEntity, TKey>
     List<TEntity> ApplyPreValidation(
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken) =>
+        OperationPreValidationHelper.Run(Validation, entities, context, Accumulator, cancellationToken);
 
     /// <summary>
     /// Validates all entities before processing. Called once at the start.
@@ -60,16 +70,23 @@ internal interface IInsertOperation<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
+    /// <summary>The configured pre-validation options (or null if none).</summary>
+    ValidationOptions? Validation { get; }
+
+    /// <summary>The accumulator used to record per-entity insert outcomes.</summary>
+    InsertAccumulator<TKey> Accumulator { get; }
+
     /// <summary>
     /// Runs the configured pre-validation pipeline (if any). Returns the
     /// survivors plus an optional original-index map; the caller uses
     /// <see cref="Winnow.Internal.Validation.PreValidationResult{TEntity}.GetOriginalIndex"/>
     /// to record results against the user-visible input position.
     /// </summary>
-    Winnow.Internal.Validation.PreValidationResult<TEntity> ApplyPreValidation(
+    PreValidationResult<TEntity> ApplyPreValidation(
         List<TEntity> entities,
         StrategyContext<TEntity, TKey> context,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken) =>
+        OperationPreValidationHelper.RunIndexed(Validation, entities, context, Accumulator, cancellationToken);
 
     /// <summary>
     /// Validates all entities before processing. Called once at the start.
