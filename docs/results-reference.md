@@ -110,6 +110,9 @@ result.UpdatedEntities    // IReadOnlyList<UpsertedEntity<TKey>> - updated entit
 result.UpdatedIds         // IReadOnlyList<TKey> - just updated IDs
 result.UpdatedCount       // Number of updates
 
+// MatchBy diagnostics (null when WithMatchBy is not configured)
+result.InsertedWithNullMatchKeyCount // int? - entities routed to INSERT because their MatchBy values contained null
+
 // Combined
 result.SuccessfulIds      // IReadOnlyList<TKey> - all successful IDs
 result.SuccessCount       // Total successful operations

@@ -32,7 +32,7 @@ public class WinnowerUpsertMatchByCancellationTests : TestBase
         MatchByTestHelpers.InjectConflictingRowOnce(context, "RACE-1", "Concurrent");
 
         var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate }
-            .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
+            .WithMatchBy<CustomerOrder>(o => o.OrderNumber);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = await saver.UpsertAsync(new[] { incoming }, options);
@@ -77,6 +77,42 @@ public class WinnowerUpsertMatchByCancellationTests : TestBase
         interceptor.SawSelect.ShouldBeTrue("Test setup: the pre-SELECT must have been intercepted.");
     }
 
+    [Fact]
+    public async Task UpsertAsync_MatchBy_CancellationDuringRetryRefreshSelect_ThrowsOperationCancelled()
+    {
+        // The retry-refresh SELECT is a separate query from the pre-SELECT (fires only
+        // after the initial INSERT collides with a concurrent row). The cancellation
+        // token must propagate to that second SELECT too — without it, the retry path
+        // would block on a sync-over-async I/O or ignore the cancel altogether.
+        using var cts = new CancellationTokenSource();
+        var interceptor = new CancelOnNthSelectInterceptor(cts, "RACE-RETRY-CANCEL", cancelOn: 2);
+        using var context = CreateContextWithInterceptor(interceptor);
+
+        MatchByTestHelpers.InjectConflictingRowOnce(context, "RACE-RETRY-CANCEL", "Concurrent");
+
+        var batch = new[]
+        {
+            new CustomerOrder
+            {
+                OrderNumber = "RACE-RETRY-CANCEL",
+                CustomerId = 1,
+                CustomerName = "Incoming",
+                TotalAmount = 1m,
+                OrderDate = DateTimeOffset.UtcNow
+            }
+        };
+
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate }
+            .WithMatchBy<CustomerOrder>(o => o.OrderNumber);
+
+        await Should.ThrowAsync<OperationCanceledException>(async () =>
+            await saver.UpsertAsync(batch, options, cts.Token));
+
+        interceptor.SelectsSeen.ShouldBeGreaterThanOrEqualTo(2,
+            "Test setup: both the pre-SELECT and the retry-refresh SELECT must fire.");
+    }
+
     private static TestDbContext CreateContextWithInterceptor(IInterceptor interceptor)
     {
         var options = new DbContextOptionsBuilder<TestDbContext>()
@@ -113,6 +149,48 @@ public class WinnowerUpsertMatchByCancellationTests : TestBase
             {
                 SawSelect = true;
                 _cts.Cancel();
+            }
+            return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
+        }
+
+        private bool IsSelectMatchingMarker(DbCommand command)
+        {
+            var trimmed = command.CommandText.AsSpan().TrimStart();
+            if (!trimmed.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase)) return false;
+            if (!command.CommandText.Contains("CustomerOrders", StringComparison.Ordinal)) return false;
+            foreach (DbParameter p in command.Parameters)
+            {
+                if (p.Value is string s && s == _matchValueMarker) return true;
+            }
+            return false;
+        }
+    }
+
+    private sealed class CancelOnNthSelectInterceptor : DbCommandInterceptor
+    {
+        private readonly CancellationTokenSource _cts;
+        private readonly string _matchValueMarker;
+        private readonly int _cancelOn;
+
+        public CancelOnNthSelectInterceptor(CancellationTokenSource cts, string matchValueMarker, int cancelOn)
+        {
+            _cts = cts;
+            _matchValueMarker = matchValueMarker;
+            _cancelOn = cancelOn;
+        }
+
+        public int SelectsSeen { get; private set; }
+
+        public override ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(
+            DbCommand command,
+            CommandEventData eventData,
+            InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (IsSelectMatchingMarker(command))
+            {
+                SelectsSeen++;
+                if (SelectsSeen == _cancelOn) _cts.Cancel();
             }
             return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
         }

@@ -23,11 +23,11 @@ public class UpsertOptions : WinnowOptions
 
     /// <summary>
     /// Internal carrier for a configured MatchBy expression. The public path is
-    /// <see cref="UpsertOptionsExtensions.WithMatchBy{TEntity, TKey}"/> (or the
-    /// single-type-argument overload), which performs shape validation before
-    /// storing the expression here. Wrapped so future configuration fields can
-    /// be added without breaking the public API. Graph upsert does not yet
-    /// support MatchBy.
+    /// <see cref="UpsertOptionsExtensions.WithMatchBy{TEntity}"/>, which performs shape
+    /// validation before storing the expression here. Wrapped so future configuration
+    /// fields can be added without breaking the public API. Graph upsert does not
+    /// support MatchBy; entity types with global query filters are rejected at
+    /// resolve time.
     /// </summary>
     internal MatchByConfiguration? MatchBy { get; set; }
 }

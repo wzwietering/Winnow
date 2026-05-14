@@ -9,12 +9,39 @@ internal class EntityKeyService<TEntity, TKey>
     where TKey : notnull, IEquatable<TKey>
 {
     private readonly DbContext _context;
+    private IReadOnlyList<IProperty>? _cachedKeyProperties;
 
     internal EntityKeyService(DbContext context)
     {
         _context = context;
     }
 
+    // Resolve and cache PK metadata once per service lifetime — UpsertOperation's
+    // MatchBy UPDATE path calls GetEntityIdFromInstance / SetEntityId once per
+    // matched entity, and the EF model lookup is wasted work after the first call.
+    private IReadOnlyList<IProperty> KeyProperties
+    {
+        get
+        {
+            if (_cachedKeyProperties is not null) return _cachedKeyProperties;
+            var entityType = _context.Model.FindEntityType(typeof(TEntity))
+                ?? throw new InvalidOperationException(
+                    $"Entity type {typeof(TEntity).Name} is not part of the DbContext model.");
+            _cachedKeyProperties = entityType.FindPrimaryKey()?.Properties
+                ?? throw new InvalidOperationException(
+                    $"Entity {typeof(TEntity).Name} does not have a primary key.");
+            return _cachedKeyProperties;
+        }
+    }
+
+    // Two read paths exist:
+    //   GetEntityId            — reads via the EF change tracker entry. Use when the
+    //                            entity is attached / about to be saved.
+    //   GetEntityIdFromInstance — reads via reflection on the CLR instance, bypassing
+    //                            the tracker. Use for AsNoTracking lookup results
+    //                            (e.g. MatchBy's pre-SELECT) where no entry exists.
+    // They are NOT interchangeable: GetEntityId throws if the entity isn't tracked;
+    // GetEntityIdFromInstance throws if the PK is a shadow property.
     internal TKey GetEntityId(TEntity entity)
     {
         var entry = _context.Entry(entity);
@@ -23,13 +50,7 @@ internal class EntityKeyService<TEntity, TKey>
 
     internal TKey GetEntityIdFromInstance(TEntity entity)
     {
-        var entityType = _context.Model.FindEntityType(typeof(TEntity))
-            ?? throw new InvalidOperationException(
-                $"Entity type {typeof(TEntity).Name} is not part of the DbContext model.");
-        var keyProperties = entityType.FindPrimaryKey()?.Properties
-            ?? throw new InvalidOperationException(
-                $"Entity {typeof(TEntity).Name} does not have a primary key.");
-
+        var keyProperties = KeyProperties;
         if (keyProperties.Count == 1)
         {
             return ReadSimpleKey(entity, keyProperties[0]);
@@ -84,13 +105,7 @@ internal class EntityKeyService<TEntity, TKey>
 
     internal void SetEntityId(TEntity entity, TKey value)
     {
-        var entityType = _context.Model.FindEntityType(typeof(TEntity))
-            ?? throw new InvalidOperationException(
-                $"Entity type {typeof(TEntity).Name} is not part of the DbContext model.");
-        var keyProperties = entityType.FindPrimaryKey()?.Properties
-            ?? throw new InvalidOperationException(
-                $"Entity {typeof(TEntity).Name} does not have a primary key.");
-
+        var keyProperties = KeyProperties;
         if (keyProperties.Count == 1)
         {
             SetSimpleKey(entity, keyProperties[0], value);

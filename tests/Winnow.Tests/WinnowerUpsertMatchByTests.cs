@@ -23,7 +23,7 @@ public class WinnowerUpsertMatchByTests : TestBase
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = saver.Upsert(
             new[] { order },
-            new UpsertOptions().WithMatchBy<CustomerOrder, string>(o => o.OrderNumber));
+            new UpsertOptions().WithMatchBy<CustomerOrder>(o => o.OrderNumber));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedCount.ShouldBe(1);
@@ -49,7 +49,7 @@ public class WinnowerUpsertMatchByTests : TestBase
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = saver.Upsert(
             new[] { incoming },
-            new UpsertOptions().WithMatchBy<CustomerOrder, string>(o => o.OrderNumber));
+            new UpsertOptions().WithMatchBy<CustomerOrder>(o => o.OrderNumber));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.UpdatedCount.ShouldBe(1);
@@ -79,7 +79,7 @@ public class WinnowerUpsertMatchByTests : TestBase
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = saver.Upsert(
             new[] { incoming },
-            new UpsertOptions().WithMatchBy<CustomerOrder, string>(o => o.OrderNumber));
+            new UpsertOptions().WithMatchBy<CustomerOrder>(o => o.OrderNumber));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         incoming.Id.ShouldBe(existing.Id);
@@ -103,7 +103,7 @@ public class WinnowerUpsertMatchByTests : TestBase
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = saver.Upsert(
             batch,
-            new UpsertOptions().WithMatchBy<CustomerOrder, string>(o => o.OrderNumber));
+            new UpsertOptions().WithMatchBy<CustomerOrder>(o => o.OrderNumber));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.UpdatedCount.ShouldBe(2);
@@ -127,7 +127,7 @@ public class WinnowerUpsertMatchByTests : TestBase
         var saver = new Winnower<Product, int>(context);
         var result = saver.Upsert(
             new[] { product },
-            new UpsertOptions().WithMatchBy<Product, int?>(p => p.CategoryId));
+            new UpsertOptions().WithMatchBy<Product>(p => p.CategoryId));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedCount.ShouldBe(1);
@@ -152,7 +152,7 @@ public class WinnowerUpsertMatchByTests : TestBase
         var saver = new Winnower<Enrollment, int>(context);
         var result = saver.Upsert(
             new[] { enrollment },
-            new UpsertOptions().WithMatchBy<Enrollment, object>(e => new { e.StudentId, e.CourseId }));
+            new UpsertOptions().WithMatchBy<Enrollment>(e => new { e.StudentId, e.CourseId }));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedCount.ShouldBe(1);
@@ -180,7 +180,7 @@ public class WinnowerUpsertMatchByTests : TestBase
         var saver = new Winnower<Enrollment, int>(context);
         var result = saver.Upsert(
             new[] { incoming },
-            new UpsertOptions().WithMatchBy<Enrollment, object>(e => new { e.StudentId, e.CourseId }));
+            new UpsertOptions().WithMatchBy<Enrollment>(e => new { e.StudentId, e.CourseId }));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.UpdatedCount.ShouldBe(1);
@@ -207,7 +207,7 @@ public class WinnowerUpsertMatchByTests : TestBase
         };
 
         var options = new UpsertOptions { Strategy = BatchStrategy.DivideAndConquer }
-            .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
+            .WithMatchBy<CustomerOrder>(o => o.OrderNumber);
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = saver.Upsert(batch, options);
 
@@ -250,13 +250,53 @@ public class WinnowerUpsertMatchByTests : TestBase
         var saver = new Winnower<Product, int>(context);
         var result = saver.Upsert(
             batch,
-            new UpsertOptions().WithMatchBy<Product, int?>(p => p.CategoryId));
+            new UpsertOptions().WithMatchBy<Product>(p => p.CategoryId));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedCount.ShouldBe(2);
         result.UpdatedCount.ShouldBe(0);
         result.InsertedWithNullMatchKeyCount.ShouldBe(2,
             "entities whose MatchBy values contain null are routed to INSERT — the count surfaces that fact for observability.");
+    }
+
+    [Fact]
+    public void Upsert_MatchBy_NullableIntKey_NonNullValue_FindsExistingRow_UpdatesIt()
+    {
+        // The ValueHolder<int?> reflection-construction path through BuildParameterizedValue
+        // is only exercised when MatchBy targets a Nullable<T> column with a non-null value.
+        // Existing null-keyed tests cover the INSERT branch; this locks in the UPDATE branch.
+        using var context = CreateContext();
+        context.Categories.Add(new Category { Id = 42, Name = "TestCategory" });
+        context.SaveChanges();
+        context.Products.Add(new Product
+        {
+            Name = "Existing",
+            Price = 1m,
+            Stock = 1,
+            LastModified = DateTimeOffset.UtcNow,
+            CategoryId = 42
+        });
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+
+        var incoming = new Product
+        {
+            Name = "Replacement",
+            Price = 2m,
+            Stock = 2,
+            LastModified = DateTimeOffset.UtcNow,
+            CategoryId = 42
+        };
+
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Upsert(
+            new[] { incoming },
+            new UpsertOptions().WithMatchBy<Product>(p => p.CategoryId));
+
+        result.IsCompleteSuccess.ShouldBeTrue();
+        result.UpdatedCount.ShouldBe(1,
+            "Nullable<int> match key with a non-null value must drive the ValueHolder<int?> UPDATE path.");
+        result.InsertedCount.ShouldBe(0);
     }
 
     private static void SeedStudentAndCourse(TestDbContext context, int studentId, int courseId)

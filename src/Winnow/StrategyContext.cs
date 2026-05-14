@@ -29,6 +29,7 @@ internal class StrategyContext<TEntity, TKey>
     private readonly ManyToManyDeleteProcessor<TEntity, TKey> _m2mDeleteProcessor;
 
     private GraphHierarchyBuilder<TKey>? _graphBuilder;
+    private MatchExpressionQueryService? _matchByQueryService;
 
     internal StrategyContext(DbContext context)
     {
@@ -62,6 +63,14 @@ internal class StrategyContext<TEntity, TKey>
     /// operation) so per-batch state cannot leak across invocations or threads.
     /// </summary>
     internal MatchByResolution<TEntity>? MatchByResolution { get; set; }
+
+    /// <summary>
+    /// Lazily-initialized MatchBy query service. Only constructed for upserts that
+    /// actually configure <c>WithMatchBy</c>; flat upserts and graph upserts never
+    /// touch the field.
+    /// </summary>
+    internal MatchExpressionQueryService MatchByQueryService =>
+        _matchByQueryService ??= new MatchExpressionQueryService(_context);
     internal int RoundTripCounter => _roundTripCounter;
     internal void IncrementRoundTrip() => _roundTripCounter++;
 

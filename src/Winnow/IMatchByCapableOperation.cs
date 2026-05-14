@@ -46,7 +46,8 @@ internal interface IMatchByCapableOperation<TEntity, TKey> : IUpsertOperation<TE
 
     /// <summary>
     /// Records a failure for an entity whose duplicate-key retry could not be recovered
-    /// because the MatchBy refresh found no matching row.
+    /// because the MatchBy refresh found no matching row — classified as
+    /// <see cref="FailureReason.BusinessKeyConflictLost"/>.
     /// </summary>
-    void RecordMatchByRefreshNotFound(TEntity entity, int index, StrategyContext<TEntity, TKey> context);
+    void RecordBusinessKeyConflictLost(TEntity entity, int index, StrategyContext<TEntity, TKey> context);
 }

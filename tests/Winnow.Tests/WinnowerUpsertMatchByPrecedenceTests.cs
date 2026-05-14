@@ -26,7 +26,7 @@ public class WinnowerUpsertMatchByPrecedenceTests : TestBase
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = saver.Upsert(
             new[] { order },
-            new UpsertOptions().WithMatchBy<CustomerOrder, string>(o => o.OrderNumber));
+            new UpsertOptions().WithMatchBy<CustomerOrder>(o => o.OrderNumber));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedCount.ShouldBe(1);
@@ -65,7 +65,7 @@ public class WinnowerUpsertMatchByPrecedenceTests : TestBase
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = saver.Upsert(
             new[] { incoming },
-            new UpsertOptions().WithMatchBy<CustomerOrder, string>(o => o.OrderNumber));
+            new UpsertOptions().WithMatchBy<CustomerOrder>(o => o.OrderNumber));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.UpdatedCount.ShouldBe(1);

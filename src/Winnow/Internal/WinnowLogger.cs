@@ -44,6 +44,13 @@ internal static partial class WinnowLogger
         RetryAttempt(logger, attempt, maxRetries, delayMs, error);
     }
 
+    internal static void LogMatchByPreSelect(
+        ILogger? logger, string entityType, int tupleCount, int columnCount)
+    {
+        if (logger is null) return;
+        MatchByPreSelect(logger, entityType, tupleCount, columnCount);
+    }
+
     [LoggerMessage(Level = LogLevel.Information,
         Message = "{Operation} starting for {EntityType}: {Count} entities using {Strategy}")]
     private static partial void BatchStarting(
@@ -69,4 +76,9 @@ internal static partial class WinnowLogger
         Message = "Retry attempt {Attempt}/{MaxRetries} after {DelayMs:F0}ms delay: {Error}")]
     private static partial void RetryAttempt(
         ILogger logger, int attempt, int maxRetries, double delayMs, string error);
+
+    [LoggerMessage(Level = LogLevel.Debug,
+        Message = "MatchBy pre-SELECT for {EntityType}: {TupleCount} tuples × {ColumnCount} columns")]
+    private static partial void MatchByPreSelect(
+        ILogger logger, string entityType, int tupleCount, int columnCount);
 }

@@ -175,11 +175,21 @@ internal class MatchExpressionQueryService
             if (!destination.TryAdd(matchKey, entity))
             {
                 throw new InvalidOperationException(
-                    "MatchBy resolved multiple existing rows for the same match values. " +
+                    $"MatchBy resolved multiple existing rows for {FormatMatchKey(matchProperties, matchKey)}. " +
                     "The MatchBy expression must select a unique row. " +
                     "Add a unique constraint on the matched columns or refine MatchBy.");
             }
         }
+    }
+
+    private static string FormatMatchKey(IReadOnlyList<IProperty> matchProperties, MatchKey matchKey)
+    {
+        var parts = new string[matchProperties.Count];
+        for (var i = 0; i < matchProperties.Count; i++)
+        {
+            parts[i] = $"{matchProperties[i].Name}={matchKey.GetValue(i) ?? "<null>"}";
+        }
+        return $"match values [{string.Join(", ", parts)}]";
     }
 
     private static MatchKey ExtractMatchKey<TEntity>(

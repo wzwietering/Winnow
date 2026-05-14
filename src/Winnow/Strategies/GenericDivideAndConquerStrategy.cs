@@ -48,6 +48,9 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         CancellationToken cancellationToken)
     {
         operation.ValidateAll(entities, context);
+        // MatchBy resolution lives here at the batch entry — must fire BEFORE ProcessUpsertAsync
+        // so the pre-SELECT runs once per batch, not once per entity. Adding a new upsert
+        // strategy? Make the same call here at your batch entry point.
         if (operation is IMatchByCapableOperation<TEntity, TKey> matchByOp)
         {
             await matchByOp.ResolveBatchAsync(entities, context, cancellationToken);
@@ -454,6 +457,9 @@ internal class GenericDivideAndConquerStrategy<TEntity, TKey>
         IUpsertOperation<TEntity, TKey> operation)
     {
         operation.ValidateAll(entities, context);
+        // MatchBy resolution must fire here, ONCE per batch, before ProcessUpsert iterates.
+        // Adding a new upsert strategy? Mirror this call at your batch entry point so
+        // MatchBy still routes correctly.
         if (operation is IMatchByCapableOperation<TEntity, TKey> matchByOp)
         {
             matchByOp.ResolveBatch(entities, context);

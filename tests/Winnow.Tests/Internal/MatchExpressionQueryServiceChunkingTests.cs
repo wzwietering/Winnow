@@ -22,7 +22,7 @@ public class MatchExpressionQueryServiceChunkingTests : TestBase
         var batch = BuildBatchPreservingMatchKey(count, totalAmount: 999m);
 
         var options = new UpsertOptions()
-            .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
+            .WithMatchBy<CustomerOrder>(o => o.OrderNumber);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = saver.Upsert(batch, options);

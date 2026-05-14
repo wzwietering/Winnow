@@ -24,6 +24,39 @@ public class WinnowerUpsertMatchByErgonomicsTests : TestBase
     }
 
     [Fact]
+    public void WithMatchBy_CalledTwice_SecondExpressionWins()
+    {
+        // Locks in the documented "last call wins" behavior. Replacing this with
+        // a throw later would be a breaking API change.
+        using var context = CreateContext();
+        var existing = MatchByTestHelpers.SeedOrder(context, "WIN-1", "Original-By-OrderNumber", 10m);
+        var saver = new Winnower<CustomerOrder, int>(context);
+
+        var incoming = new CustomerOrder
+        {
+            OrderNumber = "WIN-1",
+            CustomerId = 1,
+            CustomerName = "Original-By-OrderNumber",
+            TotalAmount = 99m,
+            OrderDate = DateTimeOffset.UtcNow
+        };
+
+        // First call would route by OrderNumber (would UPDATE the seeded row); second
+        // call replaces with CustomerName routing (no row matches "MISMATCH", so INSERT).
+        // Different OrderNumbers on the seed and incoming guarantee the discriminator
+        // forces a unique routing decision.
+        var options = new UpsertOptions()
+            .WithMatchBy<CustomerOrder>(o => o.OrderNumber)
+            .WithMatchBy<CustomerOrder>(o => o.CustomerName);
+
+        var result = saver.Upsert(new[] { incoming }, options);
+
+        result.UpdatedCount.ShouldBe(1,
+            "Second WithMatchBy must replace the first; CustomerName routing should match the seeded row.");
+        result.InsertedCount.ShouldBe(0);
+    }
+
+    [Fact]
     public void WithMatchBy_CompositeKey_NoExplicitTKey_RoutesUpsert()
     {
         using var context = CreateContext();

@@ -26,7 +26,7 @@ public class ParallelWinnowerMatchByTests : ParallelTestBase
         var saver = CreateSaver(maxDegreeOfParallelism: 2);
         var result = await saver.UpsertAsync(
             products,
-            new UpsertOptions().WithMatchBy<Product, int?>(p => p.CategoryId));
+            new UpsertOptions().WithMatchBy<Product>(p => p.CategoryId));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedCount.ShouldBe(4);

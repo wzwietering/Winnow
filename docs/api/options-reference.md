@@ -90,11 +90,10 @@ Used with `Upsert`.
 |----------|------|---------|-------------|
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `DuplicateKeyStrategy` | `DuplicateKeyStrategy` | `Fail` | How to handle duplicate key errors during INSERT |
+| `MatchBy` (configure via `WithMatchBy`) | `internal` | `null` | Business-key expression for insert/update routing. Set via `options.WithMatchBy<TEntity>(e => e.Sku)` (single property) or `options.WithMatchBy<TEntity>(e => new { e.TenantId, e.ExternalId })` (composite). See [Upsert Operations → Custom Match Expressions](../upsert-operations.md#custom-match-expressions-matchby). |
 
-To configure a business-key match expression (overriding the default primary-key
-detection), use `options.WithMatchBy<TEntity>(e => e.Sku)` for a single property or
-`options.WithMatchBy<TEntity>(e => new { e.TenantId, e.ExternalId })` for a composite.
-See [Upsert Operations → Custom Match Expressions](../upsert-operations.md#custom-match-expressions-matchby).
+Note: `MatchBy` rejects entity types that have a `HasQueryFilter` defined — see the
+linked docs for the rationale and mitigations.
 
 ## UpsertGraphOptions
 
@@ -198,7 +197,7 @@ var result = saver.Update(entities, new WinnowOptions
 | `DuplicateKey` | Primary key or unique constraint violation. |
 | `Cancelled` | Operation was cancelled via CancellationToken. |
 | `UnknownError` | Unclassified error. |
-| `MatchByRefreshNotFound` | `DuplicateKeyStrategy.RetryAsUpdate` fired under `MatchBy`, but the re-query found no row matching the business key (typically a concurrent INSERT-then-DELETE between the original failure and our retry). The entity is not persisted; inspect `UpsertFailure.EntityIndex` and decide whether to discard or re-queue. |
+| `BusinessKeyConflictLost` | Under `MatchBy` with `DuplicateKeyStrategy.RetryAsUpdate`, a concurrent process won a race: the row matching our business key existed long enough to cause our INSERT to fail, but was gone by the time we re-queried for the retry. The entity is not persisted; inspect `UpsertFailure.EntityIndex` and decide whether to discard or re-queue. |
 
 ### ResultDetail
 

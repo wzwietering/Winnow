@@ -14,40 +14,40 @@ namespace Winnow.Tests;
 public class WinnowerUpsertMatchByRetryRefreshTests : TestBase
 {
     [Fact]
-    public async Task UpsertAsync_MatchBy_RetryPath_WhenRefreshFindsNoRow_RecordsMatchByRefreshNotFound()
+    public async Task UpsertAsync_MatchBy_RetryPath_WhenRefreshFindsNoRow_RecordsBusinessKeyConflictLost()
     {
         using var context = CreateContext();
         InjectConflictingRowThenDeleteOnFailure(context, "RACE-REFRESH-ASYNC");
 
         var incoming = NewOrder("RACE-REFRESH-ASYNC", "Incoming");
         var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate }
-            .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
+            .WithMatchBy<CustomerOrder>(o => o.OrderNumber);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = await saver.UpsertAsync(new[] { incoming }, options);
 
         result.FailureCount.ShouldBe(1);
         var failure = result.Failures.Single();
-        failure.Reason.ShouldBe(FailureReason.MatchByRefreshNotFound);
+        failure.Reason.ShouldBe(FailureReason.BusinessKeyConflictLost);
         failure.ErrorMessage.ShouldContain("match", Case.Insensitive);
     }
 
     [Fact]
-    public void Upsert_MatchBy_RetryPath_WhenRefreshFindsNoRow_RecordsMatchByRefreshNotFound()
+    public void Upsert_MatchBy_RetryPath_WhenRefreshFindsNoRow_RecordsBusinessKeyConflictLost()
     {
         using var context = CreateContext();
         InjectConflictingRowThenDeleteOnFailure(context, "RACE-REFRESH-SYNC");
 
         var incoming = NewOrder("RACE-REFRESH-SYNC", "Incoming");
         var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate }
-            .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
+            .WithMatchBy<CustomerOrder>(o => o.OrderNumber);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = saver.Upsert(new[] { incoming }, options);
 
         result.FailureCount.ShouldBe(1);
         var failure = result.Failures.Single();
-        failure.Reason.ShouldBe(FailureReason.MatchByRefreshNotFound);
+        failure.Reason.ShouldBe(FailureReason.BusinessKeyConflictLost);
         failure.ErrorMessage.ShouldContain("match", Case.Insensitive);
     }
 

@@ -28,7 +28,7 @@ public class WinnowerUpsertMatchByCoverageGapTests : TestBase
         };
 
         var saver = new Winnower<CustomerOrder, int>(context);
-        var result = saver.Upsert(batch, new UpsertOptions().WithMatchBy<CustomerOrder, string>(o => o.OrderNumber));
+        var result = saver.Upsert(batch, new UpsertOptions().WithMatchBy<CustomerOrder>(o => o.OrderNumber));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedCount.ShouldBe(3);
@@ -51,7 +51,7 @@ public class WinnowerUpsertMatchByCoverageGapTests : TestBase
         };
 
         var saver = new Winnower<CustomerOrder, int>(context);
-        var result = saver.Upsert(batch, new UpsertOptions().WithMatchBy<CustomerOrder, string>(o => o.OrderNumber));
+        var result = saver.Upsert(batch, new UpsertOptions().WithMatchBy<CustomerOrder>(o => o.OrderNumber));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.UpdatedCount.ShouldBe(3);
@@ -66,7 +66,7 @@ public class WinnowerUpsertMatchByCoverageGapTests : TestBase
 
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = saver.Upsert(Array.Empty<CustomerOrder>(),
-            new UpsertOptions().WithMatchBy<CustomerOrder, string>(o => o.OrderNumber));
+            new UpsertOptions().WithMatchBy<CustomerOrder>(o => o.OrderNumber));
 
         result.SuccessCount.ShouldBe(0);
         result.FailureCount.ShouldBe(0);
@@ -88,7 +88,7 @@ public class WinnowerUpsertMatchByCoverageGapTests : TestBase
         };
 
         var saver = new Winnower<Product, int>(context);
-        var result = saver.Upsert(batch, new UpsertOptions().WithMatchBy<Product, int?>(p => p.CategoryId));
+        var result = saver.Upsert(batch, new UpsertOptions().WithMatchBy<Product>(p => p.CategoryId));
 
         result.IsCompleteSuccess.ShouldBeTrue();
         result.InsertedCount.ShouldBe(2);

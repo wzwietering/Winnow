@@ -46,7 +46,12 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
             if (outcome == MatchByRefreshOutcome.NotFound)
             {
                 context.IncrementRoundTrip();
-                matchByOp!.RecordMatchByRefreshNotFound(entity, index, context);
+                WinnowLogger.LogEntityFailed(
+                    context.Logger,
+                    typeof(TEntity).Name,
+                    $"index:{index}",
+                    $"{FailureReason.BusinessKeyConflictLost}: MatchBy refresh found no matching row at retry time.");
+                matchByOp!.RecordBusinessKeyConflictLost(entity, index, context);
                 return;
             }
             SaveAsUpdate(entity, index, context, operation);
@@ -78,7 +83,12 @@ internal static class DuplicateKeyHandler<TEntity, TKey>
             if (outcome == MatchByRefreshOutcome.NotFound)
             {
                 context.IncrementRoundTrip();
-                matchByOp!.RecordMatchByRefreshNotFound(entity, index, context);
+                WinnowLogger.LogEntityFailed(
+                    context.Logger,
+                    typeof(TEntity).Name,
+                    $"index:{index}",
+                    $"{FailureReason.BusinessKeyConflictLost}: MatchBy refresh found no matching row at retry time.");
+                matchByOp!.RecordBusinessKeyConflictLost(entity, index, context);
                 return false;
             }
             await SaveAsUpdateAsync(entity, index, context, operation, cancellationToken);

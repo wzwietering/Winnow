@@ -16,6 +16,20 @@ internal static class MatchExpressionParser
     // instance across calls, so cache hits are the normal case. typeof(TEntity) guards
     // against the latent class of bug where a caller passes a TEntity that doesn't match
     // the entityType, which would otherwise cast the cached plan to the wrong generic and NRE.
+    //
+    // Lifetime assumption: IEntityType instances are long-lived — typically singletons
+    // owned by a compiled EF Core model that survives for the application's lifetime.
+    // In that common scenario the cache bounds itself by the application's count of
+    // (expression, entity-type) pairs, which is small.
+    //
+    // Pathological case to avoid: callers that construct fresh DbContextOptions (and thus
+    // fresh IEntityType instances) per call will accumulate entries that can never be
+    // evicted. This is rare in production but common in test suites with new in-memory
+    // databases per test. If a workload hits this — a streaming caller constructing
+    // models dynamically (e.g. per-tenant compiled models in EF Core) — switch to a
+    // ConditionalWeakTable keyed on IEntityType, or recycle DbContextOptions across
+    // calls. Both have measurable startup cost; the current static dictionary is the
+    // right default.
     private static readonly ConcurrentDictionary<(LambdaExpression, IEntityType, Type), object> PlanCache = new();
 
     internal static MatchExpressionPlan<TEntity> Parse<TEntity>(
@@ -40,7 +54,7 @@ internal static class MatchExpressionParser
 
     /// <summary>
     /// Runs only the model-independent shape checks (parameter shape + member access form).
-    /// Used by <see cref="UpsertOptionsExtensions.WithMatchBy{TEntity, TKey}"/> to fail fast
+    /// Used by <see cref="UpsertOptionsExtensions.WithMatchBy{TEntity}"/> to fail fast
     /// before <see cref="Parse{TEntity}"/> resolves properties against the EF Core model.
     /// </summary>
     internal static void ValidateShape<TEntity>(LambdaExpression expression) where TEntity : class

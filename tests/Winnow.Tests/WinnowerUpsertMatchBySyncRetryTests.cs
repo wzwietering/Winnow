@@ -29,7 +29,7 @@ public class WinnowerUpsertMatchBySyncRetryTests : TestBase
         MatchByTestHelpers.InjectConflictingRowOnce(context, "RACE-SYNC", "Concurrent");
 
         var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate }
-            .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
+            .WithMatchBy<CustomerOrder>(o => o.OrderNumber);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = saver.Upsert(new[] { incoming }, options);

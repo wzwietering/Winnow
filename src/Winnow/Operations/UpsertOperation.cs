@@ -53,9 +53,12 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
     public void ResolveBatch(List<TEntity> entities, StrategyContext<TEntity, TKey> context)
     {
         if (_options.MatchBy is null) return;
+        _accumulator.MarkMatchByActive();
         var prepared = PrepareMatchBatch(entities, context);
-        var service = new MatchExpressionQueryService(context.Context);
-        var existing = service.QueryExisting<TEntity>(prepared.Plan.Properties, prepared.Values);
+        WinnowLogger.LogMatchByPreSelect(
+            context.Logger, typeof(TEntity).Name, prepared.Values.Length, prepared.Plan.Properties.Count);
+        var existing = context.MatchByQueryService.QueryExisting<TEntity>(
+            prepared.Plan.Properties, prepared.Values);
         context.MatchByResolution = BuildResolution(prepared, existing);
     }
 
@@ -65,9 +68,11 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         CancellationToken cancellationToken)
     {
         if (_options.MatchBy is null) return;
+        _accumulator.MarkMatchByActive();
         var prepared = PrepareMatchBatch(entities, context);
-        var service = new MatchExpressionQueryService(context.Context);
-        var existing = await service.QueryExistingAsync<TEntity>(
+        WinnowLogger.LogMatchByPreSelect(
+            context.Logger, typeof(TEntity).Name, prepared.Values.Length, prepared.Plan.Properties.Count);
+        var existing = await context.MatchByQueryService.QueryExistingAsync<TEntity>(
             prepared.Plan.Properties, prepared.Values, cancellationToken);
         context.MatchByResolution = BuildResolution(prepared, existing);
     }
@@ -78,10 +83,37 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         var entityType = context.Context.Model.FindEntityType(typeof(TEntity))
             ?? throw new InvalidOperationException(
                 $"Entity type {typeof(TEntity).Name} is not part of the DbContext model.");
+        RejectGlobalQueryFilter(entityType);
         var plan = MatchExpressionParser.Parse<TEntity>(_options.MatchBy!.Expression, entityType);
         var values = ExtractMatchValues(entities, plan);
         RejectDuplicateMatchKeys(values);
         return new PreparedMatchBatch(plan, values, entityType);
+    }
+
+    private static void RejectGlobalQueryFilter(IEntityType entityType)
+    {
+        // AsNoTracking does not suppress global query filters; a soft-delete or
+        // multi-tenant filter would cause the pre-SELECT to miss matching rows
+        // and silently route entities to INSERT (producing duplicates). Refuse
+        // to run rather than corrupt data quietly. Callers must either remove
+        // the filter or upsert against a different entity type.
+        if (!HasQueryFilter(entityType)) return;
+        throw new InvalidOperationException(
+            $"MatchBy refuses to run against {entityType.ClrType.Name} because the entity type " +
+            $"has a global query filter (HasQueryFilter). The pre-SELECT would silently miss " +
+            $"filtered rows and route existing entities to INSERT, producing duplicates. " +
+            $"Mitigations: (1) remove the HasQueryFilter configuration for this entity type; " +
+            $"(2) omit MatchBy and fall back to primary-key default-value routing; " +
+            $"(3) wait for a future Winnow release that exposes an opt-in to ignore filters.");
+    }
+
+    private static bool HasQueryFilter(IEntityType entityType)
+    {
+#if NET10_0_OR_GREATER
+        return entityType.GetDeclaredQueryFilters().Count > 0;
+#else
+        return entityType.GetQueryFilter() is not null;
+#endif
     }
 
     private static MatchByResolution<TEntity> BuildResolution(
@@ -99,23 +131,23 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         var result = new List<IProperty>();
         foreach (var property in entityType.GetProperties())
         {
-            if (property.IsConcurrencyToken && !property.IsPrimaryKey())
-            {
-                // Shadow tokens cannot be copied via reflection because there is no CLR
-                // backing property. Reject at configuration time (here, called from
-                // ResolveBatch) so the caller fails before any entity has been touched,
-                // rather than as a per-entity failure mid-batch.
-                if (property.PropertyInfo is null)
-                {
-                    throw new InvalidOperationException(
-                        $"Concurrency token '{property.Name}' on {entityType.ClrType.Name} is a shadow property; " +
-                        $"MatchBy requires CLR-backed concurrency tokens. Map '{property.Name}' as a public property " +
-                        $"or remove its IsConcurrencyToken configuration.");
-                }
-                result.Add(property);
-            }
+            if (!property.IsConcurrencyToken || property.IsPrimaryKey()) continue;
+            EnsureClrBackedToken(property, entityType);
+            result.Add(property);
         }
         return result;
+    }
+
+    private static void EnsureClrBackedToken(IProperty property, IEntityType entityType)
+    {
+        // Shadow tokens cannot be copied via reflection because there is no CLR
+        // backing property. Reject at ResolveBatch time so the caller fails before
+        // any entity has been touched, rather than as a per-entity failure mid-batch.
+        if (property.PropertyInfo is not null) return;
+        throw new InvalidOperationException(
+            $"Concurrency token '{property.Name}' on {entityType.ClrType.Name} is a shadow property; " +
+            $"MatchBy requires CLR-backed concurrency tokens. Map '{property.Name}' as a public property " +
+            $"or remove its IsConcurrencyToken configuration.");
     }
 
     private static object?[][] ExtractMatchValues(
@@ -208,8 +240,8 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         var values = resolution.Plan.Extractor(entity);
         if (MatchKey.ContainsNull(values)) return MatchByRefreshOutcome.NotFound;
 
-        var service = new MatchExpressionQueryService(context.Context);
-        var dict = service.QueryExisting<TEntity>(resolution.Plan.Properties, new[] { values });
+        var dict = context.MatchByQueryService.QueryExisting<TEntity>(
+            resolution.Plan.Properties, new[] { values });
         return ApplyRefreshResult(entity, values, dict, context);
     }
 
@@ -222,8 +254,7 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         var values = resolution.Plan.Extractor(entity);
         if (MatchKey.ContainsNull(values)) return MatchByRefreshOutcome.NotFound;
 
-        var service = new MatchExpressionQueryService(context.Context);
-        var dict = await service.QueryExistingAsync<TEntity>(
+        var dict = await context.MatchByQueryService.QueryExistingAsync<TEntity>(
             resolution.Plan.Properties, new[] { values }, cancellationToken);
         return ApplyRefreshResult(entity, values, dict, context);
     }
@@ -237,12 +268,13 @@ internal class UpsertOperation<TEntity, TKey> : IMatchByCapableOperation<TEntity
         return MatchByRefreshOutcome.Refreshed;
     }
 
-    public void RecordMatchByRefreshNotFound(TEntity entity, int index, StrategyContext<TEntity, TKey> context) =>
+    public void RecordBusinessKeyConflictLost(TEntity entity, int index, StrategyContext<TEntity, TKey> context) =>
         _accumulator.RecordFailure(
             index,
             entityId: default,
-            "Upsert retry-as-update could not refresh from MatchBy: no row matched the configured match expression at retry time.",
-            FailureReason.MatchByRefreshNotFound,
+            "Upsert retry-as-update could not refresh from MatchBy: no row matched the configured match expression at retry time. " +
+            "A concurrent process likely won the race (INSERT-then-DELETE between our save and our retry).",
+            FailureReason.BusinessKeyConflictLost,
             exception: null,
             UpsertOperationType.Insert);
 

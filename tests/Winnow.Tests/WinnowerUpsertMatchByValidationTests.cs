@@ -13,7 +13,7 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
         var options = new UpsertOptions();
 
         Should.Throw<ArgumentException>(() =>
-            options.WithMatchBy<Product, string>(p => p.Name.ToLower()));
+            options.WithMatchBy<Product>(p => p.Name.ToLower()));
     }
 
     [Fact]
@@ -23,7 +23,7 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
 
         // p => p.Category.Id — Category is a navigation, the lambda body is a nested MemberExpression.
         Should.Throw<ArgumentException>(() =>
-            options.WithMatchBy<Product, int?>(p => p.Category!.Id));
+            options.WithMatchBy<Product>(p => p.Category!.Id));
     }
 
     [Fact]
@@ -32,7 +32,7 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
         using var context = CreateContext();
         var saver = new Winnower<Product, int>(context);
 
-        var options = new UpsertOptions().WithMatchBy<Product, Category?>(p => p.Category);
+        var options = new UpsertOptions().WithMatchBy<Product>(p => p.Category);
 
         Should.Throw<ArgumentException>(() =>
             saver.Upsert(new[] { NewProduct("X") }, options));
@@ -71,7 +71,7 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
             new CustomerOrder { OrderNumber = "DUPLICATE", CustomerName = "B", TotalAmount = 2m }
         };
 
-        var options = new UpsertOptions().WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
+        var options = new UpsertOptions().WithMatchBy<CustomerOrder>(o => o.OrderNumber);
 
         Should.Throw<InvalidOperationException>(() => saver.Upsert(batch, options));
     }
@@ -88,7 +88,7 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
         context.ChangeTracker.Clear();
 
         var batch = new[] { new Product { Name = "Same", Price = 99m, Stock = 99, LastModified = DateTimeOffset.UtcNow } };
-        var options = new UpsertOptions().WithMatchBy<Product, string>(p => p.Name);
+        var options = new UpsertOptions().WithMatchBy<Product>(p => p.Name);
         var saver = new Winnower<Product, int>(context);
 
         Should.Throw<InvalidOperationException>(() => saver.Upsert(batch, options));
@@ -98,7 +98,7 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
     public void WithMatchBy_NullOptions_Throws()
     {
         Should.Throw<ArgumentNullException>(() =>
-            UpsertOptionsExtensions.WithMatchBy<Product, string>(null!, p => p.Name));
+            UpsertOptionsExtensions.WithMatchBy<Product>(null!, p => p.Name));
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
     {
         var options = new UpsertOptions();
         Should.Throw<ArgumentNullException>(() =>
-            options.WithMatchBy<Product, string>(null!));
+            options.WithMatchBy<Product>(null!));
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
     {
         var options = new UpsertOptions();
         Should.Throw<ArgumentException>(() =>
-            options.WithMatchBy<Product, string>(p => p.Name.ToLower()));
+            options.WithMatchBy<Product>(p => p.Name.ToLower()));
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
     {
         var options = new UpsertOptions();
         Should.Throw<ArgumentException>(() =>
-            options.WithMatchBy<Product, int?>(p => p.Category!.Id));
+            options.WithMatchBy<Product>(p => p.Category!.Id));
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
     {
         var options = new UpsertOptions();
         Should.Throw<ArgumentException>(() =>
-            options.WithMatchBy<Product, object>(p => new { Lower = p.Name.ToLower() }));
+            options.WithMatchBy<Product>(p => new { Lower = p.Name.ToLower() }));
     }
 
     [Fact]
@@ -139,7 +139,7 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
         using var context = CreateContext();
         var saver = new Winnower<Product, int>(context);
 
-        var options = new UpsertOptions().WithMatchBy<Product, int>(p => p.Id);
+        var options = new UpsertOptions().WithMatchBy<Product>(p => p.Id);
 
         var ex = Should.Throw<ArgumentException>(() =>
             saver.Upsert(new[] { NewProduct("X") }, options));
@@ -182,7 +182,7 @@ public class WinnowerUpsertMatchByValidationTests : TestBase
         var saver = new Winnower<Product, int>(context);
 
         // Version is configured with IsRowVersion → ValueGenerated.OnAddOrUpdate; not safe to match on.
-        var options = new UpsertOptions().WithMatchBy<Product, byte[]>(p => p.Version);
+        var options = new UpsertOptions().WithMatchBy<Product>(p => p.Version);
 
         var ex = Should.Throw<ArgumentException>(() =>
             saver.Upsert(new[] { NewProduct("X") }, options));

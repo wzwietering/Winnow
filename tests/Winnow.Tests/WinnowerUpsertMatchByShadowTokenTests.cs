@@ -42,7 +42,7 @@ public class WinnowerUpsertMatchByShadowTokenTests : IDisposable
         {
             new ShadowTokenEntity { Sku = "SKU-1", Name = "updated" }
         };
-        var options = new UpsertOptions().WithMatchBy<ShadowTokenEntity, string>(e => e.Sku);
+        var options = new UpsertOptions().WithMatchBy<ShadowTokenEntity>(e => e.Sku);
 
         // Sanity check: the shadow token actually exists in the model.
         var entityType = _context.Model.FindEntityType(typeof(ShadowTokenEntity))!;

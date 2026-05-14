@@ -180,11 +180,14 @@ public class UpsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, I
 
     /// <summary>
     /// Number of entities routed to INSERT because their <c>MatchBy</c> values contained
-    /// a null component. A non-zero value is a signal that some business-key columns
-    /// were unexpectedly null; callers may want to surface this as a data-quality warning
-    /// rather than rely on the silent insert. Zero when <c>MatchBy</c> is not configured.
+    /// a null component. <c>null</c> when <c>WithMatchBy</c> was not configured on the
+    /// upsert call (the counter is inactive). Otherwise a non-negative integer — including
+    /// zero, which means MatchBy ran and observed no null-key entities. A non-zero value
+    /// typically signals a data-quality issue upstream (a business key was unexpectedly
+    /// missing) and is worth surfacing as a warning rather than relying on the silent
+    /// insert.
     /// </summary>
-    public int InsertedWithNullMatchKeyCount { get; init; }
+    public int? InsertedWithNullMatchKeyCount { get; init; }
 
     /// <summary>
     /// Details of each failed upsert operation. Throws when

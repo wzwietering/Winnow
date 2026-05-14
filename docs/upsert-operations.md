@@ -35,12 +35,8 @@ saver.Upsert(items, new UpsertOptions()
     .WithMatchBy<Item>(i => new { i.TenantId, i.ExternalId }));
 ```
 
-> **Tip:** The single-type-argument overload (`WithMatchBy<TEntity>`) shown above
-> is the preferred form — it accepts both simple properties and anonymous
-> projections. The two-argument overload (`WithMatchBy<TEntity, TKey>`) exists
-> for callers that need to bind `TKey` explicitly (e.g. storing the expression
-> in a typed variable); avoid it for composite keys, where it requires the
-> awkward `TKey = object` spelling.
+Calling `WithMatchBy` more than once on the same options instance replaces
+the previously configured expression — the last call wins.
 
 ### How it works
 
@@ -110,6 +106,15 @@ correct under concurrent inserts.
 - `MatchBy` properties must be CLR properties; shadow properties are not
   supported.
 - Concurrency tokens copied during the merge must also be CLR properties.
+- **Global query filters are rejected.** If the entity type has a
+  `HasQueryFilter(...)` defined (typically used for soft delete or multi-tenant
+  isolation), `MatchBy` throws `InvalidOperationException` before running any
+  SELECT. The pre-SELECT uses `AsNoTracking()` which does *not* suppress the
+  filter, so silently honoring it would route existing-but-filtered rows to
+  INSERT and produce duplicates. Winnow refuses rather than corrupt data
+  quietly. Mitigations: remove the `HasQueryFilter` configuration for the
+  entity type, or omit `MatchBy` and use primary-key default-value routing.
+  An opt-in to ignore filters may ship in a future release.
 
 ### Interaction with other UpsertOptions
 
@@ -129,11 +134,20 @@ SELECT per refreshed entity.
 
 ### InsertedWithNullMatchKeyCount
 
-If any component of an entity's `MatchBy` projection is null, the entity is
-routed to INSERT and counted via `UpsertResult.InsertedWithNullMatchKeyCount`. A
-non-zero value typically indicates a data-quality issue upstream — the business
-key was expected but missing. Surface this signal in your application rather
-than relying on silent inserts.
+`UpsertResult.InsertedWithNullMatchKeyCount` reports the number of entities
+routed to INSERT because at least one component of their `MatchBy` projection
+was null. It is:
+
+- `null` when `WithMatchBy` was not configured on the upsert call.
+- `0` when MatchBy was configured but every entity had a non-null match key.
+- A positive integer when MatchBy was configured and some entities had null
+  components.
+
+A non-zero value typically indicates a data-quality issue upstream — the
+business key was expected but missing. Surface this signal in your application
+rather than relying on the silent insert. Distinguishing `null` from `0` lets
+callers tell "feature not active" apart from "feature active, no null keys
+observed."
 
 ## DuplicateKeyStrategy
 

@@ -20,6 +20,7 @@ internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<T
     private int _updatedCount;
     private int _failureCount;
     private int _nullMatchKeyInsertCount;
+    private bool _matchByActive;
 
     internal UpsertAccumulator(ResultDetail detail)
     {
@@ -137,6 +138,14 @@ internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<T
 
     internal void RecordNullMatchKeyInsert() => _nullMatchKeyInsertCount++;
 
+    /// <summary>
+    /// Signals that <c>WithMatchBy</c> was configured on this upsert. Toggles the
+    /// <see cref="UpsertResult{TKey}.InsertedWithNullMatchKeyCount"/> result property
+    /// from <c>null</c> (inactive) to an integer count (active, possibly zero).
+    /// Idempotent.
+    /// </summary>
+    internal void MarkMatchByActive() => _matchByActive = true;
+
     internal int SuccessCount => _insertedCount + _updatedCount;
     internal int FailureCount => _failureCount;
 
@@ -152,7 +161,7 @@ internal sealed class UpsertAccumulator<TKey> where TKey : notnull, IEquatable<T
         FailureCount = _failureCount,
         InsertedCount = _insertedCount,
         UpdatedCount = _updatedCount,
-        InsertedWithNullMatchKeyCount = _nullMatchKeyInsertCount,
+        InsertedWithNullMatchKeyCount = _matchByActive ? _nullMatchKeyInsertCount : null,
         WasCancelled = wasCancelled,
         GraphHierarchy = graph?.Hierarchy,
         TraversalInfo = graph?.TraversalInfo

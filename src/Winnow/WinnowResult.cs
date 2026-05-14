@@ -142,17 +142,18 @@ public enum FailureReason
     UnknownError,
 
     /// <summary>
-    /// <c>DuplicateKeyStrategy.RetryAsUpdate</c> fired under <c>MatchBy</c>, but the
-    /// re-query found no row matching the configured business key. The row that caused
-    /// the original duplicate-key failure no longer exists at retry time — typically
-    /// the result of a concurrent INSERT-then-DELETE between the original failure and
-    /// our retry. The entity has not been persisted.
+    /// Under <c>MatchBy</c> with <c>DuplicateKeyStrategy.RetryAsUpdate</c>, a concurrent
+    /// process won a race: a row matching the business key existed long enough to cause
+    /// our INSERT to fail, but was gone (or never existed under the configured key) by
+    /// the time we re-queried for the retry. The entity has not been persisted.
     /// </summary>
     /// <remarks>
-    /// To recover: inspect <see cref="UpsertFailure{TKey}.EntityIndex"/>, decide whether
-    /// to discard or re-queue the entity, or wrap the operation in application-level
-    /// retry with a delay. Adding a unique constraint on the MatchBy columns does not
-    /// prevent this outcome (the row is genuinely gone); it only narrows the race window.
+    /// Typical cause is an INSERT-then-DELETE between our save and our retry, but the same
+    /// classification fires whenever the duplicate-key retry refresh finds no matching row.
+    /// To recover: inspect <see cref="UpsertFailure{TKey}.EntityIndex"/>, decide whether to
+    /// discard or re-queue the entity, or wrap the operation in application-level retry
+    /// with a delay. A unique constraint on the MatchBy columns narrows but does not
+    /// eliminate the race window — the row may be genuinely gone.
     /// </remarks>
-    MatchByRefreshNotFound
+    BusinessKeyConflictLost
 }

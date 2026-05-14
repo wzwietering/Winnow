@@ -29,7 +29,7 @@ public class WinnowerUpsertMatchByConcurrencyTests : TestBase
         MatchByTestHelpers.InjectConflictingRowOnce(context, "RACE-1", "Concurrent");
 
         var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.RetryAsUpdate }
-            .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
+            .WithMatchBy<CustomerOrder>(o => o.OrderNumber);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = await saver.UpsertAsync(new[] { incoming }, options);
@@ -61,7 +61,7 @@ public class WinnowerUpsertMatchByConcurrencyTests : TestBase
         MatchByTestHelpers.InjectConflictingRowOnce(context, "RACE-FAIL", "Concurrent");
 
         var options = new UpsertOptions { DuplicateKeyStrategy = DuplicateKeyStrategy.Fail }
-            .WithMatchBy<CustomerOrder, string>(o => o.OrderNumber);
+            .WithMatchBy<CustomerOrder>(o => o.OrderNumber);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         var result = await saver.UpsertAsync(new[] { incoming }, options);
