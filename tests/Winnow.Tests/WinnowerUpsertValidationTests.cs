@@ -90,4 +90,42 @@ public class WinnowerUpsertValidationTests : TestBase
         failure.AttemptedOperation.ShouldBe(UpsertOperationType.Update);
         failure.EntityId.ShouldBe(existing.Id);
     }
+
+    [Fact]
+    public void Upsert_AllInvalid_ZeroDatabaseRoundTrips()
+    {
+        using var context = CreateContext();
+        var products = new[]
+        {
+            new Product { Id = 0, Name = "a", Price = -1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+            new Product { Id = 0, Name = "b", Price = -2m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+        };
+
+        var options = new UpsertOptions();
+        options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
+        {
+            if (p.Price <= 0) c.Add("Price", "Must be positive");
+        });
+
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Upsert(products, options);
+
+        result.FailureCount.ShouldBe(2);
+        result.DatabaseRoundTrips.ShouldBe(0);
+    }
+
+    [Fact]
+    public void Upsert_EmptyBatch_NoFailuresNoRoundTrips()
+    {
+        using var context = CreateContext();
+        var options = new UpsertOptions();
+        options.WithValidation<Product>((Product _, ref ValidationCollector _) => { });
+
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Upsert(Array.Empty<Product>(), options);
+
+        result.SuccessCount.ShouldBe(0);
+        result.FailureCount.ShouldBe(0);
+        result.DatabaseRoundTrips.ShouldBe(0);
+    }
 }

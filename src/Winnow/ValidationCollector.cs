@@ -51,13 +51,15 @@ public ref struct ValidationCollector
     /// Creates a standalone collector suitable for unit-testing a
     /// <see cref="ValidatorDelegate{TEntity}"/> in isolation. Allocates a small inline
     /// buffer; rents from <see cref="ArrayPool{T}"/> only if the test pushes more
-    /// errors than the buffer holds. Call <c>using</c> or assign to a local so the
-    /// caller does not retain the collector beyond the scope.
+    /// errors than the buffer holds.
     /// </summary>
     /// <remarks>
-    /// Not on the production hot path — the pipeline supplies its own batch-wide
-    /// inline buffer to avoid the per-call allocation this factory does. Use this
-    /// only from tests or one-off diagnostic code.
+    /// Wrap the result in <c>using var c = ValidationCollector.CreateForTesting();</c> —
+    /// it is required if the test may push more than four errors, because the
+    /// rented buffer otherwise leaks back into the pool's tracking. The collector
+    /// implements ref-struct disposal so the <c>using</c> form is the supported
+    /// pattern. Not on the production hot path — the pipeline supplies its own
+    /// batch-wide inline buffer.
     /// </remarks>
     public static ValidationCollector CreateForTesting() =>
         new(new ValidationError[InlineCapacity]);
@@ -90,15 +92,24 @@ public ref struct ValidationCollector
     /// Equivalent to <c>Add(new ValidationError(propertyName, message))</c>.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Add(string propertyName, string message) =>
+    public void Add(string propertyName, string message)
+    {
+        ArgumentNullException.ThrowIfNull(propertyName);
+        ArgumentNullException.ThrowIfNull(message);
         Add(new ValidationError(propertyName, message));
+    }
 
     /// <summary>
     /// Records a <see cref="ValidationError"/> built from a property name, message, and machine code.
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Add(string propertyName, string message, string code) =>
+    public void Add(string propertyName, string message, string code)
+    {
+        ArgumentNullException.ThrowIfNull(propertyName);
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(code);
         Add(new ValidationError(propertyName, message, code));
+    }
 
     /// <summary>
     /// Returns the recorded errors as a read-only span. The span is valid only
@@ -121,9 +132,12 @@ public ref struct ValidationCollector
 
     /// <summary>
     /// Returns any rented buffer to <see cref="ArrayPool{T}"/>. The pipeline calls
-    /// this exactly once per entity validated; user code should not invoke it.
+    /// this exactly once per entity validated. External callers must invoke it
+    /// (via <c>using</c>) on collectors built by <see cref="CreateForTesting"/>
+    /// whenever more than four errors may be added — otherwise the rented buffer
+    /// leaks.
     /// </summary>
-    internal void Dispose()
+    public void Dispose()
     {
         if (_rented is null)
         {

@@ -47,6 +47,22 @@ public class ValidationOptions
     internal bool IsDataAnnotationsValidator { get; }
 
     /// <summary>
+    /// Whether the pipeline should descend into navigation properties when
+    /// validating each entity. <c>false</c> on the base type — only
+    /// <see cref="GraphValidationOptions"/> can enable navigation walking,
+    /// which keeps the flat-vs-graph distinction enforced in the type system.
+    /// </summary>
+    internal virtual bool ShouldWalkNavigations => false;
+
+    /// <summary>
+    /// Maximum depth the navigation walker descends before stopping. Reached
+    /// only when <see cref="ShouldWalkNavigations"/> is true. The base value is
+    /// unused; <see cref="GraphValidationOptions"/> overrides it with the
+    /// user-configurable depth cap.
+    /// </summary>
+    internal virtual int NavigationDepthLimit => 0;
+
+    /// <summary>
     /// Controls what happens when at least one entity fails validation.
     /// Default: <see cref="ValidationFailureBehavior.RecordAsFailure"/>.
     /// </summary>

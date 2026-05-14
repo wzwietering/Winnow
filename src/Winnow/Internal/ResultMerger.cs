@@ -149,7 +149,8 @@ internal static class ResultMerger
                 EntityIndex = f.EntityIndex + p.Offset,
                 ErrorMessage = f.ErrorMessage,
                 Reason = f.Reason,
-                Exception = f.Exception
+                Exception = f.Exception,
+                ValidationErrors = f.ValidationErrors
             })).ToList();
     }
 
@@ -181,7 +182,8 @@ internal static class ResultMerger
                 Reason = f.Reason,
                 Exception = f.Exception,
                 AttemptedOperation = f.AttemptedOperation,
-                IsDefaultKey = f.IsDefaultKey
+                IsDefaultKey = f.IsDefaultKey,
+                ValidationErrors = f.ValidationErrors
             })).ToList();
     }
 

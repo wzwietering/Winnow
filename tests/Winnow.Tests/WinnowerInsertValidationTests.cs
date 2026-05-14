@@ -141,10 +141,10 @@ public class WinnowerInsertValidationTests : TestBase
     public void WinnowValidationException_RequiresNonEmptyFailures()
     {
         Should.Throw<ArgumentNullException>(() =>
-            new WinnowValidationException(null!));
+            new WinnowValidationException((IReadOnlyList<WinnowValidationException.EntityFailure>)null!));
 
         Should.Throw<ArgumentException>(() =>
-            new WinnowValidationException(Array.Empty<EntityValidationFailure>()));
+            new WinnowValidationException(Array.Empty<WinnowValidationException.EntityFailure>()));
     }
 
     [Fact]
@@ -302,7 +302,7 @@ public class WinnowerInsertValidationTests : TestBase
     }
 
     [Fact]
-    public void Throw_EntityValidationFailure_CarriesStructuredErrors()
+    public void Throw_EntityFailure_CarriesStructuredErrors()
     {
         using var context = CreateContext();
         var products = new[]
@@ -383,5 +383,69 @@ public class WinnowerInsertValidationTests : TestBase
 
         [System.ComponentModel.DataAnnotations.Range(0, 100)]
         public int Quantity { get; set; }
+    }
+
+    [Fact]
+    public void Insert_NullEntityInList_ThrowBehavior_ThrowsWithNullEntityFailure()
+    {
+        using var context = CreateContext();
+        var products = new Product[]
+        {
+            new() { Name = "A", Price = 10m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+            null!,
+        };
+
+        var options = new InsertOptions()
+            .WithValidation(RejectNonPositivePrice(), ValidationFailureBehavior.Throw);
+
+        var saver = new Winnower<Product, int>(context);
+        var ex = Should.Throw<WinnowValidationException>(() => saver.Insert(products, options));
+        ex.Failures.ShouldContain(f => f.EntityIndex == 1);
+    }
+
+    [Fact]
+    public void Insert_ResultDetailNone_WithValidationFailures_CountIsAccurateAndFailuresThrows()
+    {
+        using var context = CreateContext();
+        var products = new[]
+        {
+            new Product { Name = "A", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+            new Product { Name = "B", Price = -1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+        };
+
+        var options = new InsertOptions { ResultDetail = ResultDetail.None };
+        options.WithValidation(RejectNonPositivePrice());
+
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Insert(products, options);
+
+        result.FailureCount.ShouldBe(1);
+        result.SuccessCount.ShouldBe(1);
+        Should.Throw<InvalidOperationException>(() => _ = result.Failures);
+    }
+
+    [Fact]
+    public void Insert_ResultDetailMinimal_WithValidationFailures_FailuresPopulatedWithValidationErrors()
+    {
+        using var context = CreateContext();
+        var products = new[]
+        {
+            new Product { Name = "A", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+            new Product { Name = "B", Price = -1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+        };
+
+        var options = new InsertOptions { ResultDetail = ResultDetail.Minimal };
+        options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
+        {
+            if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
+        });
+
+        var saver = new Winnower<Product, int>(context);
+        var result = saver.Insert(products, options);
+
+        result.FailureCount.ShouldBe(1);
+        var failure = result.Failures.ShouldHaveSingleItem();
+        failure.ValidationErrors.ShouldNotBeNull();
+        failure.ValidationErrors!.ShouldContain(e => e.Code == "RANGE");
     }
 }

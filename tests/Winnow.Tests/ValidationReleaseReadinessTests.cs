@@ -47,6 +47,102 @@ public class ValidationReleaseReadinessTests
                 .ShouldBe(expectedInvalidIndices);
             result.Failures.ShouldAllBe(f => f.Reason == FailureReason.ValidationError);
         }
+
+        [Fact]
+        public async Task InsertAsync_ValidationFailure_PreservesValidationErrorsAcrossPartitions()
+        {
+            EnsureDatabaseCreated();
+
+            var products = Enumerable.Range(0, 8).Select(i => new Product
+            {
+                Name = $"p{i}",
+                Price = i % 3 == 0 ? -1m : 1m,
+                Stock = 1,
+                LastModified = DateTimeOffset.UtcNow,
+            }).ToList();
+
+            var saver = CreateSaver(maxDegreeOfParallelism: 2);
+            var options = new InsertOptions();
+            options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
+            {
+                if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
+            });
+
+            var result = await saver.InsertAsync(products, options);
+
+            result.Failures.ShouldNotBeEmpty();
+            foreach (var failure in result.Failures)
+            {
+                failure.ValidationErrors.ShouldNotBeNull();
+                failure.ValidationErrors!.ShouldContain(e => e.Code == "RANGE");
+            }
+        }
+
+        [Fact]
+        public async Task UpsertAsync_ValidationFailure_PreservesValidationErrorsAcrossPartitions()
+        {
+            EnsureDatabaseCreated();
+
+            var products = Enumerable.Range(0, 8).Select(i => new Product
+            {
+                Name = $"p{i}",
+                Price = i % 3 == 0 ? -1m : 1m,
+                Stock = 1,
+                LastModified = DateTimeOffset.UtcNow,
+            }).ToList();
+
+            var factory = CreateContextFactory();
+            var saver = new ParallelWinnower<Product, int>(factory, maxDegreeOfParallelism: 2);
+            var options = new UpsertOptions();
+            options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
+            {
+                if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
+            });
+
+            var result = await saver.UpsertAsync(products, options);
+
+            var validationFailures = result.Failures.Where(f => f.Reason == FailureReason.ValidationError).ToList();
+            validationFailures.ShouldNotBeEmpty();
+            foreach (var failure in validationFailures)
+            {
+                failure.ValidationErrors.ShouldNotBeNull();
+                failure.ValidationErrors!.ShouldContain(e => e.Code == "RANGE");
+            }
+        }
+
+        // Documents the current behavior: when validators throw inside a partition,
+        // the ParallelWinnower orchestrator catches the exception and converts the
+        // partition's entities into failures rather than propagating the exception.
+        // This means ValidationFailureBehavior.Throw is effectively absorbed by the
+        // parallel orchestrator — the user sees failures, not an exception. Captured
+        // here so any change to parallel exception handling is intentional and reviewed.
+        [Fact]
+        public async Task InsertAsync_ThrowBehavior_ConvertedToFailuresByParallelOrchestrator()
+        {
+            EnsureDatabaseCreated();
+
+            var products = Enumerable.Range(0, 8).Select(i => new Product
+            {
+                Name = $"p{i}",
+                Price = i % 3 == 0 ? -1m : 1m,
+                Stock = 1,
+                LastModified = DateTimeOffset.UtcNow,
+            }).ToList();
+
+            var saver = CreateSaver(maxDegreeOfParallelism: 2);
+            var options = new InsertOptions()
+                .WithValidation<Product>(
+                    (Product p, ref ValidationCollector c) =>
+                    {
+                        if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive");
+                    },
+                    ValidationFailureBehavior.Throw);
+
+            var result = await saver.InsertAsync(products, options);
+
+            result.FailureCount.ShouldBeGreaterThan(0);
+            result.SuccessCount.ShouldBe(0);
+        }
     }
 
     // --- Task #8: IncludeNavigations end-to-end through InsertGraph -------

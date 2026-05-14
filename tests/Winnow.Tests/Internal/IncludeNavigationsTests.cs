@@ -99,14 +99,13 @@ public class IncludeNavigationsTests
     }
 
     [Fact]
-    public void IncludeNavigationsTrue_WithTypedDelegate_ThrowsInvalidOperationException()
+    public void IncludeNavigationsTrue_WithTypedDelegate_ThrowsAtConfigurationTime()
     {
         var options = new InsertGraphOptions();
         options.WithValidation<Order>((Order o, ref ValidationCollector c) => { });
-        options.Validation!.IncludeNavigations = true;
 
         var ex = Should.Throw<InvalidOperationException>(() =>
-            Run([new Order { Number = "x" }], options.Validation!, (_, _, _) => { }));
+            options.Validation!.IncludeNavigations = true);
 
         ex.Message.ShouldContain("IncludeNavigations");
         ex.Message.ShouldContain("DataAnnotations");
@@ -206,5 +205,90 @@ public class IncludeNavigationsTests
 
         var (_, _, errors) = failures.ShouldHaveSingleItem();
         errors.ShouldContain(err => err.PropertyName == "Number");
+    }
+
+    private sealed class DiamondLeaf
+    {
+        [Required] public string? Name { get; set; }
+    }
+
+    private sealed class DiamondRoot
+    {
+        [Required] public string? RootName { get; set; }
+        public DiamondLeaf? PathA { get; set; }
+        public DiamondLeaf? PathB { get; set; }
+    }
+
+    [Fact]
+    public void IncludeNavigationsTrue_SharedReference_ValidatesLeafOnce()
+    {
+        var options = BuildGraphOptions<DiamondRoot>(includeNavigations: true);
+
+        var sharedLeaf = new DiamondLeaf { Name = null };
+        var root = new DiamondRoot { RootName = "R", PathA = sharedLeaf, PathB = sharedLeaf };
+
+        var failures = new List<(int Index, string Message, IReadOnlyList<ValidationError> Errors)>();
+        Run([root], options.Validation!, (i, m, e) => failures.Add((i, m, e)));
+
+        var (_, _, errors) = failures.ShouldHaveSingleItem();
+        errors.Count(e => e.PropertyName.EndsWith(".Name")).ShouldBe(1);
+    }
+
+    private sealed class CollectionHolder
+    {
+        public List<OrderItem?> Items { get; set; } = [];
+    }
+
+    [Fact]
+    public void IncludeNavigationsTrue_NullCollectionElement_DoesNotThrowAndStillValidatesOthers()
+    {
+        var options = BuildGraphOptions<CollectionHolder>(includeNavigations: true);
+
+        var holder = new CollectionHolder
+        {
+            Items = { null, new OrderItem { Sku = null, Quantity = 1 } }
+        };
+
+        var failures = new List<(int Index, string Message, IReadOnlyList<ValidationError> Errors)>();
+        Run([holder], options.Validation!, (i, m, e) => failures.Add((i, m, e)));
+
+        var (_, _, errors) = failures.ShouldHaveSingleItem();
+        errors.ShouldContain(e => e.PropertyName == "Items[1].Sku");
+    }
+
+    private sealed class ChainNode
+    {
+        [Required] public string? Name { get; set; }
+        public ChainNode? Next { get; set; }
+    }
+
+    [Fact]
+    public void IncludeNavigationsTrue_DeepLinearChain_StopsAtDepthLimit()
+    {
+        var options = BuildGraphOptions<ChainNode>(includeNavigations: true);
+        options.Validation!.MaxNavigationDepth = 5;
+
+        var head = new ChainNode { Name = "0" };
+        var current = head;
+        for (int i = 1; i < 64; i++)
+        {
+            var next = new ChainNode { Name = $"{i}" };
+            current.Next = next;
+            current = next;
+        }
+
+        var failures = new List<(int Index, string Message, IReadOnlyList<ValidationError> Errors)>();
+        Run([head], options.Validation!, (i, m, e) => failures.Add((i, m, e)));
+
+        var (_, _, errors) = failures.ShouldHaveSingleItem();
+        errors.ShouldContain(e => e.Code == NavigationWalker.DepthLimitErrorCode);
+    }
+
+    [Fact]
+    public void GraphValidationOptions_MaxNavigationDepth_RejectsNonPositive()
+    {
+        var options = new InsertGraphOptions().WithDataAnnotations<ChainNode>();
+        Should.Throw<ArgumentOutOfRangeException>(() => options.Validation!.MaxNavigationDepth = 0);
+        Should.Throw<ArgumentOutOfRangeException>(() => options.Validation!.MaxNavigationDepth = -1);
     }
 }

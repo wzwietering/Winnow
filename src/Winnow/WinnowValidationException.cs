@@ -17,23 +17,54 @@ public sealed class WinnowValidationException : Exception
 
     /// <summary>
     /// The validation failures that triggered this exception, keyed by the entity's
-    /// position in the original input batch. Always non-empty: the pipeline only
-    /// throws this exception when at least one failure has been collected.
+    /// position in the original input batch. Non-empty when constructed via the
+    /// failures-list overload; empty when the exception was constructed via the
+    /// message-only or message-plus-inner overloads (use those for re-throw scenarios).
     /// </summary>
-    public IReadOnlyList<EntityValidationFailure> Failures { get; }
+    public IReadOnlyList<EntityFailure> Failures { get; }
 
     /// <summary>
     /// Creates an exception carrying the supplied per-entity failures. Throws
     /// <see cref="ArgumentException"/> if the list is empty — a validation
-    /// exception without failures is semantically incoherent.
+    /// exception without failures from the pipeline is semantically incoherent.
     /// </summary>
-    public WinnowValidationException(IReadOnlyList<EntityValidationFailure> failures)
+    public WinnowValidationException(IReadOnlyList<EntityFailure> failures)
         : base(BuildMessage(RequireFailures(failures)))
     {
         Failures = failures;
     }
 
-    private static IReadOnlyList<EntityValidationFailure> RequireFailures(IReadOnlyList<EntityValidationFailure> failures)
+    /// <summary>
+    /// Parameterless constructor for serialization scenarios and frameworks that
+    /// require it. <see cref="Failures"/> is initialised to an empty list.
+    /// </summary>
+    public WinnowValidationException()
+    {
+        Failures = Array.Empty<EntityFailure>();
+    }
+
+    /// <summary>
+    /// Creates an exception with a custom message and no per-entity failures.
+    /// Intended for wrapping/rethrow scenarios where the failure detail is not
+    /// available at the rethrow site.
+    /// </summary>
+    public WinnowValidationException(string message)
+        : base(message)
+    {
+        Failures = Array.Empty<EntityFailure>();
+    }
+
+    /// <summary>
+    /// Creates an exception with a custom message and an inner exception, with no
+    /// per-entity failures. Intended for wrapping/rethrow scenarios.
+    /// </summary>
+    public WinnowValidationException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+        Failures = Array.Empty<EntityFailure>();
+    }
+
+    private static IReadOnlyList<EntityFailure> RequireFailures(IReadOnlyList<EntityFailure> failures)
     {
         ArgumentNullException.ThrowIfNull(failures);
         if (failures.Count == 0)
@@ -45,7 +76,7 @@ public sealed class WinnowValidationException : Exception
         return failures;
     }
 
-    private static string BuildMessage(IReadOnlyList<EntityValidationFailure> failures)
+    private static string BuildMessage(IReadOnlyList<EntityFailure> failures)
     {
         if (failures.Count == 1)
         {
@@ -55,7 +86,7 @@ public sealed class WinnowValidationException : Exception
         return $"Pre-validation failed for {failures.Count} entities at {FormatIndices(failures)}.";
     }
 
-    private static string FormatIndices(IReadOnlyList<EntityValidationFailure> failures)
+    private static string FormatIndices(IReadOnlyList<EntityFailure> failures)
     {
         var take = Math.Min(failures.Count, MaxIndicesInMessage);
         var indices = new string[take];
@@ -66,10 +97,10 @@ public sealed class WinnowValidationException : Exception
         var joined = $"indices {string.Join(", ", indices)}";
         return failures.Count > MaxIndicesInMessage ? joined + ", ..." : joined;
     }
-}
 
-/// <summary>
-/// A snapshot of one entity's pre-validation failure, surfaced via
-/// <see cref="WinnowValidationException.Failures"/>.
-/// </summary>
-public sealed record EntityValidationFailure(int EntityIndex, string Message, IReadOnlyList<ValidationError> Errors);
+    /// <summary>
+    /// A snapshot of one entity's pre-validation failure, surfaced via
+    /// <see cref="WinnowValidationException.Failures"/>.
+    /// </summary>
+    public sealed record EntityFailure(int EntityIndex, string Message, IReadOnlyList<ValidationError> Errors);
+}

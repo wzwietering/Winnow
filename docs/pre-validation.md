@@ -81,6 +81,16 @@ entity is rejected:
 | `RecordAsFailure` (default) | Each invalid entity becomes a failure with `FailureReason.ValidationError`. Valid entities still hit the database. Matches the "winnow out the failures" model the rest of the library follows. |
 | `Throw` | A `WinnowValidationException` is thrown after the batch is scanned. The exception carries every failure that was reported. No database round trips occur. Use this when validation failures indicate a bug rather than a data-quality issue you want to capture per-entity. |
 
+Pass the behaviour inline so the whole thing is configured in one call:
+
+```csharp
+options.WithValidation<Product>(validator, ValidationFailureBehavior.Throw);
+// or:
+options.WithDataAnnotations<Product>(ValidationFailureBehavior.Throw);
+```
+
+The two-step form remains valid for code that needs to flip the behaviour after construction:
+
 ```csharp
 options.WithValidation<Product>(validator);
 options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
@@ -99,19 +109,29 @@ options.Validation!.CancellationCheckInterval = 32;
 By default, pre-validation walks only the top-level entities passed to `InsertGraph`, `UpdateGraph`, `DeleteGraph`, or `UpsertGraph` — navigation children are not validated. `IncludeNavigations` lives on `GraphValidationOptions` (a subtype of `ValidationOptions`) and is only accessible when validation is attached to a graph options object — the type system makes it impossible to set on a flat `InsertOptions`/`DeleteOptions`/`UpsertOptions`. Set `IncludeNavigations = true` to opt into walking the entity's reference and collection navigations and applying DataAnnotations to each reachable child:
 
 ```csharp
-var options = new InsertGraphOptions();
-options.WithDataAnnotations<Order>();
+var options = new InsertGraphOptions()
+    .WithDataAnnotations<Order>(includeNavigations: true);
+```
+
+Or set it after the fact if you prefer:
+
+```csharp
+var options = new InsertGraphOptions().WithDataAnnotations<Order>();
 options.Validation!.IncludeNavigations = true;   // GraphValidationOptions
 ```
 
 Child failures are reported on the parent's failure record with a property path that locates the offending value, for example `"Items[2].Sku"`. Cycle protection is reference-based: if a child links back to an already-visited parent it is skipped, so self-referencing graphs terminate cleanly. The walk also honours `GraphOptionsBase.NavigationFilter` — navigations excluded by the filter are not validated, matching the scope of the graph operation that owns the walk. Validation also recurses through unannotated intermediate types when a deeper child has DataAnnotations, so a `Root → Mid (no annotations) → Leaf [Required]` graph still surfaces leaf failures.
 
+The walker stops at `GraphValidationOptions.MaxNavigationDepth` (default 32) and records a `WINNOW_NAV_DEPTH_LIMIT` validation error at the cut-off point — this is what keeps accidentally-unbounded or deeply-nested graphs from blowing the stack. Raise the cap if your graph is genuinely deep; the cap exists to surface a configuration issue, not to silently drop entities.
+
 > `IncludeNavigations` requires a DataAnnotations-built validator
 > (`WithDataAnnotations<TEntity>()`). A typed `ValidatorDelegate<TEntity>`
 > can only run against `TEntity` and cannot validate children of differing
-> types — using one with `IncludeNavigations = true` throws
-> `InvalidOperationException` at validation time. Pair custom delegates with
-> a separate options instance per child type if you need polymorphic validation.
+> types — assigning `IncludeNavigations = true` to a `GraphValidationOptions`
+> built with a custom delegate throws `InvalidOperationException` at the
+> point of assignment, not when the first batch runs. Pair custom delegates
+> with a separate options instance per child type if you need polymorphic
+> validation.
 
 ## Result Shape
 

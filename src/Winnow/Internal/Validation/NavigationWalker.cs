@@ -30,21 +30,33 @@ internal static class NavigationWalker
     private static readonly ConcurrentDictionary<Type, NavigationProperty[]> _navCache = new();
 
     /// <summary>
+    /// Error code emitted when the navigation walk reaches
+    /// <see cref="GraphValidationOptions.MaxNavigationDepth"/> and stops descending
+    /// further. Distinguishable from real validation failures so callers can
+    /// surface a depth-limit hit as a configuration issue rather than bad data.
+    /// </summary>
+    internal const string DepthLimitErrorCode = "WINNOW_NAV_DEPTH_LIMIT";
+
+    /// <summary>
     /// Walks <paramref name="root"/>'s reachable children and adds any validation
     /// failures to <paramref name="collector"/> with property paths prefixed so
     /// the failing entity can be located in the graph. When <paramref name="filter"/>
     /// is supplied, navigations excluded by the filter are skipped, matching the
-    /// scope of the graph operation that owns this walk.
+    /// scope of the graph operation that owns this walk. The walker stops
+    /// descending when <paramref name="maxDepth"/> is reached and records a
+    /// <see cref="DepthLimitErrorCode"/> error at the cut-off point — this is
+    /// what keeps deeply-nested or accidentally-unbounded graphs from blowing
+    /// the stack.
     /// </summary>
-    internal static void Walk(object root, ref ValidationCollector collector, NavigationFilter? filter = null)
+    internal static void Walk(object root, ref ValidationCollector collector, int maxDepth, NavigationFilter? filter = null)
     {
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance) { root };
-        WalkChildrenOf(root, ref collector, visited, filter, pathPrefix: string.Empty);
+        WalkChildrenOf(root, ref collector, visited, filter, pathPrefix: string.Empty, depth: 0, maxDepth);
     }
 
     private static void WalkChildrenOf(
         object entity, ref ValidationCollector collector, HashSet<object> visited,
-        NavigationFilter? filter, string pathPrefix)
+        NavigationFilter? filter, string pathPrefix, int depth, int maxDepth)
     {
         var entityType = entity.GetType();
         var navs = GetNavigations(entityType);
@@ -55,28 +67,28 @@ internal static class NavigationWalker
             if (value is null) continue;
             if (nav.IsCollection)
             {
-                WalkCollection((IEnumerable)value, nav.Name, ref collector, visited, filter, pathPrefix);
+                WalkCollection((IEnumerable)value, nav.Name, ref collector, visited, filter, pathPrefix, depth, maxDepth);
             }
             else
             {
-                WalkSingle(value, nav.Name, ref collector, visited, filter, pathPrefix);
+                WalkSingle(value, nav.Name, ref collector, visited, filter, pathPrefix, depth, maxDepth);
             }
         }
     }
 
     private static void WalkSingle(
         object child, string navName, ref ValidationCollector collector,
-        HashSet<object> visited, NavigationFilter? filter, string pathPrefix)
+        HashSet<object> visited, NavigationFilter? filter, string pathPrefix, int depth, int maxDepth)
     {
         if (!visited.Add(child)) return;
         var childPrefix = pathPrefix + navName + ".";
         DataAnnotationsValidatorFactory.ValidateInstance(child, ref collector, childPrefix);
-        WalkChildrenOf(child, ref collector, visited, filter, childPrefix);
+        DescendOrFlag(child, ref collector, visited, filter, childPrefix, depth, maxDepth);
     }
 
     private static void WalkCollection(
         IEnumerable collection, string navName, ref ValidationCollector collector,
-        HashSet<object> visited, NavigationFilter? filter, string pathPrefix)
+        HashSet<object> visited, NavigationFilter? filter, string pathPrefix, int depth, int maxDepth)
     {
         int index = 0;
         foreach (var child in collection)
@@ -86,11 +98,30 @@ internal static class NavigationWalker
             {
                 var childPrefix = $"{pathPrefix}{navName}[{index}].";
                 DataAnnotationsValidatorFactory.ValidateInstance(child, ref collector, childPrefix);
-                WalkChildrenOf(child, ref collector, visited, filter, childPrefix);
+                DescendOrFlag(child, ref collector, visited, filter, childPrefix, depth, maxDepth);
             }
             index++;
         }
     }
+
+    private static void DescendOrFlag(
+        object child, ref ValidationCollector collector, HashSet<object> visited,
+        NavigationFilter? filter, string childPrefix, int depth, int maxDepth)
+    {
+        var nextDepth = depth + 1;
+        if (nextDepth >= maxDepth)
+        {
+            collector.Add(new ValidationError(
+                TrimTrailingDot(childPrefix),
+                $"Navigation depth limit ({maxDepth}) reached; descendants of this entity were not validated.",
+                DepthLimitErrorCode));
+            return;
+        }
+        WalkChildrenOf(child, ref collector, visited, filter, childPrefix, nextDepth, maxDepth);
+    }
+
+    private static string TrimTrailingDot(string path) =>
+        path.Length > 0 && path[^1] == '.' ? path[..^1] : path;
 
     private static NavigationProperty[] GetNavigations(Type type) =>
         _navCache.GetOrAdd(type, static t => BuildNavigations(t));

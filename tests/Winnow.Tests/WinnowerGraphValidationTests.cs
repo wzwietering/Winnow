@@ -122,4 +122,64 @@ public class WinnowerGraphValidationTests : TestBase
         context.CustomerOrders.Count(o => o.OrderNumber == "BAD").ShouldBe(0);
         context.CustomerOrders.Count(o => o.OrderNumber == "OK").ShouldBe(1);
     }
+
+    [Fact]
+    public void UpdateGraph_ThrowBehavior_ThrowsWinnowValidationException()
+    {
+        using var context = CreateContext();
+        var order = NewOrder("ORIG");
+        context.CustomerOrders.Add(order);
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+
+        order.OrderNumber = "BAD";
+
+        var options = new GraphOptions()
+            .WithValidation(RejectOrderNumber("BAD"), ValidationFailureBehavior.Throw);
+
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var ex = Should.Throw<WinnowValidationException>(() => saver.UpdateGraph([order], options));
+        ex.Failures.ShouldHaveSingleItem().EntityIndex.ShouldBe(0);
+
+        context.ChangeTracker.Clear();
+        context.CustomerOrders.AsNoTracking().Single().OrderNumber.ShouldBe("ORIG");
+    }
+
+    [Fact]
+    public void DeleteGraph_ThrowBehavior_ThrowsWinnowValidationException()
+    {
+        using var context = CreateContext();
+        var order = NewOrder("KEEP-ME");
+        context.CustomerOrders.Add(order);
+        context.SaveChanges();
+        context.ChangeTracker.Clear();
+
+        var attached = context.CustomerOrders.AsNoTracking().Include(o => o.OrderItems).Single();
+
+        var options = new DeleteGraphOptions()
+            .WithValidation(RejectOrderNumber("KEEP-ME"), ValidationFailureBehavior.Throw);
+
+        var saver = new Winnower<CustomerOrder, int>(context);
+        Should.Throw<WinnowValidationException>(() => saver.DeleteGraph([attached], options));
+
+        context.ChangeTracker.Clear();
+        context.CustomerOrders.Count().ShouldBe(1);
+    }
+
+    [Fact]
+    public void UpsertGraph_ThrowBehavior_ThrowsWinnowValidationException()
+    {
+        using var context = CreateContext();
+        var orders = new[] { NewOrder("OK"), NewOrder("BAD") };
+
+        var options = new UpsertGraphOptions()
+            .WithValidation(RejectOrderNumber("BAD"), ValidationFailureBehavior.Throw);
+
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var ex = Should.Throw<WinnowValidationException>(() => saver.UpsertGraph(orders, options));
+        ex.Failures.ShouldHaveSingleItem().EntityIndex.ShouldBe(1);
+
+        context.ChangeTracker.Clear();
+        context.CustomerOrders.Count().ShouldBe(0);
+    }
 }

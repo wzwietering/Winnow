@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Shouldly;
 using Winnow.Tests.Entities;
 using Winnow.Tests.Infrastructure;
@@ -121,5 +122,36 @@ public class WinnowerUpsertMatchByPreValidationTests : TestBase
         result.Failures.ShouldHaveSingleItem().EntityIndex.ShouldBe(0);
         result.InsertedCount.ShouldBe(1);
         result.UpdatedCount.ShouldBe(1);
+    }
+
+    [Fact]
+    public void Upsert_MatchByWithAllEntitiesRejectedByValidation_NoDatabaseWork()
+    {
+        using var context = CreateContext();
+        MatchByTestHelpers.SeedOrder(context, "EXISTING", "Original", 50m);
+        var initialCount = context.CustomerOrders.AsNoTracking().Count();
+
+        var batch = new[]
+        {
+            new CustomerOrder { OrderNumber = "BAD-1", CustomerName = "Bad1", TotalAmount = -1m },
+            new CustomerOrder { OrderNumber = "BAD-2", CustomerName = "Bad2", TotalAmount = -2m },
+        };
+
+        var options = new UpsertOptions().WithMatchBy<CustomerOrder>(o => o.OrderNumber);
+        options.WithValidation<CustomerOrder>((CustomerOrder o, ref ValidationCollector c) =>
+        {
+            if (o.TotalAmount <= 0) c.Add(nameof(CustomerOrder.TotalAmount), "Must be positive");
+        });
+
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var result = saver.Upsert(batch, options);
+
+        result.FailureCount.ShouldBe(2);
+        result.InsertedCount.ShouldBe(0);
+        result.UpdatedCount.ShouldBe(0);
+        result.DatabaseRoundTrips.ShouldBe(0);
+
+        context.ChangeTracker.Clear();
+        context.CustomerOrders.AsNoTracking().Count().ShouldBe(initialCount);
     }
 }
