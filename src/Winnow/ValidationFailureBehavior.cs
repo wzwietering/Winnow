@@ -14,10 +14,13 @@ public enum ValidationFailureBehavior
     RecordAsFailure = 0,
 
     /// <summary>
-    /// Throw a <see cref="WinnowValidationException"/> as soon as the validator finishes
-    /// running across the batch and any failures were reported. The exception
-    /// carries the aggregated failures so callers can inspect them. No database
-    /// round trips occur in this mode when any entity is invalid.
+    /// After validating every entity in the batch, throw a
+    /// <see cref="WinnowValidationException"/> aggregating all failures. Valid
+    /// entities in the same batch are not sent to the database — the throw
+    /// pre-empts the entire round trip. Use when "any failure aborts the batch"
+    /// is the right contract; if you want partial progress, use
+    /// <see cref="RecordAsFailure"/> instead. The name disambiguates from a
+    /// hypothetical fail-on-first mode, which would short-circuit the scan.
     /// </summary>
-    Throw = 1,
+    ThrowAfterBatch = 1,
 }

@@ -8,9 +8,16 @@ namespace Winnow;
 /// and never sent to the strategy.
 /// </summary>
 /// <remarks>
+/// <para>
 /// Construct via the <c>WithValidation</c> or <c>WithDataAnnotations</c> extension
 /// methods rather than directly — those carry the type information needed to wire
 /// the validator to a specific <c>TEntity</c>.
+/// </para>
+/// <para>
+/// This type is not designed for external subclassing. The constructor is
+/// <c>private protected</c>, so the only subclass is the library-supplied
+/// <see cref="GraphValidationOptions"/>. Treat the type as effectively sealed.
+/// </para>
 /// </remarks>
 public class ValidationOptions
 {
@@ -20,8 +27,10 @@ public class ValidationOptions
     /// Default cancellation poll interval — every 256 entities. Picked to keep the
     /// volatile read out of the hottest validator inner loop while still bounding
     /// time-to-cancel to a small fraction of a millisecond on typical hardware.
+    /// Exposed as <c>static readonly</c> rather than <c>const</c> so a future
+    /// tuning is observed by already-compiled consumer assemblies.
     /// </summary>
-    public const int DefaultCancellationCheckInterval = 256;
+    public static readonly int DefaultCancellationCheckInterval = 256;
 
     /// <summary>
     /// The entity type the configured validator applies to. Set by the

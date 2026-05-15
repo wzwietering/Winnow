@@ -48,7 +48,7 @@ internal static class PreValidationRunner
         var includeNavigations = validation.ShouldWalkNavigations;
         var navigationDepthLimit = validation.NavigationDepthLimit;
         var validator = (ValidatorDelegate<TEntity>)validation.Validator;
-        var throwOnAny = validation.FailureBehavior == ValidationFailureBehavior.Throw;
+        var throwOnAny = validation.FailureBehavior == ValidationFailureBehavior.ThrowAfterBatch;
         var survivors = new List<TEntity>(entities.Count);
         var indices = new int[entities.Count];
         List<WinnowValidationException.EntityFailure>? thrownFailures = null;

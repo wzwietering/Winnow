@@ -55,7 +55,7 @@ public class WinnowerUpsertValidationTests : TestBase
         {
             if (p.Price <= 0) c.Add("Price", "Must be positive");
         });
-        options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+        options.Validation!.FailureBehavior = ValidationFailureBehavior.ThrowAfterBatch;
 
         var saver = new Winnower<Product, int>(context);
         var ex = Should.Throw<WinnowValidationException>(() => saver.Upsert(products, options));

@@ -51,6 +51,29 @@ options.WithDataAnnotations<Product>();
 
 The first call for a given entity type reflects over its properties to discover attributes and compiles a getter expression for each annotated property; subsequent calls reuse the cached array of compiled getters, so neither reflection nor `PropertyInfo.GetValue` runs per entity.
 
+The adapter also runs:
+
+- **Class-level `ValidationAttribute`s** (e.g. `[CustomValidation(typeof(MyValidator), nameof(MyValidator.Check))]` placed on the entity itself) via `attribute.GetValidationResult(entity, context)`. The error code is the attribute type name, matching property-level attributes.
+- **`IValidatableObject.Validate(ValidationContext)`**, when the entity implements it — useful for cross-field rules that don't fit a single attribute. Errors are emitted with code `WINNOW_VALIDATABLE_OBJECT` so they can be distinguished from attribute-driven failures. Property paths come from `ValidationResult.MemberNames`.
+
+Both surfaces are discovered once per entity type and cached.
+
+```csharp
+public class Booking : IValidatableObject
+{
+    [Required] public DateTime Start { get; set; }
+    [Required] public DateTime End { get; set; }
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext context)
+    {
+        if (End <= Start)
+            yield return new ValidationResult("End must be after Start.", new[] { nameof(End) });
+    }
+}
+```
+
+`Booking`'s property-level `[Required]` attributes and the cross-field rule are reported in the same `ValidationCollector` and surface in `failure.ValidationErrors` together.
+
 ## FluentValidation Adapter
 
 Winnow does not ship a built-in FluentValidation integration to keep its dependency surface minimal. Wrap your validator in a delegate:
@@ -79,21 +102,21 @@ entity is rejected:
 | Value | Behaviour |
 |---|---|
 | `RecordAsFailure` (default) | Each invalid entity becomes a failure with `FailureReason.ValidationError`. Valid entities still hit the database. Matches the "winnow out the failures" model the rest of the library follows. |
-| `Throw` | A `WinnowValidationException` is thrown after the batch is scanned. The exception carries every failure that was reported. No database round trips occur. Use this when validation failures indicate a bug rather than a data-quality issue you want to capture per-entity. |
+| `ThrowAfterBatch` | A `WinnowValidationException` is thrown after the entire batch is scanned. The exception carries every failure reported. No database round trips occur. Use this when validation failures indicate a bug rather than a data-quality issue you want to capture per-entity. The name disambiguates from a hypothetical fail-on-first mode, which would short-circuit the scan. |
 
 Pass the behaviour inline so the whole thing is configured in one call:
 
 ```csharp
-options.WithValidation<Product>(validator, ValidationFailureBehavior.Throw);
+options.WithValidation<Product>(validator, ValidationFailureBehavior.ThrowAfterBatch);
 // or:
-options.WithDataAnnotations<Product>(ValidationFailureBehavior.Throw);
+options.WithDataAnnotations<Product>(ValidationFailureBehavior.ThrowAfterBatch);
 ```
 
 The two-step form remains valid for code that needs to flip the behaviour after construction:
 
 ```csharp
 options.WithValidation<Product>(validator);
-options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+options.Validation!.FailureBehavior = ValidationFailureBehavior.ThrowAfterBatch;
 ```
 
 ## Cancellation

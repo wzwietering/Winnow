@@ -62,10 +62,12 @@ public abstract class GraphOptionsBase
     /// strategy. By default only the top-level entities are validated; set
     /// <see cref="GraphValidationOptions.IncludeNavigations"/> to also walk
     /// navigation children visible to the configured <see cref="NavigationFilter"/>.
-    /// Configure via the <c>WithValidation</c> or <c>WithDataAnnotations</c>
-    /// extension methods on this options object.
+    /// Configure exclusively via the <c>WithValidation</c> or
+    /// <c>WithDataAnnotations</c> extension methods on this options object —
+    /// the setter is intentionally <c>internal</c> so the entity-type ↔
+    /// validator-type invariant cannot be silently broken by direct assignment.
     /// </summary>
-    public GraphValidationOptions? Validation { get; set; }
+    public GraphValidationOptions? Validation { get; internal set; }
 
     /// <summary>
     /// Controls how much per-entity detail the result captures. Default: <see cref="Winnow.ResultDetail.Full"/>.

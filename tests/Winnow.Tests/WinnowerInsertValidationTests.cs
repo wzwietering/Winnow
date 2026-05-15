@@ -101,7 +101,7 @@ public class WinnowerInsertValidationTests : TestBase
 
         var options = new InsertOptions();
         options.WithValidation(RejectNonPositivePrice());
-        options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+        options.Validation!.FailureBehavior = ValidationFailureBehavior.ThrowAfterBatch;
 
         var saver = new Winnower<Product, int>(context);
         var ex = Should.Throw<WinnowValidationException>(() => saver.Insert(products, options));
@@ -127,7 +127,7 @@ public class WinnowerInsertValidationTests : TestBase
 
         var options = new InsertOptions();
         options.WithValidation(RejectNonPositivePrice());
-        options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+        options.Validation!.FailureBehavior = ValidationFailureBehavior.ThrowAfterBatch;
 
         var saver = new Winnower<Product, int>(context);
         var ex = Should.Throw<WinnowValidationException>(() => saver.Insert(products, options));
@@ -316,7 +316,7 @@ public class WinnowerInsertValidationTests : TestBase
             if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
             if (p.Stock < 0) c.Add(nameof(Product.Stock), "Cannot be negative", "RANGE");
         });
-        options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+        options.Validation!.FailureBehavior = ValidationFailureBehavior.ThrowAfterBatch;
 
         var saver = new Winnower<Product, int>(context);
         var ex = Should.Throw<WinnowValidationException>(() => saver.Insert(products, options));
@@ -396,7 +396,7 @@ public class WinnowerInsertValidationTests : TestBase
         };
 
         var options = new InsertOptions()
-            .WithValidation(RejectNonPositivePrice(), ValidationFailureBehavior.Throw);
+            .WithValidation(RejectNonPositivePrice(), ValidationFailureBehavior.ThrowAfterBatch);
 
         var saver = new Winnower<Product, int>(context);
         var ex = Should.Throw<WinnowValidationException>(() => saver.Insert(products, options));

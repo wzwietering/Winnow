@@ -11,8 +11,9 @@ namespace Winnow;
 /// methods on a <see cref="GraphOptionsBase"/> subtype (e.g. <see cref="InsertGraphOptions"/>).
 /// Flat operations cannot accept this type through the public API — their
 /// <c>Validation</c> property is typed as <see cref="ValidationOptions"/>.
-/// Direct construction is supported for adapter authors and tests; production
-/// callers should prefer the extension methods.
+/// Adapter authors who need to construct an instance directly should use the
+/// typed <see cref="Create{TEntity}(ValidatorDelegate{TEntity}, bool)"/> factory,
+/// which preserves the entity-type ↔ validator-type invariant the pipeline relies on.
 /// </remarks>
 public sealed class GraphValidationOptions : ValidationOptions
 {
@@ -79,14 +80,42 @@ public sealed class GraphValidationOptions : ValidationOptions
     internal override bool ShouldWalkNavigations => _includeNavigations;
     internal override int NavigationDepthLimit => _maxNavigationDepth;
 
-    /// <summary>
-    /// Direct construction is supported for adapter authors and tests; production
-    /// callers should prefer the <c>WithValidation</c> / <c>WithDataAnnotations</c>
-    /// extension methods on a <see cref="GraphOptionsBase"/> subtype, which wire
-    /// the validator and entity type for you.
-    /// </summary>
-    public GraphValidationOptions(Type entityType, object validator, bool isDataAnnotationsValidator = false)
+    private GraphValidationOptions(Type entityType, object validator, bool isDataAnnotationsValidator)
         : base(entityType, validator, isDataAnnotationsValidator)
     {
     }
+
+    /// <summary>
+    /// Typed factory for adapter authors and tests. Production callers should
+    /// prefer the <c>WithValidation</c> / <c>WithDataAnnotations</c> extension
+    /// methods on a <see cref="GraphOptionsBase"/> subtype.
+    /// </summary>
+    /// <typeparam name="TEntity">
+    /// Entity type the validator applies to. The pipeline rejects mismatches at
+    /// execution time; this factory enforces the link at construction time so
+    /// the type can never drift.
+    /// </typeparam>
+    /// <param name="validator">The validator delegate.</param>
+    /// <param name="isDataAnnotations">
+    /// True only if the supplied delegate originates from
+    /// <see cref="Internal.Validation.DataAnnotationsValidatorFactory"/>; gates
+    /// <see cref="IncludeNavigations"/>. Defaults to <c>false</c> for callers
+    /// who want a typed delegate.
+    /// </param>
+    public static GraphValidationOptions Create<TEntity>(
+        ValidatorDelegate<TEntity> validator,
+        bool isDataAnnotations = false)
+        where TEntity : class
+    {
+        ArgumentNullException.ThrowIfNull(validator);
+        return new GraphValidationOptions(typeof(TEntity), validator, isDataAnnotations);
+    }
+
+    /// <summary>
+    /// Internal escape hatch used by the DataAnnotations adapter, which builds
+    /// the validator delegate from a runtime <see cref="Type"/> and so cannot
+    /// reach the typed <see cref="Create{TEntity}"/> overload.
+    /// </summary>
+    internal static GraphValidationOptions CreateInternal(Type entityType, object validator, bool isDataAnnotationsValidator) =>
+        new(entityType, validator, isDataAnnotationsValidator);
 }

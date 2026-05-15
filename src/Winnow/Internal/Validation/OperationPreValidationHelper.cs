@@ -88,6 +88,9 @@ internal static class OperationPreValidationHelper
         where TEntity : class
         where TKey : notnull, IEquatable<TKey>
     {
+        // Null entries reach this lambda via PreValidationRunner.RecordNullEntity, which
+        // invokes the same recordFailure callback. Treat them as inserts so we don't
+        // dereference null when probing the key state.
         var entity = entities[originalIndex];
         var isInsert = entity is null || context.HasDefaultKeyValue(entity);
         accumulator.RecordFailure(
@@ -134,10 +137,12 @@ internal static class OperationPreValidationHelper
 
     /// <summary>
     /// Reads a key value, suppressing only the <see cref="InvalidOperationException"/>
-    /// EF Core raises for shadow primary keys or model misconfiguration during the
-    /// pre-validation phase (before tracker work). All other exceptions — including
-    /// programmer errors such as <see cref="NullReferenceException"/> — propagate
-    /// so they surface as the real bug rather than collapsing to <c>default(TKey)</c>.
+    /// EF Core itself raises for shadow primary keys or model misconfiguration during
+    /// the pre-validation phase (before tracker work). User-thrown
+    /// <see cref="InvalidOperationException"/>s — and all other exception types,
+    /// including programmer errors such as <see cref="NullReferenceException"/> —
+    /// propagate so they surface as the real bug rather than collapsing to
+    /// <c>default(TKey)</c>.
     /// </summary>
     internal static TKey SuppressKeyReadFailures<TKey>(Func<TKey> reader)
         where TKey : notnull, IEquatable<TKey>
@@ -146,9 +151,19 @@ internal static class OperationPreValidationHelper
         {
             return reader();
         }
-        catch (InvalidOperationException)
+        catch (InvalidOperationException ex) when (IsEntityFrameworkException(ex))
         {
             return default!;
         }
+    }
+
+    private static bool IsEntityFrameworkException(Exception ex)
+    {
+        // TargetSite reflects the method that threw; checking its declaring assembly
+        // pins suppression to exceptions actually originating in EF Core, not in
+        // any user delegate that happens to surface InvalidOperationException.
+        var assemblyName = ex.TargetSite?.DeclaringType?.Assembly?.GetName().Name;
+        return assemblyName is not null
+            && assemblyName.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal);
     }
 }

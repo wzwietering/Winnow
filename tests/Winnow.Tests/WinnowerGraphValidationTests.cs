@@ -135,7 +135,7 @@ public class WinnowerGraphValidationTests : TestBase
         order.OrderNumber = "BAD";
 
         var options = new GraphOptions()
-            .WithValidation(RejectOrderNumber("BAD"), ValidationFailureBehavior.Throw);
+            .WithValidation(RejectOrderNumber("BAD"), ValidationFailureBehavior.ThrowAfterBatch);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         var ex = Should.Throw<WinnowValidationException>(() => saver.UpdateGraph([order], options));
@@ -157,7 +157,7 @@ public class WinnowerGraphValidationTests : TestBase
         var attached = context.CustomerOrders.AsNoTracking().Include(o => o.OrderItems).Single();
 
         var options = new DeleteGraphOptions()
-            .WithValidation(RejectOrderNumber("KEEP-ME"), ValidationFailureBehavior.Throw);
+            .WithValidation(RejectOrderNumber("KEEP-ME"), ValidationFailureBehavior.ThrowAfterBatch);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         Should.Throw<WinnowValidationException>(() => saver.DeleteGraph([attached], options));
@@ -173,7 +173,7 @@ public class WinnowerGraphValidationTests : TestBase
         var orders = new[] { NewOrder("OK"), NewOrder("BAD") };
 
         var options = new UpsertGraphOptions()
-            .WithValidation(RejectOrderNumber("BAD"), ValidationFailureBehavior.Throw);
+            .WithValidation(RejectOrderNumber("BAD"), ValidationFailureBehavior.ThrowAfterBatch);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         var ex = Should.Throw<WinnowValidationException>(() => saver.UpsertGraph(orders, options));

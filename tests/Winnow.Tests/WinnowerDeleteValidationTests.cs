@@ -44,7 +44,7 @@ public class WinnowerDeleteValidationTests : TestBase
         {
             if (p.Id == products[0].Id) c.Add("Id", "Refusing");
         });
-        options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+        options.Validation!.FailureBehavior = ValidationFailureBehavior.ThrowAfterBatch;
 
         var saver = new Winnower<Product, int>(context);
         var ex = Should.Throw<WinnowValidationException>(() => saver.Delete(products, options));

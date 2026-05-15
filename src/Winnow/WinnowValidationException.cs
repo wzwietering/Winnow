@@ -1,11 +1,13 @@
+using System.ComponentModel;
+
 namespace Winnow;
 
 /// <summary>
 /// Thrown by the pre-validation pipeline when
 /// <see cref="ValidationOptions.FailureBehavior"/> is
-/// <see cref="ValidationFailureBehavior.Throw"/> and one or more entities fail
-/// validation. Carries the aggregated per-entity failures so callers can react
-/// to them without re-running the validator.
+/// <see cref="ValidationFailureBehavior.ThrowAfterBatch"/> and one or more entities
+/// fail validation. Carries the aggregated per-entity failures so callers can
+/// react to them without re-running the validator.
 /// </summary>
 /// <remarks>
 /// Named with the <c>Winnow</c> prefix to avoid collision with
@@ -100,7 +102,21 @@ public sealed class WinnowValidationException : Exception
 
     /// <summary>
     /// A snapshot of one entity's pre-validation failure, surfaced via
-    /// <see cref="WinnowValidationException.Failures"/>.
+    /// <see cref="WinnowValidationException.Failures"/>. Drive UI / API
+    /// responses off <see cref="Errors"/> — the structured per-property list —
+    /// rather than parsing <see cref="Message"/>, which is a debug-only
+    /// concatenation whose exact format is not part of the API contract.
     /// </summary>
-    public sealed record EntityFailure(int EntityIndex, string Message, IReadOnlyList<ValidationError> Errors);
+    /// <param name="EntityIndex">Zero-based position in the original input batch.</param>
+    /// <param name="Message">
+    /// Human-readable summary built from <paramref name="Errors"/>. Format is intentionally
+    /// underspecified and may change between minor releases. Hidden from IntelliSense
+    /// to steer callers to <paramref name="Errors"/>; still accessible programmatically
+    /// for logging.
+    /// </param>
+    /// <param name="Errors">Structured per-property errors recorded by the validator.</param>
+    public sealed record EntityFailure(
+        int EntityIndex,
+        [property: EditorBrowsable(EditorBrowsableState.Never)] string Message,
+        IReadOnlyList<ValidationError> Errors);
 }

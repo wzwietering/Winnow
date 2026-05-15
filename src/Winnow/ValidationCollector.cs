@@ -48,20 +48,20 @@ public ref struct ValidationCollector
     }
 
     /// <summary>
-    /// Creates a standalone collector suitable for unit-testing a
-    /// <see cref="ValidatorDelegate{TEntity}"/> in isolation. Allocates a small inline
-    /// buffer; rents from <see cref="ArrayPool{T}"/> only if the test pushes more
-    /// errors than the buffer holds.
+    /// Creates a standalone collector that owns its inline buffer. Intended for
+    /// driving a <see cref="ValidatorDelegate{TEntity}"/> from outside the
+    /// pipeline (unit tests, validator authors prototyping rules) — the
+    /// production pipeline supplies its own batch-wide buffer and does not call
+    /// this factory.
     /// </summary>
     /// <remarks>
-    /// Wrap the result in <c>using var c = ValidationCollector.CreateForTesting();</c> —
-    /// it is required if the test may push more than four errors, because the
-    /// rented buffer otherwise leaks back into the pool's tracking. The collector
-    /// implements ref-struct disposal so the <c>using</c> form is the supported
-    /// pattern. Not on the production hot path — the pipeline supplies its own
-    /// batch-wide inline buffer.
+    /// Wrap the result in <c>using var c = ValidationCollector.Create();</c> —
+    /// required if more than <see cref="InlineCapacity"/> errors may be pushed,
+    /// because the rented <see cref="ArrayPool{T}"/> buffer otherwise leaks. The
+    /// collector implements ref-struct disposal so the <c>using</c> form is the
+    /// supported pattern.
     /// </remarks>
-    public static ValidationCollector CreateForTesting() =>
+    public static ValidationCollector Create() =>
         new(new ValidationError[InlineCapacity]);
 
     /// <summary>
@@ -133,9 +133,9 @@ public ref struct ValidationCollector
     /// <summary>
     /// Returns any rented buffer to <see cref="ArrayPool{T}"/>. The pipeline calls
     /// this exactly once per entity validated. External callers must invoke it
-    /// (via <c>using</c>) on collectors built by <see cref="CreateForTesting"/>
-    /// whenever more than four errors may be added — otherwise the rented buffer
-    /// leaks.
+    /// (via <c>using</c>) on collectors built by <see cref="Create"/> whenever
+    /// more than <see cref="InlineCapacity"/> errors may be added — otherwise
+    /// the rented buffer leaks.
     /// </summary>
     public void Dispose()
     {

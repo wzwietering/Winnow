@@ -25,10 +25,12 @@ public class WinnowOptions
     /// When set, runs a pre-validation pipeline over each batch before any
     /// database round trip. Invalid entities are recorded as failures with
     /// <see cref="FailureReason.ValidationError"/> and are not sent to the strategy.
-    /// Configure via the <c>WithValidation</c> or <c>WithDataAnnotations</c>
-    /// extension methods on this options object.
+    /// Configure exclusively via the <c>WithValidation</c> or
+    /// <c>WithDataAnnotations</c> extension methods on this options object —
+    /// the setter is intentionally <c>internal</c> so the entity-type ↔
+    /// validator-type invariant cannot be silently broken by direct assignment.
     /// </summary>
-    public ValidationOptions? Validation { get; set; }
+    public ValidationOptions? Validation { get; internal set; }
 
     /// <summary>
     /// Controls how much per-entity detail the result captures. Default: <see cref="Winnow.ResultDetail.Full"/>.

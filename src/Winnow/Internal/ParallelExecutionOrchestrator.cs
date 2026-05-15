@@ -18,6 +18,21 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     private readonly ResultDetail _resultDetail;
     private record PartitionResult<TResult>(TResult Result, int RoundTrips, int Retries);
 
+    /// <summary>
+    /// Recovery hook invoked when a partition's <c>execute</c> throws
+    /// <see cref="WinnowValidationException"/>. Implementations re-execute the
+    /// partition without the validation-failed entities and merge the per-entity
+    /// failures into the resulting payload, so that
+    /// <see cref="ValidationFailureBehavior.ThrowAfterBatch"/> in parallel mode
+    /// matches single-context semantics: only the offending entities fail; valid
+    /// siblings still reach the database.
+    /// </summary>
+    private delegate Task<PartitionResult<TResult>> ValidationRecoveryAsync<TResult>(
+        List<TEntity> partition,
+        WinnowValidationException validationException,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
+        CancellationToken cancellationToken);
+
     internal ParallelExecutionOrchestrator(
         Func<DbContext> contextFactory,
         int maxDegreeOfParallelism,
@@ -51,7 +66,8 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         var partitions = EntityPartitioner.Partition(entities, _maxDegreeOfParallelism);
         var stopwatch = Stopwatch.StartNew();
 
-        var results = await RunPartitionsAsync(partitions, execute, CreateWinnowFailureResult, cancellationToken);
+        var results = await RunPartitionsAsync(
+            partitions, execute, CreateWinnowFailureResult, RecoverWinnowAsync, cancellationToken);
 
         stopwatch.Stop();
         var totalRoundTrips = results.Sum(r => r.RoundTrips);
@@ -69,7 +85,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         var stopwatch = Stopwatch.StartNew();
 
         var results = await RunPartitionsWithOffsetsAsync(
-            partitions, execute, CreateInsertFailureResult, cancellationToken);
+            partitions, execute, CreateInsertFailureResult, RecoverInsertAsync, cancellationToken);
 
         stopwatch.Stop();
         var totalRoundTrips = results.Sum(r => r.Result.RoundTrips);
@@ -87,7 +103,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         var stopwatch = Stopwatch.StartNew();
 
         var results = await RunPartitionsWithOffsetsAsync(
-            partitions, execute, CreateUpsertFailureResult, cancellationToken);
+            partitions, execute, CreateUpsertFailureResult, RecoverUpsertAsync, cancellationToken);
 
         stopwatch.Stop();
         var totalRoundTrips = results.Sum(r => r.Result.RoundTrips);
@@ -100,11 +116,12 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         List<List<TEntity>> partitions,
         Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
+        ValidationRecoveryAsync<TResult> recoverValidation,
         CancellationToken cancellationToken)
     {
         using var semaphore = new SemaphoreSlim(_maxDegreeOfParallelism);
         var tasks = partitions.Select(
-            p => RunWithSemaphoreAsync(semaphore, p, execute, createFailure, cancellationToken));
+            p => RunWithSemaphoreAsync(semaphore, p, execute, createFailure, recoverValidation, cancellationToken));
         var results = await Task.WhenAll(tasks);
         return results.ToList();
     }
@@ -113,11 +130,13 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         List<(List<TEntity> Items, int Offset)> partitions,
         Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
+        ValidationRecoveryAsync<TResult> recoverValidation,
         CancellationToken cancellationToken)
     {
         using var semaphore = new SemaphoreSlim(_maxDegreeOfParallelism);
         var tasks = partitions.Select((p, i) =>
-            RunWithSemaphoreIndexedAsync(semaphore, p.Items, i, execute, createFailure, cancellationToken));
+            RunWithSemaphoreIndexedAsync(
+                semaphore, p.Items, i, execute, createFailure, recoverValidation, cancellationToken));
         var results = await Task.WhenAll(tasks);
         return results.ToList();
     }
@@ -127,6 +146,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         List<TEntity> partition,
         Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
+        ValidationRecoveryAsync<TResult> recoverValidation,
         CancellationToken cancellationToken)
     {
         try
@@ -140,7 +160,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
 
         try
         {
-            return await ExecutePartitionAsync(partition, execute, createFailure, cancellationToken);
+            return await ExecutePartitionAsync(partition, execute, createFailure, recoverValidation, cancellationToken);
         }
         finally
         {
@@ -154,9 +174,11 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         int index,
         Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
+        ValidationRecoveryAsync<TResult> recoverValidation,
         CancellationToken cancellationToken)
     {
-        var result = await RunWithSemaphoreAsync(semaphore, partition, execute, createFailure, cancellationToken);
+        var result = await RunWithSemaphoreAsync(
+            semaphore, partition, execute, createFailure, recoverValidation, cancellationToken);
         return (result, index);
     }
 
@@ -164,6 +186,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         List<TEntity> partition,
         Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
         Func<List<TEntity>, Exception, TResult> createFailure,
+        ValidationRecoveryAsync<TResult> recoverValidation,
         CancellationToken cancellationToken)
     {
         DbContext? context = null;
@@ -173,6 +196,16 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
             var strategyContext = new StrategyContext<TEntity, TKey>(context) { Logger = _logger, RetryOptions = _retryOptions };
             var result = await execute(partition, strategyContext, cancellationToken);
             return new PartitionResult<TResult>(result, strategyContext.RoundTripCounter, strategyContext.RetryCounter);
+        }
+        catch (WinnowValidationException validationEx) when (validationEx.Failures.Count > 0)
+        {
+            // Surrender the failed context immediately — recovery uses a fresh one.
+            if (context is not null)
+            {
+                await context.DisposeAsync().ConfigureAwait(false);
+                context = null;
+            }
+            return await recoverValidation(partition, validationEx, execute, cancellationToken);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
@@ -184,6 +217,254 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
                 await context.DisposeAsync().ConfigureAwait(false);
         }
     }
+
+    private static (HashSet<int> FailedIndices, List<TEntity> Survivors) PartitionByValidation(
+        List<TEntity> partition, IReadOnlyList<WinnowValidationException.EntityFailure> failures)
+    {
+        var failedIndices = new HashSet<int>();
+        foreach (var f in failures)
+            failedIndices.Add(f.EntityIndex);
+
+        var survivors = new List<TEntity>(Math.Max(0, partition.Count - failedIndices.Count));
+        for (int i = 0; i < partition.Count; i++)
+        {
+            if (!failedIndices.Contains(i))
+                survivors.Add(partition[i]);
+        }
+        return (failedIndices, survivors);
+    }
+
+    private async Task<(TResult? Result, int RoundTrips, int Retries)> RerunSurvivorsAsync<TResult>(
+        List<TEntity> survivors,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
+        CancellationToken cancellationToken)
+    {
+        if (survivors.Count == 0) return (default, 0, 0);
+        DbContext? recoverContext = null;
+        try
+        {
+            recoverContext = _contextFactory();
+            var strategyContext = new StrategyContext<TEntity, TKey>(recoverContext) { Logger = _logger, RetryOptions = _retryOptions };
+            var result = await execute(survivors, strategyContext, cancellationToken);
+            return (result, strategyContext.RoundTripCounter, strategyContext.RetryCounter);
+        }
+        finally
+        {
+            if (recoverContext is not null)
+                await recoverContext.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
+    // === Per-result-type recovery handlers =============================
+
+    private async Task<PartitionResult<WinnowResult<TKey>>> RecoverWinnowAsync(
+        List<TEntity> partition,
+        WinnowValidationException validationEx,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<WinnowResult<TKey>>> execute,
+        CancellationToken cancellationToken)
+    {
+        var (_, survivors) = PartitionByValidation(partition, validationEx.Failures);
+        var (survivorResult, rt, retries) = await RerunSurvivorsAsync(survivors, execute, cancellationToken);
+
+        var validationFailures = BuildWinnowValidationFailures(partition, validationEx.Failures);
+        var merged = MergeWinnowWithValidationFailures(survivorResult, validationFailures);
+        return new PartitionResult<WinnowResult<TKey>>(merged, rt, retries);
+    }
+
+    private async Task<PartitionResult<InsertResult<TKey>>> RecoverInsertAsync(
+        List<TEntity> partition,
+        WinnowValidationException validationEx,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<InsertResult<TKey>>> execute,
+        CancellationToken cancellationToken)
+    {
+        var (_, survivors) = PartitionByValidation(partition, validationEx.Failures);
+        var (survivorResult, rt, retries) = await RerunSurvivorsAsync(survivors, execute, cancellationToken);
+
+        var validationFailures = BuildInsertValidationFailures(validationEx.Failures);
+        var merged = MergeInsertWithValidationFailures(survivorResult, validationFailures);
+        return new PartitionResult<InsertResult<TKey>>(merged, rt, retries);
+    }
+
+    private async Task<PartitionResult<UpsertResult<TKey>>> RecoverUpsertAsync(
+        List<TEntity> partition,
+        WinnowValidationException validationEx,
+        Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<UpsertResult<TKey>>> execute,
+        CancellationToken cancellationToken)
+    {
+        var (_, survivors) = PartitionByValidation(partition, validationEx.Failures);
+        var (survivorResult, rt, retries) = await RerunSurvivorsAsync(survivors, execute, cancellationToken);
+
+        var validationFailures = BuildUpsertValidationFailures(validationEx.Failures);
+        var merged = MergeUpsertWithValidationFailures(survivorResult, validationFailures);
+        return new PartitionResult<UpsertResult<TKey>>(merged, rt, retries);
+    }
+
+    // === Failure builders / mergers ====================================
+
+    private List<WinnowFailure<TKey>> BuildWinnowValidationFailures(
+        List<TEntity> partition, IReadOnlyList<WinnowValidationException.EntityFailure> failures)
+    {
+        if (_resultDetail < ResultDetail.Minimal) return [];
+        var keyService = _keyService.Value.Service;
+        var list = new List<WinnowFailure<TKey>>(failures.Count);
+        foreach (var f in failures)
+        {
+            list.Add(new WinnowFailure<TKey>
+            {
+                EntityId = SafeReadKey(partition[f.EntityIndex], keyService),
+                ErrorMessage = f.Message,
+                Reason = FailureReason.ValidationError,
+                ValidationErrors = f.Errors,
+            });
+        }
+        return list;
+    }
+
+    private static TKey SafeReadKey(TEntity? entity, EntityKeyService<TEntity, TKey> keyService)
+    {
+        if (entity is null) return default!;
+        try { return keyService.GetEntityIdFromInstance(entity); }
+        catch { return default!; }
+    }
+
+    private List<InsertFailure> BuildInsertValidationFailures(
+        IReadOnlyList<WinnowValidationException.EntityFailure> failures)
+    {
+        if (_resultDetail < ResultDetail.Minimal) return [];
+        var list = new List<InsertFailure>(failures.Count);
+        foreach (var f in failures)
+        {
+            list.Add(new InsertFailure
+            {
+                EntityIndex = f.EntityIndex,
+                ErrorMessage = f.Message,
+                Reason = FailureReason.ValidationError,
+                ValidationErrors = f.Errors,
+            });
+        }
+        return list;
+    }
+
+    private List<UpsertFailure<TKey>> BuildUpsertValidationFailures(
+        IReadOnlyList<WinnowValidationException.EntityFailure> failures)
+    {
+        if (_resultDetail < ResultDetail.Minimal) return [];
+        var list = new List<UpsertFailure<TKey>>(failures.Count);
+        foreach (var f in failures)
+        {
+            list.Add(new UpsertFailure<TKey>
+            {
+                EntityIndex = f.EntityIndex,
+                ErrorMessage = f.Message,
+                Reason = FailureReason.ValidationError,
+                AttemptedOperation = UpsertOperationType.Insert,
+                ValidationErrors = f.Errors,
+            });
+        }
+        return list;
+    }
+
+    private WinnowResult<TKey> MergeWinnowWithValidationFailures(
+        WinnowResult<TKey>? survivor, List<WinnowFailure<TKey>> validationFailures)
+    {
+        if (survivor is null)
+        {
+            return new WinnowResult<TKey>
+            {
+                ResultDetail = _resultDetail,
+                SuccessfulIds = [],
+                Failures = validationFailures,
+                SuccessCount = 0,
+                FailureCount = validationFailures.Count,
+            };
+        }
+        return new WinnowResult<TKey>
+        {
+            ResultDetail = survivor.ResultDetail,
+            SuccessfulIds = survivor.SuccessfulIdsRaw,
+            Failures = [.. survivor.FailuresRaw, .. validationFailures],
+            SuccessCount = survivor.SuccessCount,
+            FailureCount = survivor.FailureCount + validationFailures.Count,
+            Duration = survivor.Duration,
+            DatabaseRoundTrips = survivor.DatabaseRoundTrips,
+            WasCancelled = survivor.WasCancelled,
+            TotalRetries = survivor.TotalRetries,
+            GraphHierarchy = survivor.GraphHierarchyRaw,
+            TraversalInfo = survivor.TraversalInfoRaw,
+        };
+    }
+
+    private InsertResult<TKey> MergeInsertWithValidationFailures(
+        InsertResult<TKey>? survivor, List<InsertFailure> validationFailures)
+    {
+        if (survivor is null)
+        {
+            return new InsertResult<TKey>
+            {
+                ResultDetail = _resultDetail,
+                InsertedEntities = [],
+                Failures = validationFailures,
+                SuccessCount = 0,
+                FailureCount = validationFailures.Count,
+            };
+        }
+        return new InsertResult<TKey>
+        {
+            ResultDetail = survivor.ResultDetail,
+            InsertedEntities = survivor.InsertedEntitiesRaw,
+            InsertedIds = survivor.InsertedIdsRaw,
+            Failures = [.. survivor.FailuresRaw, .. validationFailures],
+            SuccessCount = survivor.SuccessCount,
+            FailureCount = survivor.FailureCount + validationFailures.Count,
+            Duration = survivor.Duration,
+            DatabaseRoundTrips = survivor.DatabaseRoundTrips,
+            WasCancelled = survivor.WasCancelled,
+            TotalRetries = survivor.TotalRetries,
+            GraphHierarchy = survivor.GraphHierarchyRaw,
+            TraversalInfo = survivor.TraversalInfoRaw,
+        };
+    }
+
+    private UpsertResult<TKey> MergeUpsertWithValidationFailures(
+        UpsertResult<TKey>? survivor, List<UpsertFailure<TKey>> validationFailures)
+    {
+        if (survivor is null)
+        {
+            return new UpsertResult<TKey>
+            {
+                ResultDetail = _resultDetail,
+                InsertedEntities = [],
+                UpdatedEntities = [],
+                Failures = validationFailures,
+                SuccessCount = 0,
+                FailureCount = validationFailures.Count,
+                InsertedCount = 0,
+                UpdatedCount = 0,
+            };
+        }
+        return new UpsertResult<TKey>
+        {
+            ResultDetail = survivor.ResultDetail,
+            InsertedEntities = survivor.InsertedEntitiesRaw,
+            UpdatedEntities = survivor.UpdatedEntitiesRaw,
+            InsertedIds = survivor.InsertedIdsRaw,
+            UpdatedIds = survivor.UpdatedIdsRaw,
+            Failures = [.. survivor.FailuresRaw, .. validationFailures],
+            SuccessCount = survivor.SuccessCount,
+            FailureCount = survivor.FailureCount + validationFailures.Count,
+            InsertedCount = survivor.InsertedCount,
+            UpdatedCount = survivor.UpdatedCount,
+            InsertedWithNullMatchKeyCount = survivor.InsertedWithNullMatchKeyCount,
+            Duration = survivor.Duration,
+            DatabaseRoundTrips = survivor.DatabaseRoundTrips,
+            WasCancelled = survivor.WasCancelled,
+            TotalRetries = survivor.TotalRetries,
+            GraphHierarchy = survivor.GraphHierarchyRaw,
+            TraversalInfo = survivor.TraversalInfoRaw,
+        };
+    }
+
+    // === Pre-existing total-failure builders (for non-validation exceptions) =====
 
     private WinnowResult<TKey> CreateWinnowFailureResult(List<TEntity> entities, Exception ex)
     {

@@ -110,14 +110,13 @@ public class ValidationReleaseReadinessTests
             }
         }
 
-        // Documents the current behavior: when validators throw inside a partition,
-        // the ParallelWinnower orchestrator catches the exception and converts the
-        // partition's entities into failures rather than propagating the exception.
-        // This means ValidationFailureBehavior.Throw is effectively absorbed by the
-        // parallel orchestrator — the user sees failures, not an exception. Captured
-        // here so any change to parallel exception handling is intentional and reviewed.
+        // Locks B4: in ParallelWinnower with ThrowAfterBatch, only the entities the
+        // validator rejected become failures. Valid siblings in the same partition are
+        // NOT swept into the failure bucket — the orchestrator catches the partition's
+        // WinnowValidationException, removes the failed entities, and re-runs the
+        // partition with the survivors so they reach the database.
         [Fact]
-        public async Task InsertAsync_ThrowBehavior_ConvertedToFailuresByParallelOrchestrator()
+        public async Task InsertAsync_ThrowBehavior_RecordsOnlyOffendingEntitiesAndPersistsSurvivors()
         {
             EnsureDatabaseCreated();
 
@@ -128,20 +127,31 @@ public class ValidationReleaseReadinessTests
                 Stock = 1,
                 LastModified = DateTimeOffset.UtcNow,
             }).ToList();
+            var expectedInvalidIndices = Enumerable.Range(0, 8).Where(i => i % 3 == 0).ToList();
+            var expectedValidIndices = Enumerable.Range(0, 8).Where(i => i % 3 != 0).ToList();
 
             var saver = CreateSaver(maxDegreeOfParallelism: 2);
             var options = new InsertOptions()
                 .WithValidation<Product>(
                     (Product p, ref ValidationCollector c) =>
                     {
-                        if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive");
+                        if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
                     },
-                    ValidationFailureBehavior.Throw);
+                    ValidationFailureBehavior.ThrowAfterBatch);
 
             var result = await saver.InsertAsync(products, options);
 
-            result.FailureCount.ShouldBeGreaterThan(0);
-            result.SuccessCount.ShouldBe(0);
+            result.FailureCount.ShouldBe(expectedInvalidIndices.Count);
+            result.SuccessCount.ShouldBe(expectedValidIndices.Count);
+
+            var failureIndices = result.Failures.Select(f => f.EntityIndex).OrderBy(x => x).ToList();
+            failureIndices.ShouldBe(expectedInvalidIndices);
+            foreach (var failure in result.Failures)
+            {
+                failure.Reason.ShouldBe(FailureReason.ValidationError);
+                failure.ValidationErrors.ShouldNotBeNull();
+                failure.ValidationErrors!.ShouldContain(e => e.Code == "RANGE");
+            }
         }
     }
 
@@ -227,7 +237,7 @@ public class ValidationReleaseReadinessTests
 
             var options = new InsertGraphOptions();
             options.WithValidation(RejectOrderNumber("BAD"));
-            options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+            options.Validation!.FailureBehavior = ValidationFailureBehavior.ThrowAfterBatch;
 
             var saver = new Winnower<CustomerOrder, int>(context);
             var ex = Should.Throw<WinnowValidationException>(() => saver.InsertGraph(orders, options));
@@ -250,7 +260,7 @@ public class ValidationReleaseReadinessTests
 
             var options = new InsertOptions();
             options.WithValidation(AlwaysFail());
-            options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
+            options.Validation!.FailureBehavior = ValidationFailureBehavior.ThrowAfterBatch;
 
             var saver = new Winnower<Product, int>(context);
             await Should.ThrowAsync<WinnowValidationException>(

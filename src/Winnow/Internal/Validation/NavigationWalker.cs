@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Concurrent;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Expressions;
 using System.Reflection;
 
@@ -140,6 +141,13 @@ internal static class NavigationWalker
 
     private static NavigationProperty? ClassifyNavigation(PropertyInfo property)
     {
+        // [NotMapped] computed properties (e.g. derived value objects) often have
+        // reachable annotations but aren't real EF navigations — walking them
+        // would surface spurious "navigation" errors at a path the user never
+        // mapped. Exclude them here so the heuristic stays close to the EF model
+        // even though we discover navigations by reflection.
+        if (property.GetCustomAttribute<NotMappedAttribute>() is not null) return null;
+
         var elementType = TryGetCollectionElementType(property.PropertyType);
         var childType = elementType ?? property.PropertyType;
         return HasAnyReachableAnnotation(childType)
@@ -212,7 +220,9 @@ internal static class NavigationWalker
     }
 
     private static bool TypeHasAnnotations(Type type) =>
-        DataAnnotationsValidatorFactory.GetUntypedEntries(type).Length > 0;
+        DataAnnotationsValidatorFactory.GetUntypedEntries(type).Length > 0
+            || type.GetCustomAttributes(typeof(System.ComponentModel.DataAnnotations.ValidationAttribute), inherit: true).Length > 0
+            || typeof(System.ComponentModel.DataAnnotations.IValidatableObject).IsAssignableFrom(type);
 
     private static Func<object, object?> BuildGetter(PropertyInfo property)
     {
