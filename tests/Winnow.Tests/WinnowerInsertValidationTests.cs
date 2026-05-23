@@ -6,7 +6,7 @@ namespace Winnow.Tests;
 
 public class WinnowerInsertValidationTests : TestBase
 {
-    private static ValidatorDelegate<Product> RejectNonPositivePrice()
+    private static WinnowValidator<Product> RejectNonPositivePrice()
         => (Product p, ref ValidationCollector c) =>
         {
             if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive");
@@ -33,7 +33,7 @@ public class WinnowerInsertValidationTests : TestBase
         result.FailureCount.ShouldBe(1);
         var failure = result.Failures.ShouldHaveSingleItem();
         failure.EntityIndex.ShouldBe(1);
-        failure.Reason.ShouldBe(FailureReason.ValidationError);
+        failure.Reason.ShouldBe(FailureReason.PreValidationError);
         failure.ErrorMessage.ShouldContain("Price");
 
         // The invalid entity was never assigned an ID.
@@ -197,7 +197,7 @@ public class WinnowerInsertValidationTests : TestBase
         result.FailureCount.ShouldBe(1);
         var failure = result.Failures.ShouldHaveSingleItem();
         failure.EntityIndex.ShouldBe(1);
-        failure.Reason.ShouldBe(FailureReason.ValidationError);
+        failure.Reason.ShouldBe(FailureReason.PreValidationError);
 
         products[0].Id.ShouldBeGreaterThan(0);
         products[2].Id.ShouldBeGreaterThan(0);
@@ -322,9 +322,9 @@ public class WinnowerInsertValidationTests : TestBase
         var ex = Should.Throw<WinnowValidationException>(() => saver.Insert(products, options));
 
         var failure = ex.Failures.ShouldHaveSingleItem();
-        failure.Errors.Count.ShouldBe(2);
-        failure.Errors.ShouldContain(e => e.PropertyName == nameof(Product.Price) && e.Code == "RANGE");
-        failure.Errors.ShouldContain(e => e.PropertyName == nameof(Product.Stock) && e.Code == "RANGE");
+        failure.ValidationErrors.Count.ShouldBe(2);
+        failure.ValidationErrors.ShouldContain(e => e.PropertyName == nameof(Product.Price) && e.Code == "RANGE");
+        failure.ValidationErrors.ShouldContain(e => e.PropertyName == nameof(Product.Stock) && e.Code == "RANGE");
     }
 
     [Fact]

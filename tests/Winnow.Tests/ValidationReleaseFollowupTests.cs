@@ -227,7 +227,7 @@ public class ValidationReleaseFollowupTests
             result.SuccessCount.ShouldBe(1);
             result.FailureCount.ShouldBe(1);
             var failure = result.Failures.ShouldHaveSingleItem();
-            failure.Reason.ShouldBe(FailureReason.ValidationError);
+            failure.Reason.ShouldBe(FailureReason.PreValidationError);
             failure.ValidationErrors.ShouldNotBeNull();
             failure.ValidationErrors!.ShouldContain(e => e.Code == "REJECT");
             failure.EntityId.ShouldNotBe(default!);

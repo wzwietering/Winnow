@@ -45,7 +45,7 @@ public class ValidationReleaseReadinessTests
             result.SuccessCount.ShouldBe(8 - expectedInvalidIndices.Count);
             result.Failures.Select(f => f.EntityIndex).OrderBy(x => x)
                 .ShouldBe(expectedInvalidIndices);
-            result.Failures.ShouldAllBe(f => f.Reason == FailureReason.ValidationError);
+            result.Failures.ShouldAllBe(f => f.Reason == FailureReason.PreValidationError);
         }
 
         [Fact]
@@ -101,7 +101,7 @@ public class ValidationReleaseReadinessTests
 
             var result = await saver.UpsertAsync(products, options);
 
-            var validationFailures = result.Failures.Where(f => f.Reason == FailureReason.ValidationError).ToList();
+            var validationFailures = result.Failures.Where(f => f.Reason == FailureReason.PreValidationError).ToList();
             validationFailures.ShouldNotBeEmpty();
             foreach (var failure in validationFailures)
             {
@@ -148,7 +148,7 @@ public class ValidationReleaseReadinessTests
             failureIndices.ShouldBe(expectedInvalidIndices);
             foreach (var failure in result.Failures)
             {
-                failure.Reason.ShouldBe(FailureReason.ValidationError);
+                failure.Reason.ShouldBe(FailureReason.PreValidationError);
                 failure.ValidationErrors.ShouldNotBeNull();
                 failure.ValidationErrors!.ShouldContain(e => e.Code == "RANGE");
             }
@@ -374,7 +374,7 @@ public class ValidationReleaseReadinessTests
             // were attempted as INSERTs — IsDefaultKey must be true.
             foreach (var failure in result.Failures)
             {
-                failure.Reason.ShouldBe(FailureReason.ValidationError);
+                failure.Reason.ShouldBe(FailureReason.PreValidationError);
                 failure.AttemptedOperation.ShouldBe(UpsertOperationType.Insert);
                 failure.IsDefaultKey.ShouldBeTrue();
             }
@@ -432,6 +432,65 @@ public class ValidationReleaseReadinessTests
             failureByIndex[3].AttemptedOperation.ShouldBe(UpsertOperationType.Insert);
             failureByIndex[3].IsDefaultKey.ShouldBeTrue();
         }
+
+        // Regression lock: parallel-Throw recovery must remap UpdatedEntities.OriginalIndex
+        // back to user-visible input positions. Existing coverage exercises the insert side
+        // (InsertedEntities remap) and the failure side (AttemptedOperation), but no test
+        // asserts on the update-side OriginalIndex — so RemapUpsertSurvivor's update branch
+        // is otherwise unverified.
+        [Fact]
+        public async Task UpsertAsync_ThrowBehavior_RemapsUpdatedEntityOriginalIndices()
+        {
+            EnsureDatabaseCreated();
+            SeedWithFactory(c =>
+            {
+                c.Products.Add(new Product { Id = 9_998, Name = "seed-1", Price = 5m, Stock = 1, LastModified = DateTimeOffset.UtcNow });
+                c.Products.Add(new Product { Id = 9_997, Name = "seed-2", Price = 5m, Stock = 1, LastModified = DateTimeOffset.UtcNow });
+                c.SaveChanges();
+            });
+
+            // Re-read the seeded entities so we have their rowversion-equivalent Version
+            // values — otherwise EF Core's optimistic concurrency check rejects the UPDATE.
+            var seeded = QueryWithFactory(c => c.Products.AsNoTracking().Where(p => p.Id == 9_998 || p.Id == 9_997).ToList());
+            var seed1 = seeded.Single(p => p.Id == 9_998);
+            var seed2 = seeded.Single(p => p.Id == 9_997);
+            seed1.Name = "updated-1"; seed1.Price = 7m;
+            seed2.Name = "updated-3"; seed2.Price = 8m;
+
+            // Mix valid INSERT, valid UPDATE, and validation-rejected entries so the
+            // partition survives through both Throw-recovery (validator rejects index 2)
+            // and the remap (survivors carry original-index translation back to user positions).
+            var products = new List<Product>
+            {
+                new() { Name = "new-ok-0", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+                seed1,
+                new() { Name = "new-bad-2", Price = -1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+                seed2,
+                new() { Name = "new-ok-4", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+            };
+
+            var saver = CreateSaver(maxDegreeOfParallelism: 2);
+            var options = new UpsertOptions()
+                .WithValidation<Product>(
+                    (Product p, ref ValidationCollector c) =>
+                    {
+                        if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
+                    },
+                    ValidationFailureBehavior.Throw);
+
+            var result = await saver.UpsertAsync(products, options);
+
+            result.Failures.Select(f => f.EntityIndex).ShouldBe(new[] { 2 });
+            result.InsertedEntities.Select(e => e.OriginalIndex).OrderBy(x => x).ShouldBe(new[] { 0, 4 });
+            result.UpdatedEntities.Select(e => e.OriginalIndex).OrderBy(x => x).ShouldBe(new[] { 1, 3 });
+
+            // Sanity-check the entity payload itself was remapped, not just the index.
+            foreach (var updated in result.UpdatedEntities)
+            {
+                var product = (Product)updated.Entity;
+                product.Name.ShouldBe($"updated-{updated.OriginalIndex}");
+            }
+        }
     }
 
     // --- Task #8: IncludeNavigations end-to-end through InsertGraph -------
@@ -477,7 +536,7 @@ public class ValidationReleaseReadinessTests
             result.FailureCount.ShouldBe(1);
             var failure = result.Failures.ShouldHaveSingleItem();
             failure.EntityIndex.ShouldBe(1);
-            failure.Reason.ShouldBe(FailureReason.ValidationError);
+            failure.Reason.ShouldBe(FailureReason.PreValidationError);
             failure.ValidationErrors.ShouldNotBeNull();
             failure.ValidationErrors!.ShouldContain(e => e.PropertyName.Contains("ProductName"));
 
@@ -491,10 +550,10 @@ public class ValidationReleaseReadinessTests
 
     public class ThrowModeCoverage : TestBase
     {
-        private static ValidatorDelegate<Product> AlwaysFail()
+        private static WinnowValidator<Product> AlwaysFail()
             => (Product _, ref ValidationCollector c) => c.Add("X", "always");
 
-        private static ValidatorDelegate<CustomerOrder> RejectOrderNumber(string n)
+        private static WinnowValidator<CustomerOrder> RejectOrderNumber(string n)
             => (CustomerOrder o, ref ValidationCollector c) =>
             {
                 if (o.OrderNumber == n) c.Add(nameof(CustomerOrder.OrderNumber), "Rejected");
@@ -522,7 +581,7 @@ public class ValidationReleaseReadinessTests
             var ex = Should.Throw<WinnowValidationException>(() => saver.InsertGraph(orders, options));
             ex.Failures.Count.ShouldBe(1);
             ex.Failures[0].EntityIndex.ShouldBe(0);
-            ex.Failures[0].Errors.ShouldContain(e => e.PropertyName == nameof(CustomerOrder.OrderNumber));
+            ex.Failures[0].ValidationErrors.ShouldContain(e => e.PropertyName == nameof(CustomerOrder.OrderNumber));
 
             context.ChangeTracker.Clear();
             context.CustomerOrders.Count().ShouldBe(0);
@@ -663,8 +722,8 @@ public class ValidationReleaseReadinessTests
             var aOptions = new InsertOptions().WithDataAnnotations<TypeA>();
             var bOptions = new InsertOptions().WithDataAnnotations<TypeB>();
 
-            var aValidator = (ValidatorDelegate<TypeA>)aOptions.Validation!.Validator;
-            var bValidator = (ValidatorDelegate<TypeB>)bOptions.Validation!.Validator;
+            var aValidator = (WinnowValidator<TypeA>)aOptions.Validation!.Validator;
+            var bValidator = (WinnowValidator<TypeB>)bOptions.Validation!.Validator;
 
             var aBuffer = new ValidationError[4];
             var aCollector = new ValidationCollector(aBuffer);

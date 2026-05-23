@@ -1,4 +1,5 @@
 using Winnow.Internal.Services;
+using Winnow.Internal.Validation;
 
 namespace Winnow.Internal;
 
@@ -168,9 +169,9 @@ internal static class ValidationResultMerger
             list.Add(new WinnowFailure<TKey>
             {
                 EntityId = SafeReadKey(partition[f.EntityIndex], keyService),
-                ErrorMessage = f.Message,
-                Reason = FailureReason.ValidationError,
-                ValidationErrors = f.Errors,
+                ErrorMessage = f.ErrorMessage,
+                Reason = FailureReason.PreValidationError,
+                ValidationErrors = f.ValidationErrors,
             });
         }
         return list;
@@ -186,9 +187,9 @@ internal static class ValidationResultMerger
             list.Add(new InsertFailure
             {
                 EntityIndex = f.EntityIndex,
-                ErrorMessage = f.Message,
-                Reason = FailureReason.ValidationError,
-                ValidationErrors = f.Errors,
+                ErrorMessage = f.ErrorMessage,
+                Reason = FailureReason.PreValidationError,
+                ValidationErrors = f.ValidationErrors,
             });
         }
         return list;
@@ -211,11 +212,11 @@ internal static class ValidationResultMerger
             {
                 EntityIndex = f.EntityIndex,
                 EntityId = entityId,
-                ErrorMessage = f.Message,
-                Reason = FailureReason.ValidationError,
+                ErrorMessage = f.ErrorMessage,
+                Reason = FailureReason.PreValidationError,
                 AttemptedOperation = attempted,
                 IsDefaultKey = isDefaultKey,
-                ValidationErrors = f.Errors,
+                ValidationErrors = f.ValidationErrors,
             });
         }
         return list;
@@ -226,8 +227,14 @@ internal static class ValidationResultMerger
         where TKey : notnull, IEquatable<TKey>
     {
         if (entity is null) return default!;
-        try { return keyService.GetEntityIdFromInstance(entity); }
-        catch { return default!; }
+        try
+        {
+            return keyService.GetEntityIdFromInstance(entity);
+        }
+        catch (InvalidOperationException ex) when (EfExceptionFilter.IsEntityFrameworkInvalidOperation(ex))
+        {
+            return default!;
+        }
     }
 
     /// <summary>
@@ -251,7 +258,7 @@ internal static class ValidationResultMerger
         {
             isDefault = keyService.HasDefaultKeyValueFromInstance(entity);
         }
-        catch
+        catch (InvalidOperationException ex) when (EfExceptionFilter.IsEntityFrameworkInvalidOperation(ex))
         {
             return (UpsertOperationType.Insert, IsDefaultKey: true, default!);
         }

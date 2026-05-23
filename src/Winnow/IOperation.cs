@@ -8,22 +8,12 @@ namespace Winnow;
 /// Strategies (OneByOne, DivideAndConquer) use this interface to delegate
 /// operation-specific logic (Update, Insert, Delete) while reusing the algorithm.
 /// </summary>
-internal interface IOperation<TEntity, TKey>
+internal interface IOperation<TEntity, TKey> : IPreValidatable<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    /// <summary>The configured pre-validation options (or null if none).</summary>
-    ValidationOptions? Validation { get; }
-
     /// <summary>The accumulator used to record per-entity outcomes.</summary>
     WinnowAccumulator<TKey> Accumulator { get; }
-
-    /// <summary>
-    /// Optional navigation filter forwarded to the pre-validation navigation walk
-    /// so excluded navigations are not validated, matching the scope of the graph
-    /// operation. Always <c>null</c> for flat operations.
-    /// </summary>
-    NavigationFilter? NavigationFilter => null;
 
     /// <summary>
     /// Runs the configured pre-validation pipeline (if any) and returns the
@@ -73,22 +63,12 @@ internal interface IOperation<TEntity, TKey>
 /// Defines operation-specific behavior for insert batch processing strategies.
 /// Unlike IOperation, tracks entities by index since they don't have IDs before insertion.
 /// </summary>
-internal interface IInsertOperation<TEntity, TKey>
+internal interface IInsertOperation<TEntity, TKey> : IPreValidatable<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    /// <summary>The configured pre-validation options (or null if none).</summary>
-    ValidationOptions? Validation { get; }
-
     /// <summary>The accumulator used to record per-entity insert outcomes.</summary>
     InsertAccumulator<TKey> Accumulator { get; }
-
-    /// <summary>
-    /// Optional navigation filter forwarded to the pre-validation navigation walk
-    /// so excluded navigations are not validated, matching the scope of the graph
-    /// operation. Always <c>null</c> for flat operations.
-    /// </summary>
-    NavigationFilter? NavigationFilter => null;
 
     /// <summary>
     /// Runs the configured pre-validation pipeline (if any). Returns the

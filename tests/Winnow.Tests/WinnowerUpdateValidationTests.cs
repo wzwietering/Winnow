@@ -28,7 +28,7 @@ public class WinnowerUpdateValidationTests : TestBase
         result.FailureCount.ShouldBe(1);
         var failure = result.Failures.ShouldHaveSingleItem();
         failure.EntityId.ShouldBe(products[1].Id);
-        failure.Reason.ShouldBe(FailureReason.ValidationError);
+        failure.Reason.ShouldBe(FailureReason.PreValidationError);
         failure.ValidationErrors.ShouldNotBeNull();
         failure.ValidationErrors!.ShouldContain(e => e.PropertyName == nameof(Product.Price));
     }

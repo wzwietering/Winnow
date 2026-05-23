@@ -30,7 +30,7 @@ internal static class OperationPreValidationHelper
             (originalIndex, message, errors) => accumulator.RecordFailure(
                 ReadIdOrDefault(context, entities[originalIndex]),
                 message,
-                FailureReason.ValidationError,
+                FailureReason.PreValidationError,
                 exception: null,
                 validationErrors: errors));
         return result.Survivors;
@@ -54,7 +54,7 @@ internal static class OperationPreValidationHelper
             (originalIndex, message, errors) => accumulator.RecordFailure(
                 originalIndex,
                 message,
-                FailureReason.ValidationError,
+                FailureReason.PreValidationError,
                 exception: null,
                 validationErrors: errors));
     }
@@ -97,7 +97,7 @@ internal static class OperationPreValidationHelper
             originalIndex,
             isInsert ? default : ReadIdOrDefault(context, entity),
             message,
-            FailureReason.ValidationError,
+            FailureReason.PreValidationError,
             exception: null,
             isInsert ? UpsertOperationType.Insert : UpsertOperationType.Update,
             validationErrors: errors);
@@ -151,19 +151,9 @@ internal static class OperationPreValidationHelper
         {
             return reader();
         }
-        catch (InvalidOperationException ex) when (IsEntityFrameworkException(ex))
+        catch (InvalidOperationException ex) when (EfExceptionFilter.IsEntityFrameworkInvalidOperation(ex))
         {
             return default!;
         }
-    }
-
-    private static bool IsEntityFrameworkException(Exception ex)
-    {
-        // TargetSite reflects the method that threw; checking its declaring assembly
-        // pins suppression to exceptions actually originating in EF Core, not in
-        // any user delegate that happens to surface InvalidOperationException.
-        var assemblyName = ex.TargetSite?.DeclaringType?.Assembly?.GetName().Name;
-        return assemblyName is not null
-            && assemblyName.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal);
     }
 }

@@ -19,8 +19,8 @@ options.WithValidation<Product>((Product p, ref ValidationCollector c) =>
 var saver = new Winnower<Product, int>(context);
 var result = saver.Insert(products, options);
 
-// Invalid entities show up in result.Failures with FailureReason.ValidationError.
-foreach (var failure in result.Failures.Where(f => f.Reason == FailureReason.ValidationError))
+// Invalid entities show up in result.Failures with FailureReason.PreValidationError.
+foreach (var failure in result.Failures.Where(f => f.Reason == FailureReason.PreValidationError))
 {
     _logger.LogWarning("Index {Index}: {Message}", failure.EntityIndex, failure.ErrorMessage);
 }
@@ -81,7 +81,7 @@ Winnow does not ship a built-in FluentValidation integration to keep its depende
 ```csharp
 public sealed class ProductValidator : AbstractValidator<Product> { /* … */ }
 
-ValidatorDelegate<Product> Wrap(ProductValidator fv) =>
+WinnowValidator<Product> Wrap(ProductValidator fv) =>
     (Product p, ref ValidationCollector c) =>
     {
         var result = fv.Validate(p);
@@ -101,7 +101,7 @@ entity is rejected:
 
 | Value | Behavior |
 |---|---|
-| `RecordAsFailure` (default) | Each invalid entity becomes a failure with `FailureReason.ValidationError`. Valid entities still hit the database. Matches the "winnow out the failures" model the rest of the library follows. |
+| `RecordAsFailure` (default) | Each invalid entity becomes a failure with `FailureReason.PreValidationError`. Valid entities still hit the database. Matches the "winnow out the failures" model the rest of the library follows. |
 | `Throw` | A `WinnowValidationException` is thrown after the entire batch is scanned. The exception carries every failure reported. No database round trips occur. Use this when validation failures indicate a bug rather than a data-quality issue you want to capture per-entity. The scan is not short-circuited on the first failure — every offending entity is included so callers can react to them all. |
 
 Pass the behavior inline so the whole thing is configured in one call:
@@ -148,7 +148,7 @@ Child failures are reported on the parent's failure record with a property path 
 The walker stops at `GraphValidationOptions.MaxNavigationDepth` (default 32) and records a `WINNOW_NAV_DEPTH_LIMIT` validation error at the cut-off point — this is what keeps accidentally-unbounded or deeply-nested graphs from blowing the stack. Raise the cap if your graph is genuinely deep; the cap exists to surface a configuration issue, not to silently drop entities.
 
 > `IncludeNavigations` requires a DataAnnotations-built validator
-> (`WithDataAnnotations<TEntity>()`). A typed `ValidatorDelegate<TEntity>`
+> (`WithDataAnnotations<TEntity>()`). A typed `WinnowValidator<TEntity>`
 > can only run against `TEntity` and cannot validate children of differing
 > types — assigning `IncludeNavigations = true` to a `GraphValidationOptions`
 > built with a custom delegate throws `InvalidOperationException` at the
@@ -158,7 +158,7 @@ The walker stops at `GraphValidationOptions.MaxNavigationDepth` (default 32) and
 
 ## Result Shape
 
-Pre-validation failures appear in `result.Failures` exactly like any other failure, with `Reason = FailureReason.ValidationError`:
+Pre-validation failures appear in `result.Failures` exactly like any other failure, with `Reason = FailureReason.PreValidationError`:
 
 - **Insert / InsertGraph**: failures are keyed by `EntityIndex` (the position in the original input list).
 - **Update / Delete / UpdateGraph / DeleteGraph**: failures are keyed by `EntityId` (read via reflection from the entity's primary-key property).
@@ -167,7 +167,7 @@ Pre-validation failures appear in `result.Failures` exactly like any other failu
 Each failure also exposes the structured `ValidationErrors` list — the same `ValidationError` instances the validator emitted. Drive UI / API responses off this list rather than parsing `ErrorMessage`:
 
 ```csharp
-foreach (var failure in result.Failures.Where(f => f.Reason == FailureReason.ValidationError))
+foreach (var failure in result.Failures.Where(f => f.Reason == FailureReason.PreValidationError))
 {
     foreach (var error in failure.ValidationErrors!)
     {
@@ -177,13 +177,13 @@ foreach (var failure in result.Failures.Where(f => f.Reason == FailureReason.Val
 }
 ```
 
-`ValidationErrors` is `null` on every non-validation failure, so checking `Reason == FailureReason.ValidationError` (or just `ValidationErrors is not null`) is enough to gate the structured access.
+`ValidationErrors` is `null` on every non-validation failure, so checking `Reason == FailureReason.PreValidationError` (or just `ValidationErrors is not null`) is enough to gate the structured access.
 
 `SuccessCount`, `FailureCount`, and `DatabaseRoundTrips` remain accurate at every `ResultDetail` level.
 
 ## ParallelWinnower
 
-`ParallelWinnower<TEntity, TKey>` partitions the input list across multiple `DbContext` instances. Pre-validation runs inside each partition's strategy — there is no shared validator state, so a `ValidatorDelegate<TEntity>` (or `WithDataAnnotations`) can rely on the same single-threaded guarantees the synchronous path provides. The reflection cache used by `WithDataAnnotations` is thread-safe (`ConcurrentDictionary`) so configuring the same options across partitions has no observable effect on correctness or throughput.
+`ParallelWinnower<TEntity, TKey>` partitions the input list across multiple `DbContext` instances. Pre-validation runs inside each partition's strategy — there is no shared validator state, so a `WinnowValidator<TEntity>` (or `WithDataAnnotations`) can rely on the same single-threaded guarantees the synchronous path provides. The reflection cache used by `WithDataAnnotations` is thread-safe (`ConcurrentDictionary`) so configuring the same options across partitions has no observable effect on correctness or throughput.
 
 `EntityIndex` on failures is reported relative to the **partition's** input, not the caller's global list. Use `ParallelWinnower`'s aggregated result accessors if you need global indexing; pre-validation does not change that contract.
 

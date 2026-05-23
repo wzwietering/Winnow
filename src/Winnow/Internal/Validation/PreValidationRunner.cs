@@ -62,7 +62,7 @@ internal static class PreValidationRunner
         where TEntity : class =>
         new()
         {
-            Validator = (ValidatorDelegate<TEntity>)validation.Validator,
+            Validator = (WinnowValidator<TEntity>)validation.Validator,
             RecordFailure = recordFailure,
             ThrowOnAny = validation.FailureBehavior == ValidationFailureBehavior.Throw,
             IncludeNavigations = validation.ShouldWalkNavigations,
@@ -231,7 +231,7 @@ internal static class PreValidationRunner
 internal struct ValidationRunContext<TEntity>
     where TEntity : class
 {
-    public ValidatorDelegate<TEntity> Validator;
+    public WinnowValidator<TEntity> Validator;
     public Action<int, string, IReadOnlyList<ValidationError>> RecordFailure;
     public bool ThrowOnAny;
     public bool IncludeNavigations;

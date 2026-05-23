@@ -18,4 +18,4 @@ namespace Winnow;
 /// will dominate batch throughput. For DB-backed checks, prefer
 /// <c>Upsert</c> with <c>MatchBy</c> instead of running a query per entity here.
 /// </remarks>
-public delegate void ValidatorDelegate<TEntity>(TEntity entity, ref ValidationCollector collector);
+public delegate void WinnowValidator<TEntity>(TEntity entity, ref ValidationCollector collector);

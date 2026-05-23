@@ -7,7 +7,7 @@ public enum ValidationFailureBehavior
 {
     /// <summary>
     /// Record each invalid entity as a failure with
-    /// <see cref="FailureReason.ValidationError"/> and continue processing the
+    /// <see cref="FailureReason.PreValidationError"/> and continue processing the
     /// remaining valid entities. Default behaviour — matches the
     /// "winnow out the failures" model the rest of the library follows.
     /// </summary>

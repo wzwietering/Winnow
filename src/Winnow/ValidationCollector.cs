@@ -4,7 +4,7 @@ using System.Runtime.CompilerServices;
 namespace Winnow;
 
 /// <summary>
-/// Stack-only buffer that a <see cref="ValidatorDelegate{TEntity}"/> uses to report
+/// Stack-only buffer that a <see cref="WinnowValidator{TEntity}"/> uses to report
 /// zero, one, or many <see cref="ValidationError"/> instances for a single entity.
 /// </summary>
 /// <remarks>
@@ -49,7 +49,7 @@ public ref struct ValidationCollector
 
     /// <summary>
     /// Creates a standalone collector that owns its inline buffer. Intended for
-    /// driving a <see cref="ValidatorDelegate{TEntity}"/> from outside the
+    /// driving a <see cref="WinnowValidator{TEntity}"/> from outside the
     /// pipeline (unit tests, validator authors prototyping rules) — the
     /// production pipeline supplies its own batch-wide buffer and does not call
     /// this factory.

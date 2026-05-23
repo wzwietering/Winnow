@@ -12,7 +12,7 @@ namespace Winnow;
 /// Flat operations cannot accept this type through the public API — their
 /// <c>Validation</c> property is typed as <see cref="ValidationOptions"/>.
 /// Adapter authors who need to construct an instance directly should use the
-/// typed <see cref="Create{TEntity}(ValidatorDelegate{TEntity}, bool)"/> factory,
+/// typed <see cref="Create{TEntity}(WinnowValidator{TEntity}, bool)"/> factory,
 /// which preserves the entity-type ↔ validator-type invariant the pipeline relies on.
 /// </remarks>
 public sealed class GraphValidationOptions : ValidationOptions
@@ -41,7 +41,7 @@ public sealed class GraphValidationOptions : ValidationOptions
     /// </summary>
     /// <exception cref="InvalidOperationException">
     /// Thrown when set to <c>true</c> on options that were not built by
-    /// <c>WithDataAnnotations</c>. Custom <see cref="ValidatorDelegate{TEntity}"/>
+    /// <c>WithDataAnnotations</c>. Custom <see cref="WinnowValidator{TEntity}"/>
     /// validators cannot be applied polymorphically to children of differing
     /// types, so this combination is rejected eagerly at configuration time
     /// rather than at execution.
@@ -55,7 +55,7 @@ public sealed class GraphValidationOptions : ValidationOptions
             {
                 throw new InvalidOperationException(
                     "IncludeNavigations only supports validators built by WithDataAnnotations. " +
-                    "Typed ValidatorDelegate<TEntity> cannot be applied polymorphically to children " +
+                    "Typed WinnowValidator<TEntity> cannot be applied polymorphically to children " +
                     "of differing types — wire WithDataAnnotations<TEntity>() instead, or leave " +
                     "IncludeNavigations = false and validate children with a separate options instance.");
             }
@@ -109,7 +109,7 @@ public sealed class GraphValidationOptions : ValidationOptions
     /// who want a typed delegate.
     /// </param>
     internal static GraphValidationOptions Create<TEntity>(
-        ValidatorDelegate<TEntity> validator,
+        WinnowValidator<TEntity> validator,
         bool isDataAnnotations = false)
         where TEntity : class
     {

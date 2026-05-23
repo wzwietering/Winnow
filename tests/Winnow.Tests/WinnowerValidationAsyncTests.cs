@@ -7,7 +7,7 @@ namespace Winnow.Tests;
 
 public class WinnowerValidationAsyncTests : TestBase
 {
-    private static ValidatorDelegate<Product> RejectNonPositivePrice()
+    private static WinnowValidator<Product> RejectNonPositivePrice()
         => (Product p, ref ValidationCollector c) =>
         {
             if (p.Price <= 0) c.Add("Price", "Must be positive");
@@ -92,7 +92,7 @@ public class WinnowerValidationAsyncTests : TestBase
         result.FailureCount.ShouldBe(1);
         var failure = result.Failures.ShouldHaveSingleItem();
         failure.EntityId.ShouldBe(products[1].Id);
-        failure.Reason.ShouldBe(FailureReason.ValidationError);
+        failure.Reason.ShouldBe(FailureReason.PreValidationError);
         failure.ValidationErrors.ShouldNotBeNull();
         failure.ValidationErrors!.ShouldContain(e => e.PropertyName == "Price");
     }
@@ -116,7 +116,7 @@ public class WinnowerValidationAsyncTests : TestBase
         result.FailureCount.ShouldBe(1);
         var failure = result.Failures.ShouldHaveSingleItem();
         failure.EntityId.ShouldBe(invalidId);
-        failure.Reason.ShouldBe(FailureReason.ValidationError);
+        failure.Reason.ShouldBe(FailureReason.PreValidationError);
 
         context.ChangeTracker.Clear();
         context.Products.Find(invalidId).ShouldNotBeNull();

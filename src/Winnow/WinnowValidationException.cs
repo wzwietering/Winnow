@@ -81,7 +81,7 @@ public sealed class WinnowValidationException : Exception
         if (failures.Count == 1)
         {
             var single = failures[0];
-            return $"Pre-validation failed for entity at index {single.EntityIndex}: {single.Message}";
+            return $"Pre-validation failed for entity at index {single.EntityIndex}: {single.ErrorMessage}";
         }
         return $"Pre-validation failed for {failures.Count} entities at {FormatIndices(failures)}.";
     }

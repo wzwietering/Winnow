@@ -12,22 +12,12 @@ namespace Winnow;
 /// <see cref="IMatchByCapableOperation{TEntity, TKey}"/>; strategies branch via
 /// <c>as</c>-cast so operations without MatchBy support carry no no-op stubs.
 /// </remarks>
-internal interface IUpsertOperation<TEntity, TKey>
+internal interface IUpsertOperation<TEntity, TKey> : IPreValidatable<TEntity, TKey>
     where TEntity : class
     where TKey : notnull, IEquatable<TKey>
 {
-    /// <summary>The configured pre-validation options (or null if none).</summary>
-    ValidationOptions? Validation { get; }
-
     /// <summary>The accumulator used to record per-entity upsert outcomes.</summary>
     UpsertAccumulator<TKey> Accumulator { get; }
-
-    /// <summary>
-    /// Optional navigation filter forwarded to the pre-validation navigation walk
-    /// so excluded navigations are not validated, matching the scope of the graph
-    /// operation. Always <c>null</c> for flat operations.
-    /// </summary>
-    NavigationFilter? NavigationFilter => null;
 
     /// <summary>
     /// Runs the configured pre-validation pipeline (if any). Returns the

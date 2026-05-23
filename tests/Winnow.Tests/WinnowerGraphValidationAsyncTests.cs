@@ -16,7 +16,7 @@ namespace Winnow.Tests;
 /// </summary>
 public class WinnowerGraphValidationAsyncTests : TestBase
 {
-    private static ValidatorDelegate<CustomerOrder> RejectOrderNumber(string orderNumber)
+    private static WinnowValidator<CustomerOrder> RejectOrderNumber(string orderNumber)
         => (CustomerOrder o, ref ValidationCollector c) =>
         {
             if (o.OrderNumber == orderNumber)
@@ -100,7 +100,7 @@ public class WinnowerGraphValidationAsyncTests : TestBase
         var result = await saver.UpdateGraphAsync([order], options);
 
         result.FailureCount.ShouldBe(1);
-        result.Failures.ShouldHaveSingleItem().Reason.ShouldBe(FailureReason.ValidationError);
+        result.Failures.ShouldHaveSingleItem().Reason.ShouldBe(FailureReason.PreValidationError);
 
         context.ChangeTracker.Clear();
         (await context.CustomerOrders.AsNoTracking().SingleAsync()).OrderNumber.ShouldBe("ORIG");
@@ -160,7 +160,7 @@ public class WinnowerGraphValidationAsyncTests : TestBase
         var result = await saver.DeleteGraphAsync([attached], options);
 
         result.FailureCount.ShouldBe(1);
-        result.Failures.ShouldHaveSingleItem().Reason.ShouldBe(FailureReason.ValidationError);
+        result.Failures.ShouldHaveSingleItem().Reason.ShouldBe(FailureReason.PreValidationError);
 
         context.ChangeTracker.Clear();
         (await context.CustomerOrders.CountAsync()).ShouldBe(1);
@@ -179,7 +179,7 @@ public class WinnowerGraphValidationAsyncTests : TestBase
 
         result.SuccessCount.ShouldBe(1);
         result.FailureCount.ShouldBe(1);
-        result.Failures.ShouldHaveSingleItem().Reason.ShouldBe(FailureReason.ValidationError);
+        result.Failures.ShouldHaveSingleItem().Reason.ShouldBe(FailureReason.PreValidationError);
 
         context.ChangeTracker.Clear();
         (await context.CustomerOrders.CountAsync(o => o.OrderNumber == "BAD")).ShouldBe(0);

@@ -7,7 +7,7 @@ namespace Winnow.Tests;
 
 public class WinnowerGraphValidationTests : TestBase
 {
-    private static ValidatorDelegate<CustomerOrder> RejectOrderNumber(string orderNumber)
+    private static WinnowValidator<CustomerOrder> RejectOrderNumber(string orderNumber)
         => (CustomerOrder o, ref ValidationCollector c) =>
         {
             if (o.OrderNumber == orderNumber)
@@ -47,7 +47,7 @@ public class WinnowerGraphValidationTests : TestBase
         result.FailureCount.ShouldBe(1);
         var failure = result.Failures.ShouldHaveSingleItem();
         failure.EntityIndex.ShouldBe(1);
-        failure.Reason.ShouldBe(FailureReason.ValidationError);
+        failure.Reason.ShouldBe(FailureReason.PreValidationError);
 
         // BAD order not in DB; OK order is.
         context.ChangeTracker.Clear();
@@ -73,7 +73,7 @@ public class WinnowerGraphValidationTests : TestBase
         var result = saver.UpdateGraph([order], options);
 
         result.FailureCount.ShouldBe(1);
-        result.Failures.ShouldHaveSingleItem().Reason.ShouldBe(FailureReason.ValidationError);
+        result.Failures.ShouldHaveSingleItem().Reason.ShouldBe(FailureReason.PreValidationError);
 
         context.ChangeTracker.Clear();
         context.CustomerOrders.AsNoTracking().Single().OrderNumber.ShouldBe("ORIG");
@@ -97,7 +97,7 @@ public class WinnowerGraphValidationTests : TestBase
         var result = saver.DeleteGraph([attached], options);
 
         result.FailureCount.ShouldBe(1);
-        result.Failures.ShouldHaveSingleItem().Reason.ShouldBe(FailureReason.ValidationError);
+        result.Failures.ShouldHaveSingleItem().Reason.ShouldBe(FailureReason.PreValidationError);
 
         context.ChangeTracker.Clear();
         context.CustomerOrders.Count().ShouldBe(1);
@@ -117,7 +117,7 @@ public class WinnowerGraphValidationTests : TestBase
 
         result.SuccessCount.ShouldBe(1);
         result.FailureCount.ShouldBe(1);
-        result.Failures.ShouldHaveSingleItem().Reason.ShouldBe(FailureReason.ValidationError);
+        result.Failures.ShouldHaveSingleItem().Reason.ShouldBe(FailureReason.PreValidationError);
         context.ChangeTracker.Clear();
         context.CustomerOrders.Count(o => o.OrderNumber == "BAD").ShouldBe(0);
         context.CustomerOrders.Count(o => o.OrderNumber == "OK").ShouldBe(1);
@@ -194,7 +194,7 @@ public class WinnowerGraphValidationTests : TestBase
     {
         using var context = CreateContext();
 
-        ValidatorDelegate<Student> rejectEmptyCourseList = (Student s, ref ValidationCollector c) =>
+        WinnowValidator<Student> rejectEmptyCourseList = (Student s, ref ValidationCollector c) =>
         {
             if (s.Courses.Count == 0) c.Add(nameof(Student.Courses), "Must enroll in at least one course", "EMPTY");
         };
@@ -219,7 +219,7 @@ public class WinnowerGraphValidationTests : TestBase
         result.FailureCount.ShouldBe(1);
         var failure = result.Failures.ShouldHaveSingleItem();
         failure.EntityIndex.ShouldBe(1);
-        failure.Reason.ShouldBe(FailureReason.ValidationError);
+        failure.Reason.ShouldBe(FailureReason.PreValidationError);
         failure.ValidationErrors!.ShouldContain(e => e.Code == "EMPTY");
 
         context.ChangeTracker.Clear();

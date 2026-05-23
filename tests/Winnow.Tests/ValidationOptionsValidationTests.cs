@@ -54,14 +54,14 @@ public class ValidationOptionsValidationTests
     public void WithValidation_CalledTwice_LastCallWins()
     {
         var options = new InsertOptions();
-        ValidatorDelegate<Product> first = (Product _, ref ValidationCollector _) => { };
-        ValidatorDelegate<Product> second = (Product _, ref ValidationCollector c) => c.Add("X", "second");
+        WinnowValidator<Product> first = (Product _, ref ValidationCollector _) => { };
+        WinnowValidator<Product> second = (Product _, ref ValidationCollector c) => c.Add("X", "second");
 
         options.WithValidation(first);
         options.WithValidation(second);
 
         // Apply and confirm the second validator runs.
-        var validator = (ValidatorDelegate<Product>)options.Validation!.Validator;
+        var validator = (WinnowValidator<Product>)options.Validation!.Validator;
         var buffer = new ValidationError[4];
         var collector = new ValidationCollector(buffer);
         validator(new Product(), ref collector);
@@ -89,7 +89,7 @@ public class ValidationOptionsValidationTests
     public void WithDataAnnotations_ValidatorReportsRequiredAndRangeFailures()
     {
         var options = new WinnowOptions().WithDataAnnotations<AnnotatedEntity>();
-        var validator = (ValidatorDelegate<AnnotatedEntity>)options.Validation!.Validator;
+        var validator = (WinnowValidator<AnnotatedEntity>)options.Validation!.Validator;
 
         var entity = new AnnotatedEntity { Name = null!, Score = -1 };
         var buffer = new ValidationError[8];

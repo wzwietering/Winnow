@@ -4,7 +4,7 @@ namespace Winnow;
 /// Configuration for the optional pre-validation pipeline. When attached to
 /// <see cref="WinnowOptions.Validation"/> or <see cref="GraphOptionsBase.Validation"/>,
 /// entities are validated in-process before any database round trip — invalid
-/// entities are recorded as failures with <see cref="FailureReason.ValidationError"/>
+/// entities are recorded as failures with <see cref="FailureReason.PreValidationError"/>
 /// and never sent to the strategy.
 /// </summary>
 /// <remarks>
@@ -42,7 +42,7 @@ public class ValidationOptions
 
     /// <summary>
     /// Type-erased validator delegate. The concrete type is
-    /// <see cref="ValidatorDelegate{TEntity}"/> for <see cref="EntityType"/>;
+    /// <see cref="WinnowValidator{TEntity}"/> for <see cref="EntityType"/>;
     /// the pipeline casts it once per batch and caches the typed reference.
     /// </summary>
     internal object Validator { get; }

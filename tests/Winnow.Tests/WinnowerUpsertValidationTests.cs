@@ -36,7 +36,7 @@ public class WinnowerUpsertValidationTests : TestBase
         result.FailureCount.ShouldBe(1);
         var failure = result.Failures.ShouldHaveSingleItem();
         failure.EntityIndex.ShouldBe(2);
-        failure.Reason.ShouldBe(FailureReason.ValidationError);
+        failure.Reason.ShouldBe(FailureReason.PreValidationError);
         // Default key path → AttemptedOperation = Insert.
         failure.AttemptedOperation.ShouldBe(UpsertOperationType.Insert);
     }

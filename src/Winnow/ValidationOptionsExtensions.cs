@@ -18,10 +18,10 @@ namespace Winnow;
 /// </remarks>
 public static class ValidationOptionsExtensions
 {
-    /// <inheritdoc cref="WithValidation{TEntity}(InsertOptions, ValidatorDelegate{TEntity}, ValidationFailureBehavior)"/>
+    /// <inheritdoc cref="WithValidation{TEntity}(InsertOptions, WinnowValidator{TEntity}, ValidationFailureBehavior)"/>
     public static WinnowOptions WithValidation<TEntity>(
         this WinnowOptions options,
-        ValidatorDelegate<TEntity> validator,
+        WinnowValidator<TEntity> validator,
         ValidationFailureBehavior onFailure = ValidationFailureBehavior.RecordAsFailure)
         where TEntity : class
     {
@@ -29,10 +29,10 @@ public static class ValidationOptionsExtensions
         return options;
     }
 
-    /// <inheritdoc cref="WithValidation{TEntity}(InsertOptions, ValidatorDelegate{TEntity}, ValidationFailureBehavior)"/>
+    /// <inheritdoc cref="WithValidation{TEntity}(InsertOptions, WinnowValidator{TEntity}, ValidationFailureBehavior)"/>
     public static InsertOptions WithValidation<TEntity>(
         this InsertOptions options,
-        ValidatorDelegate<TEntity> validator,
+        WinnowValidator<TEntity> validator,
         ValidationFailureBehavior onFailure = ValidationFailureBehavior.RecordAsFailure)
         where TEntity : class
     {
@@ -40,10 +40,10 @@ public static class ValidationOptionsExtensions
         return options;
     }
 
-    /// <inheritdoc cref="WithValidation{TEntity}(InsertOptions, ValidatorDelegate{TEntity}, ValidationFailureBehavior)"/>
+    /// <inheritdoc cref="WithValidation{TEntity}(InsertOptions, WinnowValidator{TEntity}, ValidationFailureBehavior)"/>
     public static DeleteOptions WithValidation<TEntity>(
         this DeleteOptions options,
-        ValidatorDelegate<TEntity> validator,
+        WinnowValidator<TEntity> validator,
         ValidationFailureBehavior onFailure = ValidationFailureBehavior.RecordAsFailure)
         where TEntity : class
     {
@@ -66,7 +66,7 @@ public static class ValidationOptionsExtensions
     /// </param>
     public static UpsertOptions WithValidation<TEntity>(
         this UpsertOptions options,
-        ValidatorDelegate<TEntity> validator,
+        WinnowValidator<TEntity> validator,
         ValidationFailureBehavior onFailure = ValidationFailureBehavior.RecordAsFailure)
         where TEntity : class
     {
@@ -125,7 +125,7 @@ public static class ValidationOptionsExtensions
     }
 
     private static void ConfigureFlat<TEntity>(
-        WinnowOptions options, ValidatorDelegate<TEntity> validator, ValidationFailureBehavior onFailure)
+        WinnowOptions options, WinnowValidator<TEntity> validator, ValidationFailureBehavior onFailure)
         where TEntity : class
     {
         ArgumentNullException.ThrowIfNull(options);

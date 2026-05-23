@@ -6,7 +6,7 @@ using System.Reflection;
 namespace Winnow.Internal.Validation;
 
 /// <summary>
-/// Builds and caches DataAnnotations-driven <see cref="ValidatorDelegate{TEntity}"/>
+/// Builds and caches DataAnnotations-driven <see cref="WinnowValidator{TEntity}"/>
 /// instances. The first call for a given entity type reflects over its members to
 /// discover property-level <see cref="ValidationAttribute"/>s, class-level attributes
 /// (e.g. <see cref="CustomValidationAttribute"/>), and any <see cref="IValidatableObject"/>
@@ -27,8 +27,8 @@ internal static class DataAnnotationsValidatorFactory
     private static readonly ConcurrentDictionary<Type, UntypedAnnotatedProperty[]> _untypedCache = new();
     private static readonly ConcurrentDictionary<Type, TypeLevelMetadata> _typeMetadataCache = new();
 
-    internal static ValidatorDelegate<TEntity> Create<TEntity>() where TEntity : class =>
-        (ValidatorDelegate<TEntity>)_cache.GetOrAdd(typeof(TEntity), static t => Build<TEntity>());
+    internal static WinnowValidator<TEntity> Create<TEntity>() where TEntity : class =>
+        (WinnowValidator<TEntity>)_cache.GetOrAdd(typeof(TEntity), static t => Build<TEntity>());
 
     /// <summary>
     /// Validates an entity polymorphically based on its runtime type. Used by
@@ -159,7 +159,7 @@ internal static class DataAnnotationsValidatorFactory
         ValidationAttribute[] ClassAttributes,
         bool IsValidatableObject);
 
-    private static ValidatorDelegate<TEntity> Build<TEntity>() where TEntity : class
+    private static WinnowValidator<TEntity> Build<TEntity>() where TEntity : class
     {
         var properties = typeof(TEntity).GetProperties(BindingFlags.Public | BindingFlags.Instance);
         var entries = CollectAnnotatedProperties<TEntity>(properties);

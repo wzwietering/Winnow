@@ -17,10 +17,10 @@ namespace Winnow;
 /// </remarks>
 public static class GraphValidationOptionsExtensions
 {
-    /// <inheritdoc cref="WithValidation{TEntity}(InsertGraphOptions, ValidatorDelegate{TEntity}, ValidationFailureBehavior)"/>
+    /// <inheritdoc cref="WithValidation{TEntity}(InsertGraphOptions, WinnowValidator{TEntity}, ValidationFailureBehavior)"/>
     public static InsertGraphOptions WithValidation<TEntity>(
         this InsertGraphOptions options,
-        ValidatorDelegate<TEntity> validator,
+        WinnowValidator<TEntity> validator,
         ValidationFailureBehavior onFailure = ValidationFailureBehavior.RecordAsFailure)
         where TEntity : class
     {
@@ -28,10 +28,10 @@ public static class GraphValidationOptionsExtensions
         return options;
     }
 
-    /// <inheritdoc cref="WithValidation{TEntity}(InsertGraphOptions, ValidatorDelegate{TEntity}, ValidationFailureBehavior)"/>
+    /// <inheritdoc cref="WithValidation{TEntity}(InsertGraphOptions, WinnowValidator{TEntity}, ValidationFailureBehavior)"/>
     public static GraphOptions WithValidation<TEntity>(
         this GraphOptions options,
-        ValidatorDelegate<TEntity> validator,
+        WinnowValidator<TEntity> validator,
         ValidationFailureBehavior onFailure = ValidationFailureBehavior.RecordAsFailure)
         where TEntity : class
     {
@@ -39,10 +39,10 @@ public static class GraphValidationOptionsExtensions
         return options;
     }
 
-    /// <inheritdoc cref="WithValidation{TEntity}(InsertGraphOptions, ValidatorDelegate{TEntity}, ValidationFailureBehavior)"/>
+    /// <inheritdoc cref="WithValidation{TEntity}(InsertGraphOptions, WinnowValidator{TEntity}, ValidationFailureBehavior)"/>
     public static DeleteGraphOptions WithValidation<TEntity>(
         this DeleteGraphOptions options,
-        ValidatorDelegate<TEntity> validator,
+        WinnowValidator<TEntity> validator,
         ValidationFailureBehavior onFailure = ValidationFailureBehavior.RecordAsFailure)
         where TEntity : class
     {
@@ -66,7 +66,7 @@ public static class GraphValidationOptionsExtensions
     /// </param>
     public static UpsertGraphOptions WithValidation<TEntity>(
         this UpsertGraphOptions options,
-        ValidatorDelegate<TEntity> validator,
+        WinnowValidator<TEntity> validator,
         ValidationFailureBehavior onFailure = ValidationFailureBehavior.RecordAsFailure)
         where TEntity : class
     {
@@ -133,7 +133,7 @@ public static class GraphValidationOptionsExtensions
     }
 
     private static void ConfigureGraph<TEntity>(
-        GraphOptionsBase options, ValidatorDelegate<TEntity> validator, ValidationFailureBehavior onFailure)
+        GraphOptionsBase options, WinnowValidator<TEntity> validator, ValidationFailureBehavior onFailure)
         where TEntity : class
     {
         ArgumentNullException.ThrowIfNull(options);

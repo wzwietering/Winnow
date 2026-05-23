@@ -5,7 +5,7 @@ namespace Winnow.Tests;
 public class ValidationCollectorTests
 {
     // External consumers must be able to construct a collector to unit-test
-    // their own ValidatorDelegate<T>. Create() exposes a public factory so the
+    // their own WinnowValidator<T>. Create() exposes a public factory so the
     // otherwise-internal constructor stays hidden.
     [Fact]
     public void Create_AllowsAddingErrorsFromUserCode()

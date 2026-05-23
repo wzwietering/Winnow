@@ -58,7 +58,7 @@ public abstract class GraphOptionsBase
     /// <summary>
     /// When set, runs a pre-validation pipeline over each batch before any
     /// database round trip. Invalid top-level entities are recorded as failures
-    /// with <see cref="FailureReason.ValidationError"/> and are not sent to the
+    /// with <see cref="FailureReason.PreValidationError"/> and are not sent to the
     /// strategy. By default only the top-level entities are validated; set
     /// <see cref="GraphValidationOptions.IncludeNavigations"/> to also walk
     /// navigation children visible to the configured <see cref="NavigationFilter"/>.

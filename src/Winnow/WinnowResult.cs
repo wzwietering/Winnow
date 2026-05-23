@@ -106,15 +106,13 @@ public class WinnowFailure<TKey> where TKey : notnull, IEquatable<TKey>
     public Exception? Exception { get; init; }
 
     /// <summary>
-    /// Structured per-property errors recorded by Winnow pre-validation. Populated
-    /// only when <see cref="Reason"/> is <see cref="FailureReason.ValidationError"/>
-    /// AND the failure was produced by pre-validation (a
-    /// <see cref="ValidationOptions.Validator"/> delegate or the DataAnnotations
-    /// adapter); <c>null</c> for every other case — including
-    /// <see cref="FailureReason.ValidationError"/> failures that originate from EF
-    /// Core's save-time validation, which does not produce structured errors. Use
-    /// this to drive structured UI / API responses instead of parsing
-    /// <see cref="ErrorMessage"/>.
+    /// Structured per-property errors recorded by Winnow pre-validation.
+    /// Populated when <see cref="Reason"/> is
+    /// <see cref="FailureReason.PreValidationError"/>; <c>null</c> for every
+    /// other reason — including <see cref="FailureReason.ValidationError"/>
+    /// failures originating from EF Core's save-time validation, which does not
+    /// produce structured errors. Use this to drive structured UI / API
+    /// responses instead of parsing <see cref="ErrorMessage"/>.
     /// </summary>
     public IReadOnlyList<ValidationError>? ValidationErrors { get; init; }
 }
@@ -125,16 +123,14 @@ public class WinnowFailure<TKey> where TKey : notnull, IEquatable<TKey>
 public enum FailureReason
 {
     /// <summary>
-    /// Entity rejected for a validation reason. Two sub-cases share this value:
-    /// (a) Winnow pre-validation (a <see cref="ValidationOptions.Validator"/>
-    /// delegate or the DataAnnotations adapter) populates
-    /// <see cref="WinnowFailure{TKey}.ValidationErrors"/> with structured
-    /// per-property details; (b) EF Core's save-time rejection (e.g. unmapped
-    /// property, model mismatch, or other <see cref="InvalidOperationException"/>
-    /// from <c>SaveChanges</c>) leaves <c>ValidationErrors</c> as <c>null</c>
-    /// — only <see cref="WinnowFailure{TKey}.ErrorMessage"/> and
-    /// <see cref="WinnowFailure{TKey}.Exception"/> describe the issue. Use the
-    /// <c>ValidationErrors</c> presence to distinguish the two when needed.
+    /// Entity rejected by EF Core's save-time validation (e.g. unmapped property,
+    /// model mismatch, or other <see cref="InvalidOperationException"/> from
+    /// <c>SaveChanges</c>). The <c>ValidationErrors</c> list on the corresponding
+    /// failure is always <c>null</c> for this reason — only
+    /// <see cref="WinnowFailure{TKey}.ErrorMessage"/> and
+    /// <see cref="WinnowFailure{TKey}.Exception"/> describe the issue. For
+    /// Winnow's structured pre-validation failures (with per-property
+    /// <see cref="ValidationError"/>s), see <see cref="PreValidationError"/>.
     /// </summary>
     ValidationError,
 
@@ -177,5 +173,15 @@ public enum FailureReason
     /// with a delay. A unique constraint on the MatchBy columns narrows but does not
     /// eliminate the race window — the row may be genuinely gone.
     /// </remarks>
-    BusinessKeyConflictLost
+    BusinessKeyConflictLost,
+
+    /// <summary>
+    /// Entity rejected by Winnow pre-validation — either a configured
+    /// <see cref="WinnowValidator{TEntity}"/> delegate or the DataAnnotations
+    /// adapter — before any database round trip. The corresponding failure's
+    /// <c>ValidationErrors</c> property carries the structured per-property
+    /// errors; drive structured UI / API responses off it rather than parsing
+    /// <c>ErrorMessage</c>.
+    /// </summary>
+    PreValidationError
 }

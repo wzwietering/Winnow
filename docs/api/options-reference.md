@@ -11,7 +11,7 @@ Used with `Update`.
 | `Strategy` | `BatchStrategy` | `OneByOne` | `OneByOne` or `DivideAndConquer` |
 | `ValidateNavigationProperties` | `bool` | `true` | When true, validates navigation properties are not modified |
 | `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff for transient failures |
-| `Validation` | `ValidationOptions?` | `null` | Pre-validation pipeline — set via `WithValidation<T>(...)` or `WithDataAnnotations<T>()`. Invalid entities are recorded as failures with `FailureReason.ValidationError` and never reach the strategy. See [Pre-Validation](../pre-validation.md) |
+| `Validation` | `ValidationOptions?` | `null` | Pre-validation pipeline — set via `WithValidation<T>(...)` or `WithDataAnnotations<T>()`. Invalid entities are recorded as failures with `FailureReason.PreValidationError` and never reach the strategy. See [Pre-Validation](../pre-validation.md) |
 | `ResultDetail` | `ResultDetail` | `Full` | How much per-entity detail the result captures. Lower levels reduce memory; see [ResultDetail](#resultdetail) |
 
 All options classes that inherit from `WinnowOptions` also support `Strategy`, `ValidateNavigationProperties`, `Retry`, `Validation`, and `ResultDetail`. All options classes that inherit from `GraphOptionsBase` also support `Retry`, `Validation`, and `ResultDetail`.
@@ -223,7 +223,7 @@ var options = new InsertGraphOptions().WithDataAnnotations<CustomerOrder>(includ
 
 | Value | Description |
 |-------|-------------|
-| `RecordAsFailure` | Default. Each invalid entity becomes a failure with `FailureReason.ValidationError`. Valid entities in the same batch still hit the database. Matches the "winnow out the failures" model the rest of the library follows. |
+| `RecordAsFailure` | Default. Each invalid entity becomes a failure with `FailureReason.PreValidationError`. Valid entities in the same batch still hit the database. Matches the "winnow out the failures" model the rest of the library follows. |
 | `Throw` | After validating every entity in the batch, throw a `WinnowValidationException` aggregating all failures. Valid entities in the same batch are not sent to the database — the throw pre-empts the entire round trip. The scan is not short-circuited on the first failure; every offending entity is included so callers can react to them all without re-running the validator. |
 
 ### FailureReason
