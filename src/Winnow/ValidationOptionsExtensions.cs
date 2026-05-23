@@ -146,4 +146,3 @@ public static class ValidationOptionsExtensions
         options.Validation = validation;
     }
 }
-

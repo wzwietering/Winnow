@@ -187,6 +187,109 @@ public class ValidationReleaseReadinessTests
             result.SuccessCount.ShouldBe(5);
         }
 
+        // Same regression as InsertAsync_…_FailureCountStillAccurate, but for
+        // the WinnowResult (Update/Delete) merger path. MergeWinnow lives in
+        // ValidationResultMerger; without the raw-count fix, FailureCount
+        // collapses to zero at ResultDetail.None when validation rejects
+        // entities via Throw recovery.
+        [Fact]
+        public async Task UpdateAsync_ThrowBehavior_ResultDetailNone_FailureCountStillAccurate()
+        {
+            EnsureDatabaseCreated();
+            SeedWithFactory(ctx =>
+            {
+                ctx.Products.AddRange(Enumerable.Range(0, 8).Select(i => new Product
+                {
+                    Name = $"p{i}", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow,
+                }));
+                ctx.SaveChanges();
+            });
+
+            var products = QueryWithFactory(ctx => ctx.Products.OrderBy(p => p.Id).ToList());
+            foreach (var (p, i) in products.Select((p, i) => (p, i)))
+            {
+                p.Price = i % 3 == 0 ? -1m : 2m;
+            }
+
+            var saver = CreateSaver(maxDegreeOfParallelism: 2);
+            var options = new WinnowOptions { ResultDetail = ResultDetail.None }
+                .WithValidation<Product>(
+                    (Product p, ref ValidationCollector c) =>
+                    {
+                        if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
+                    },
+                    ValidationFailureBehavior.Throw);
+
+            var result = await saver.UpdateAsync(products, options);
+
+            result.FailureCount.ShouldBe(3);
+            result.SuccessCount.ShouldBe(5);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_ThrowBehavior_ResultDetailNone_FailureCountStillAccurate()
+        {
+            EnsureDatabaseCreated();
+            SeedWithFactory(ctx =>
+            {
+                // Names prefixed "x_" mark entities pre-validation should reject; the
+                // DbContext only validates Stock/Price so the seed itself is valid.
+                ctx.Products.AddRange(Enumerable.Range(0, 8).Select(i => new Product
+                {
+                    Name = i % 3 == 0 ? $"x_{i}" : $"p{i}",
+                    Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow,
+                }));
+                ctx.SaveChanges();
+            });
+
+            var products = QueryWithFactory(ctx => ctx.Products.OrderBy(p => p.Id).ToList());
+
+            var saver = CreateSaver(maxDegreeOfParallelism: 2);
+            var options = new DeleteOptions { ResultDetail = ResultDetail.None }
+                .WithValidation<Product>(
+                    (Product p, ref ValidationCollector c) =>
+                    {
+                        if (p.Name.StartsWith("x_"))
+                            c.Add(nameof(Product.Name), "Reserved prefix", "RESERVED");
+                    },
+                    ValidationFailureBehavior.Throw);
+
+            var result = await saver.DeleteAsync(products, options);
+
+            result.FailureCount.ShouldBe(3);
+            result.SuccessCount.ShouldBe(5);
+        }
+
+        // Mirrors the Insert variant for the MergeUpsert path. Same fix
+        // (raw-count vs gated-list count) lives in BuildUpsertValidationFailures.
+        [Fact]
+        public async Task UpsertAsync_ThrowBehavior_ResultDetailNone_FailureCountStillAccurate()
+        {
+            EnsureDatabaseCreated();
+
+            var products = Enumerable.Range(0, 8).Select(i => new Product
+            {
+                Name = $"p{i}",
+                Price = i % 3 == 0 ? -1m : 1m, // invalid at 0, 3, 6 → 3 failures
+                Stock = 1,
+                LastModified = DateTimeOffset.UtcNow,
+            }).ToList();
+
+            var saver = CreateSaver(maxDegreeOfParallelism: 2);
+            var options = new UpsertOptions { ResultDetail = ResultDetail.None }
+                .WithValidation<Product>(
+                    (Product p, ref ValidationCollector c) =>
+                    {
+                        if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
+                    },
+                    ValidationFailureBehavior.Throw);
+
+            var result = await saver.UpsertAsync(products, options);
+
+            result.FailureCount.ShouldBe(3);
+            result.SuccessCount.ShouldBe(5);
+        }
+
         // Regression for the parallel ThrowAfterBatch recovery path: when a
         // partition's WinnowValidationException fires, the orchestrator re-runs
         // the survivors through the strategy, which assigns them fresh

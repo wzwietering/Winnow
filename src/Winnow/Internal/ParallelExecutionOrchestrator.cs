@@ -236,7 +236,12 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     {
         var failedIndices = new HashSet<int>(failures.Count);
         foreach (var f in failures)
+        {
+            Debug.Assert(
+                f.EntityIndex >= 0 && f.EntityIndex < partition.Count,
+                $"WinnowEntityFailure.EntityIndex {f.EntityIndex} out of range [0, {partition.Count}); survivor count would be wrong.");
             failedIndices.Add(f.EntityIndex);
+        }
 
         var survivorCount = Math.Max(0, partition.Count - failedIndices.Count);
         var survivors = new List<TEntity>(survivorCount);

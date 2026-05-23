@@ -45,6 +45,7 @@ public class UpsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, I
     private readonly IReadOnlyList<UpsertFailure<TKey>> _failures = [];
     private IReadOnlyList<UpsertedEntity<TKey>>? _allUpsertedEntitiesCache;
     private Dictionary<int, UpsertedEntity<TKey>>? _byIndexCache;
+    private Dictionary<int, UpsertFailure<TKey>>? _failureByIndexCache;
     private IReadOnlyList<TKey>? _insertedIdsCache;
     private IReadOnlyList<TKey>? _updatedIdsCache;
     private IReadOnlyList<TKey>? _successfulIdsCache;
@@ -232,10 +233,23 @@ public class UpsertResult<TKey> : WinnowResultBase<TKey> where TKey : notnull, I
     /// <summary>
     /// Finds a failure by the entity's original input index. Throws when
     /// <see cref="WinnowResultBase{TKey}.ResultDetail"/> is lower than
-    /// <see cref="ResultDetail.Minimal"/>.
+    /// <see cref="ResultDetail.Minimal"/>. O(1) after the first call.
     /// </summary>
-    public UpsertFailure<TKey>? GetFailureByIndex(int originalIndex) =>
-        Failures.FirstOrDefault(f => f.EntityIndex == originalIndex);
+    public UpsertFailure<TKey>? GetFailureByIndex(int originalIndex)
+    {
+        if (ResultDetail < ResultDetail.Minimal)
+            throw ResultDetailGuard.NotCaptured(nameof(GetFailureByIndex), ResultDetail.Minimal, ResultDetail);
+        _failureByIndexCache ??= BuildFailureByIndexCache();
+        return _failureByIndexCache.TryGetValue(originalIndex, out var failure) ? failure : null;
+    }
+
+    private Dictionary<int, UpsertFailure<TKey>> BuildFailureByIndexCache()
+    {
+        var cache = new Dictionary<int, UpsertFailure<TKey>>(_failures.Count);
+        foreach (var failure in _failures)
+            cache[failure.EntityIndex] = failure;
+        return cache;
+    }
 
     /// <inheritdoc />
     protected override int GetCollectionSuccessCount()

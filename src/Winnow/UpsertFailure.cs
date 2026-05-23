@@ -43,10 +43,11 @@ public class UpsertFailure<TKey> where TKey : notnull, IEquatable<TKey>
 
     /// <summary>
     /// Structured per-property errors recorded by Winnow pre-validation. Populated
-    /// only when <see cref="Reason"/> is <see cref="FailureReason.ValidationError"/>;
-    /// <c>null</c> for every other reason — including
-    /// <see cref="FailureReason.EfValidationError"/>, which originates from EF
-    /// Core's save-time validation and does not produce structured errors.
+    /// only when <see cref="Reason"/> is <see cref="FailureReason.ValidationError"/>
+    /// AND the failure was produced by pre-validation; <c>null</c> for every other
+    /// case — including <see cref="FailureReason.ValidationError"/> failures that
+    /// originate from EF Core's save-time validation, which does not produce
+    /// structured errors.
     /// </summary>
     public IReadOnlyList<ValidationError>? ValidationErrors { get; init; }
 }
