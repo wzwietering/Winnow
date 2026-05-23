@@ -491,6 +491,109 @@ public class ValidationReleaseReadinessTests
                 product.Name.ShouldBe($"updated-{updated.OriginalIndex}");
             }
         }
+
+        // Covers ValidationResultMerger.ClassifyUpsertFailure's null-entity guard
+        // through the parallel Throw recovery path. The single-context path goes
+        // through OperationPreValidationHelper.RecordUpsertFailure (separate code);
+        // the parallel path reaches ClassifyUpsertFailure via BuildUpsertFailures
+        // when reconstructing the failure objects, and a null partition slot must
+        // classify cleanly as Insert + IsDefaultKey rather than NRE. Uses
+        // maxDegreeOfParallelism=2 to exercise the orchestrator path (parallelism=1
+        // bypasses it via ExecuteSequentialAsync). Partition split with chunkSize=3
+        // places the null entity in partition 0, where the recovery runs.
+        [Fact]
+        public async Task UpsertAsync_ThrowBehavior_NullEntity_ReportsInsertAttemptAndIsDefaultKey()
+        {
+            EnsureDatabaseCreated();
+
+            var products = new List<Product>
+            {
+                new() { Name = "valid-0", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+                null!,
+                new() { Name = "valid-2", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+                new() { Name = "valid-3", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+                new() { Name = "valid-4", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+            };
+
+            var saver = CreateSaver(maxDegreeOfParallelism: 2);
+            var options = new UpsertOptions()
+                .WithValidation<Product>(
+                    (Product p, ref ValidationCollector _) => { /* never rejects — null guard fires it */ },
+                    ValidationFailureBehavior.Throw);
+
+            var result = await saver.UpsertAsync(products, options);
+
+            var failure = result.Failures.ShouldHaveSingleItem();
+            failure.EntityIndex.ShouldBe(1);
+            failure.Reason.ShouldBe(FailureReason.PreValidationError);
+            failure.AttemptedOperation.ShouldBe(UpsertOperationType.Insert);
+            failure.IsDefaultKey.ShouldBeTrue();
+        }
+
+        // Locks RemapInsertFailures: under parallel Throw recovery, when the
+        // survivor re-run produces per-entity DB failures (here: unique-constraint
+        // violation on OrderNumber), those failures must carry partition-relative
+        // EntityIndex values — NOT the survivor-local 0..N-1 indices that the
+        // strategy actually saw. Without the remap, a callback reading
+        // failure.EntityIndex would point at the wrong source entity.
+        // 6 entities × parallelism=2 → partition 0 spans original indices 0..2;
+        // the validator rejects 0, the DB rejects 2 after the survivor re-run.
+        [Fact]
+        public async Task InsertAsync_ThrowBehavior_DbFailureOnSurvivor_RemapsEntityIndexCorrectly()
+        {
+            EnsureDatabaseCreated();
+            SeedWithFactory(c =>
+            {
+                c.CustomerOrders.Add(new CustomerOrder
+                {
+                    OrderNumber = "DUP",
+                    CustomerName = "seeded",
+                    CustomerId = 1,
+                    Status = CustomerOrderStatus.Pending,
+                    TotalAmount = 10m,
+                    OrderDate = DateTimeOffset.UtcNow,
+                });
+                c.SaveChanges();
+            });
+
+            // Partition 0 (indices 0..2):
+            //   0 — empty OrderNumber: rejected by validator
+            //   1 — "OK-1": valid + unique
+            //   2 — "DUP": valid by validator, DB rejects (unique constraint)
+            // Partition 1 (indices 3..5): all clean inserts
+            var orders = new List<CustomerOrder>
+            {
+                new() { OrderNumber = "", CustomerName = "bad-0", CustomerId = 1, Status = CustomerOrderStatus.Pending, TotalAmount = 10m, OrderDate = DateTimeOffset.UtcNow },
+                new() { OrderNumber = "OK-1", CustomerName = "good-1", CustomerId = 1, Status = CustomerOrderStatus.Pending, TotalAmount = 10m, OrderDate = DateTimeOffset.UtcNow },
+                new() { OrderNumber = "DUP", CustomerName = "bad-2", CustomerId = 1, Status = CustomerOrderStatus.Pending, TotalAmount = 10m, OrderDate = DateTimeOffset.UtcNow },
+                new() { OrderNumber = "OK-3", CustomerName = "good-3", CustomerId = 1, Status = CustomerOrderStatus.Pending, TotalAmount = 10m, OrderDate = DateTimeOffset.UtcNow },
+                new() { OrderNumber = "OK-4", CustomerName = "good-4", CustomerId = 1, Status = CustomerOrderStatus.Pending, TotalAmount = 10m, OrderDate = DateTimeOffset.UtcNow },
+                new() { OrderNumber = "OK-5", CustomerName = "good-5", CustomerId = 1, Status = CustomerOrderStatus.Pending, TotalAmount = 10m, OrderDate = DateTimeOffset.UtcNow },
+            };
+
+            var saver = new ParallelWinnower<CustomerOrder, int>(
+                CreateContextFactory(), maxDegreeOfParallelism: 2);
+            var options = new InsertOptions()
+                .WithValidation<CustomerOrder>(
+                    (CustomerOrder o, ref ValidationCollector c) =>
+                    {
+                        if (string.IsNullOrEmpty(o.OrderNumber))
+                            c.Add(nameof(CustomerOrder.OrderNumber), "required", "REQUIRED");
+                    },
+                    ValidationFailureBehavior.Throw);
+
+            var result = await saver.InsertAsync(orders, options);
+
+            var validationFailure = result.Failures.SingleOrDefault(f => f.Reason == FailureReason.PreValidationError);
+            validationFailure.ShouldNotBeNull();
+            validationFailure!.EntityIndex.ShouldBe(0);
+
+            var dbFailure = result.Failures.SingleOrDefault(f => f.Reason != FailureReason.PreValidationError);
+            dbFailure.ShouldNotBeNull();
+            // The critical assertion: EntityIndex points back at the *original* batch
+            // position (2), not the survivor-local position (1) that the strategy saw.
+            dbFailure!.EntityIndex.ShouldBe(2);
+        }
     }
 
     // --- Task #8: IncludeNavigations end-to-end through InsertGraph -------

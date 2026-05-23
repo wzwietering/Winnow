@@ -39,32 +39,9 @@ internal static class ValidationResultMerger
         where TKey : notnull, IEquatable<TKey>
     {
         var validationFailures = BuildWinnowFailures(partition, failures, resultDetail, keyService);
-        var validationCount = failures.Count;
-        if (survivor is null)
-        {
-            return new WinnowResult<TKey>
-            {
-                ResultDetail = resultDetail,
-                SuccessfulIds = [],
-                Failures = validationFailures,
-                SuccessCount = 0,
-                FailureCount = validationCount,
-            };
-        }
-        return new WinnowResult<TKey>
-        {
-            ResultDetail = survivor.ResultDetail,
-            SuccessfulIds = survivor.SuccessfulIdsRaw,
-            Failures = [.. survivor.FailuresRaw, .. validationFailures],
-            SuccessCount = survivor.SuccessCount,
-            FailureCount = survivor.FailureCount + validationCount,
-            Duration = survivor.Duration,
-            DatabaseRoundTrips = survivor.DatabaseRoundTrips,
-            WasCancelled = survivor.WasCancelled,
-            TotalRetries = survivor.TotalRetries,
-            GraphHierarchy = survivor.GraphHierarchyRaw,
-            TraversalInfo = survivor.TraversalInfoRaw,
-        };
+        return survivor is null
+            ? BuildEmptyWinnowResult(resultDetail, validationFailures, failures.Count)
+            : BuildMergedWinnowResult(survivor, validationFailures, failures.Count);
     }
 
     internal static InsertResult<TKey> MergeInsert<TKey>(
@@ -76,33 +53,9 @@ internal static class ValidationResultMerger
     {
         var remapped = RemapInsertSurvivor(survivor, survivorOriginalIndices);
         var validationFailures = BuildInsertFailures(failures, resultDetail);
-        var validationCount = failures.Count;
-        if (remapped is null)
-        {
-            return new InsertResult<TKey>
-            {
-                ResultDetail = resultDetail,
-                InsertedEntities = [],
-                Failures = validationFailures,
-                SuccessCount = 0,
-                FailureCount = validationCount,
-            };
-        }
-        return new InsertResult<TKey>
-        {
-            ResultDetail = remapped.ResultDetail,
-            InsertedEntities = remapped.InsertedEntitiesRaw,
-            InsertedIds = remapped.InsertedIdsRaw,
-            Failures = [.. remapped.FailuresRaw, .. validationFailures],
-            SuccessCount = remapped.SuccessCount,
-            FailureCount = remapped.FailureCount + validationCount,
-            Duration = remapped.Duration,
-            DatabaseRoundTrips = remapped.DatabaseRoundTrips,
-            WasCancelled = remapped.WasCancelled,
-            TotalRetries = remapped.TotalRetries,
-            GraphHierarchy = remapped.GraphHierarchyRaw,
-            TraversalInfo = remapped.TraversalInfoRaw,
-        };
+        return remapped is null
+            ? BuildEmptyInsertResult<TKey>(resultDetail, validationFailures, failures.Count)
+            : BuildMergedInsertResult(remapped, validationFailures, failures.Count);
     }
 
     internal static UpsertResult<TKey> MergeUpsert<TEntity, TKey>(
@@ -117,22 +70,91 @@ internal static class ValidationResultMerger
     {
         var remapped = RemapUpsertSurvivor(survivor, survivorOriginalIndices);
         var validationFailures = BuildUpsertFailures(partition, failures, resultDetail, keyService);
-        var validationCount = failures.Count;
-        if (remapped is null)
+        return remapped is null
+            ? BuildEmptyUpsertResult<TKey>(resultDetail, validationFailures, failures.Count)
+            : BuildMergedUpsertResult(remapped, validationFailures, failures.Count);
+    }
+
+    private static WinnowResult<TKey> BuildEmptyWinnowResult<TKey>(
+        ResultDetail resultDetail, List<WinnowFailure<TKey>> validationFailures, int validationCount)
+        where TKey : notnull, IEquatable<TKey> =>
+        new()
         {
-            return new UpsertResult<TKey>
-            {
-                ResultDetail = resultDetail,
-                InsertedEntities = [],
-                UpdatedEntities = [],
-                Failures = validationFailures,
-                SuccessCount = 0,
-                FailureCount = validationCount,
-                InsertedCount = 0,
-                UpdatedCount = 0,
-            };
-        }
-        return new UpsertResult<TKey>
+            ResultDetail = resultDetail,
+            SuccessfulIds = [],
+            Failures = validationFailures,
+            SuccessCount = 0,
+            FailureCount = validationCount,
+        };
+
+    private static WinnowResult<TKey> BuildMergedWinnowResult<TKey>(
+        WinnowResult<TKey> survivor, List<WinnowFailure<TKey>> validationFailures, int validationCount)
+        where TKey : notnull, IEquatable<TKey> =>
+        new()
+        {
+            ResultDetail = survivor.ResultDetail,
+            SuccessfulIds = survivor.SuccessfulIdsRaw,
+            Failures = [.. survivor.FailuresRaw, .. validationFailures],
+            SuccessCount = survivor.SuccessCount,
+            FailureCount = survivor.FailureCount + validationCount,
+            Duration = survivor.Duration,
+            DatabaseRoundTrips = survivor.DatabaseRoundTrips,
+            WasCancelled = survivor.WasCancelled,
+            TotalRetries = survivor.TotalRetries,
+            GraphHierarchy = survivor.GraphHierarchyRaw,
+            TraversalInfo = survivor.TraversalInfoRaw,
+        };
+
+    private static InsertResult<TKey> BuildEmptyInsertResult<TKey>(
+        ResultDetail resultDetail, List<InsertFailure> validationFailures, int validationCount)
+        where TKey : notnull, IEquatable<TKey> =>
+        new()
+        {
+            ResultDetail = resultDetail,
+            InsertedEntities = [],
+            Failures = validationFailures,
+            SuccessCount = 0,
+            FailureCount = validationCount,
+        };
+
+    private static InsertResult<TKey> BuildMergedInsertResult<TKey>(
+        InsertResult<TKey> remapped, List<InsertFailure> validationFailures, int validationCount)
+        where TKey : notnull, IEquatable<TKey> =>
+        new()
+        {
+            ResultDetail = remapped.ResultDetail,
+            InsertedEntities = remapped.InsertedEntitiesRaw,
+            InsertedIds = remapped.InsertedIdsRaw,
+            Failures = [.. remapped.FailuresRaw, .. validationFailures],
+            SuccessCount = remapped.SuccessCount,
+            FailureCount = remapped.FailureCount + validationCount,
+            Duration = remapped.Duration,
+            DatabaseRoundTrips = remapped.DatabaseRoundTrips,
+            WasCancelled = remapped.WasCancelled,
+            TotalRetries = remapped.TotalRetries,
+            GraphHierarchy = remapped.GraphHierarchyRaw,
+            TraversalInfo = remapped.TraversalInfoRaw,
+        };
+
+    private static UpsertResult<TKey> BuildEmptyUpsertResult<TKey>(
+        ResultDetail resultDetail, List<UpsertFailure<TKey>> validationFailures, int validationCount)
+        where TKey : notnull, IEquatable<TKey> =>
+        new()
+        {
+            ResultDetail = resultDetail,
+            InsertedEntities = [],
+            UpdatedEntities = [],
+            Failures = validationFailures,
+            SuccessCount = 0,
+            FailureCount = validationCount,
+            InsertedCount = 0,
+            UpdatedCount = 0,
+        };
+
+    private static UpsertResult<TKey> BuildMergedUpsertResult<TKey>(
+        UpsertResult<TKey> remapped, List<UpsertFailure<TKey>> validationFailures, int validationCount)
+        where TKey : notnull, IEquatable<TKey> =>
+        new()
         {
             ResultDetail = remapped.ResultDetail,
             InsertedEntities = remapped.InsertedEntitiesRaw,
@@ -152,7 +174,6 @@ internal static class ValidationResultMerger
             GraphHierarchy = remapped.GraphHierarchyRaw,
             TraversalInfo = remapped.TraversalInfoRaw,
         };
-    }
 
     private static List<WinnowFailure<TKey>> BuildWinnowFailures<TEntity, TKey>(
         List<TEntity> partition,

@@ -8,29 +8,24 @@ namespace Winnow;
 /// and never sent to the strategy.
 /// </summary>
 /// <remarks>
-/// <para>
 /// Construct via the <c>WithValidation</c> or <c>WithDataAnnotations</c> extension
 /// methods rather than directly — those carry the type information needed to wire
-/// the validator to a specific <c>TEntity</c>.
-/// </para>
-/// <para>
-/// This type is not designed for external subclassing. The constructor is
-/// <c>private protected</c>, so the only subclass is the library-supplied
-/// <see cref="GraphValidationOptions"/>. Treat the type as effectively sealed.
-/// </para>
+/// the validator to a specific <c>TEntity</c>. The constructor is <c>internal</c>,
+/// so external code cannot subclass this type; the only subclass is the
+/// library-supplied <see cref="GraphValidationOptions"/>. Sealing it in a future
+/// release is therefore non-breaking — there is no external inheritance to break.
 /// </remarks>
 public class ValidationOptions
 {
     private int _cancellationCheckInterval = DefaultCancellationCheckInterval;
+    private bool _frozen;
 
     /// <summary>
-    /// Default cancellation poll interval — every 256 entities. Picked to keep the
-    /// volatile read out of the hottest validator inner loop while still bounding
-    /// time-to-cancel to a small fraction of a millisecond on typical hardware.
-    /// Exposed as <c>static readonly</c> rather than <c>const</c> so a future
-    /// tuning is observed by already-compiled consumer assemblies.
+    /// Default cancellation poll interval — every 256 entities. Internal so the
+    /// value is not part of the public API surface; the JIT can fold it as a
+    /// compile-time constant inside the library.
     /// </summary>
-    public static readonly int DefaultCancellationCheckInterval = 256;
+    internal const int DefaultCancellationCheckInterval = 256;
 
     /// <summary>
     /// The entity type the configured validator applies to. Set by the
@@ -56,32 +51,30 @@ public class ValidationOptions
     internal bool IsDataAnnotationsValidator { get; }
 
     /// <summary>
-    /// Whether the pipeline should descend into navigation properties when
-    /// validating each entity. <c>false</c> on the base type — only
-    /// <see cref="GraphValidationOptions"/> can enable navigation walking,
-    /// which keeps the flat-vs-graph distinction enforced in the type system.
-    /// </summary>
-    internal virtual bool ShouldWalkNavigations => false;
-
-    /// <summary>
-    /// Maximum depth the navigation walker descends before stopping. Reached
-    /// only when <see cref="ShouldWalkNavigations"/> is true. The base value is
-    /// unused; <see cref="GraphValidationOptions"/> overrides it with the
-    /// user-configurable depth cap.
-    /// </summary>
-    internal virtual int NavigationDepthLimit => 0;
-
-    /// <summary>
     /// Controls what happens when at least one entity fails validation.
     /// Default: <see cref="ValidationFailureBehavior.RecordAsFailure"/>.
+    /// Must be set before the options object reaches a Winnow operation;
+    /// mutating it after the pipeline has read the value throws
+    /// <see cref="InvalidOperationException"/> to surface the race rather than
+    /// running with mid-batch divergence under <c>ParallelWinnower</c>.
     /// </summary>
-    public ValidationFailureBehavior FailureBehavior { get; set; } = ValidationFailureBehavior.RecordAsFailure;
+    public ValidationFailureBehavior FailureBehavior
+    {
+        get => _failureBehavior;
+        set
+        {
+            ThrowIfFrozen();
+            _failureBehavior = value;
+        }
+    }
+    private ValidationFailureBehavior _failureBehavior = ValidationFailureBehavior.RecordAsFailure;
 
     /// <summary>
     /// How often the validation pipeline checks the cancellation token, measured
     /// in entities. Default: <see cref="DefaultCancellationCheckInterval"/>.
     /// Must be positive. Lower values give faster cancellation response at a small
     /// throughput cost; higher values trade latency for throughput.
+    /// Same freeze semantics as <see cref="FailureBehavior"/>.
     /// </summary>
     public int CancellationCheckInterval
     {
@@ -89,11 +82,12 @@ public class ValidationOptions
         set
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            ThrowIfFrozen();
             _cancellationCheckInterval = value;
         }
     }
 
-    private protected ValidationOptions(Type entityType, object validator, bool isDataAnnotationsValidator)
+    internal ValidationOptions(Type entityType, object validator, bool isDataAnnotationsValidator)
     {
         EntityType = entityType;
         Validator = validator;
@@ -102,4 +96,21 @@ public class ValidationOptions
 
     internal static ValidationOptions CreateFlat(Type entityType, object validator, bool isDataAnnotationsValidator = false) =>
         new(entityType, validator, isDataAnnotationsValidator);
+
+    /// <summary>
+    /// Locks the mutable tuning properties. Called by the pre-validation runner
+    /// before any entity is validated so a concurrent mutation from another thread
+    /// is rejected fast rather than producing mid-batch divergence.
+    /// </summary>
+    internal void Freeze() => _frozen = true;
+
+    private void ThrowIfFrozen()
+    {
+        if (_frozen)
+        {
+            throw new InvalidOperationException(
+                "ValidationOptions cannot be mutated after the options object has reached a Winnow operation. " +
+                "Configure FailureBehavior and CancellationCheckInterval before passing the options to Insert/Update/Delete/Upsert.");
+        }
+    }
 }

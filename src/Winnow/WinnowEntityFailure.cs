@@ -9,6 +9,15 @@ namespace Winnow;
 /// rather than parsing <see cref="ErrorMessage"/>, which is a debug-only
 /// concatenation whose exact format is not part of the API contract.
 /// </summary>
+/// <remarks>
+/// This type is intentionally narrower than the operation-shaped failure types
+/// (<c>InsertFailure</c>, <c>WinnowFailure&lt;TKey&gt;</c>, <c>UpsertFailure&lt;TKey&gt;</c>)
+/// because the <see cref="ValidationFailureBehavior.Throw"/> path runs before any
+/// database attempt — there is no <c>TKey</c> available yet and no operation context
+/// to attach. The result-list path (<see cref="ValidationFailureBehavior.RecordAsFailure"/>)
+/// surfaces failures via the operation-specific types instead. See the
+/// "Consuming validation failures" section of <c>docs/pre-validation.md</c>.
+/// </remarks>
 /// <param name="EntityIndex">Zero-based position in the original input batch.</param>
 /// <param name="ValidationErrors">Structured per-property errors recorded by the validator.</param>
 /// <param name="ErrorMessage">

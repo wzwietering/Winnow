@@ -119,6 +119,41 @@ options.WithValidation<Product>(validator);
 options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
 ```
 
+`FailureBehavior` and `CancellationCheckInterval` must be set before the options object reaches a Winnow operation — once the pipeline has read either value, both are frozen and further writes throw `InvalidOperationException`. This prevents silent data races under `ParallelWinnower` where one thread mutates the options while another is mid-batch.
+
+### Consuming validation failures
+
+The two failure behaviors expose validation errors through two different types — same data, different shapes, different lifecycles:
+
+| Behavior | Where to read | Type | Carries |
+|---|---|---|---|
+| `RecordAsFailure` | `result.Failures` | `InsertFailure` / `WinnowFailure<TKey>` / `UpsertFailure<TKey>` | `EntityIndex`, `EntityId` (when known), `ValidationErrors`, `Reason = PreValidationError` |
+| `Throw` | `WinnowValidationException.Failures` | `WinnowEntityFailure` | `EntityIndex`, `ValidationErrors` — no `TKey` |
+
+The split is deliberate. The `Throw` path runs before any DB attempt, so the entity's primary key may still be the default value and there is no operation-specific context yet. `WinnowEntityFailure` keeps only what is unambiguously known: the input-list position and the per-property errors. The result-list path runs after the operation reached the strategy, so the operation-shaped failure types can carry the key and (for upsert) the attempted operation.
+
+Both shapes expose `ValidationErrors` as the authoritative structured payload — drive UI / API responses off it rather than parsing `ErrorMessage`:
+
+```csharp
+try
+{
+    var result = await winnower.InsertAsync(entities, options);
+    foreach (var failure in result.Failures.Where(f => f.Reason == FailureReason.PreValidationError))
+    {
+        ReportFailure(failure.EntityIndex, failure.ValidationErrors!);
+    }
+}
+catch (WinnowValidationException ex)
+{
+    foreach (var failure in ex.Failures)
+    {
+        ReportFailure(failure.EntityIndex, failure.ValidationErrors);
+    }
+}
+
+void ReportFailure(int index, IReadOnlyList<ValidationError> errors) { /* ... */ }
+```
+
 ## Cancellation
 
 Validation honours the `CancellationToken` passed to the `*Async` methods. The pipeline polls the token every `ValidationOptions.CancellationCheckInterval` entities (default: 256). Lower this for faster cancellation response at a small throughput cost; raise it if your validator is so cheap that the poll dominates.

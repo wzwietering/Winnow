@@ -237,13 +237,16 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         var failedIndices = new HashSet<int>(failures.Count);
         foreach (var f in failures)
         {
-            Debug.Assert(
-                f.EntityIndex >= 0 && f.EntityIndex < partition.Count,
-                $"WinnowEntityFailure.EntityIndex {f.EntityIndex} out of range [0, {partition.Count}); survivor count would be wrong.");
+            if (f.EntityIndex < 0 || f.EntityIndex >= partition.Count)
+            {
+                throw new InvalidOperationException(
+                    $"WinnowEntityFailure.EntityIndex {f.EntityIndex} is out of range [0, {partition.Count}). " +
+                    "Validation failures must reference an entity inside the partition being recovered.");
+            }
             failedIndices.Add(f.EntityIndex);
         }
 
-        var survivorCount = Math.Max(0, partition.Count - failedIndices.Count);
+        var survivorCount = partition.Count - failedIndices.Count;
         var survivors = new List<TEntity>(survivorCount);
         var survivorOriginalIndices = new int[survivorCount];
         var j = 0;
@@ -256,6 +259,24 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         return (survivors, survivorOriginalIndices);
     }
 
+    /// <summary>
+    /// Re-runs the survivor batch on a fresh <see cref="DbContext"/>.
+    /// </summary>
+    /// <remarks>
+    /// Survivors are passed as a compact list re-indexed <c>0..N-1</c>, so any
+    /// <c>EntityIndex</c> / <c>OriginalIndex</c> values inside <typeparamref name="TResult"/>
+    /// are survivor-local. The caller is responsible for remapping them back to
+    /// partition-relative positions via the <c>survivorOriginalIndices</c> map
+    /// (see <see cref="ValidationResultMerger"/>'s <c>Remap*Survivor</c> helpers)
+    /// before the top-level <see cref="ResultMerger"/> applies its partition offset.
+    /// <para>
+    /// Non-fatal exceptions from the survivor re-run (e.g. <c>DbUpdateException</c>)
+    /// are caught and returned as <c>(default, 0, 0)</c>. The merger's null-survivor
+    /// path then produces a result populated with only the validation failures —
+    /// the partition's task never faults, matching the non-recovery path's behaviour
+    /// of converting DB exceptions into structured failures.
+    /// </para>
+    /// </remarks>
     private async Task<(TResult? Result, int RoundTrips, int Retries)> RerunSurvivorsAsync<TResult>(
         List<TEntity> survivors,
         Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<TResult>> execute,
@@ -267,8 +288,17 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         {
             recoverContext = _contextFactory();
             var strategyContext = new StrategyContext<TEntity, TKey>(recoverContext) { Logger = _logger, RetryOptions = _retryOptions };
-            var result = await execute(survivors, strategyContext, cancellationToken);
-            return (result, strategyContext.RoundTripCounter, strategyContext.RetryCounter);
+            try
+            {
+                var result = await execute(survivors, strategyContext, cancellationToken);
+                return (result, strategyContext.RoundTripCounter, strategyContext.RetryCounter);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException
+                                          and not OutOfMemoryException
+                                          and not StackOverflowException)
+            {
+                return (default, strategyContext.RoundTripCounter, strategyContext.RetryCounter);
+            }
         }
         finally
         {

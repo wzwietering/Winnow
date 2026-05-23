@@ -55,7 +55,7 @@ internal static partial class WinnowLogger
         ILogger? logger, string entityType, int inputCount, int survivorCount)
     {
         if (logger is null) return;
-        PreValidationFiltered(logger, entityType, inputCount, survivorCount, inputCount - survivorCount);
+        PreValidationFiltered(logger, entityType, survivorCount, inputCount, inputCount - survivorCount);
     }
 
     [LoggerMessage(Level = LogLevel.Information,
@@ -92,5 +92,5 @@ internal static partial class WinnowLogger
     [LoggerMessage(Level = LogLevel.Debug,
         Message = "Pre-validation for {EntityType}: {SurvivorCount}/{InputCount} entities passed ({RejectedCount} rejected)")]
     private static partial void PreValidationFiltered(
-        ILogger logger, string entityType, int inputCount, int survivorCount, int rejectedCount);
+        ILogger logger, string entityType, int survivorCount, int inputCount, int rejectedCount);
 }

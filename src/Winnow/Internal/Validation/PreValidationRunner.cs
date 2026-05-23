@@ -48,6 +48,7 @@ internal static class PreValidationRunner
         where TEntity : class
     {
         EnsureEntityTypeMatches<TEntity>(validation);
+        validation.Freeze();
         var ctx = BuildContext<TEntity>(entities.Count, validation, recordFailure, navigationFilter);
         ScanEntities(entities, validation.CancellationCheckInterval, cancellationToken, ref ctx);
         ThrowIfAnyFailed(ctx.ThrownFailures);
@@ -59,19 +60,22 @@ internal static class PreValidationRunner
         ValidationOptions validation,
         Action<int, string, IReadOnlyList<ValidationError>> recordFailure,
         NavigationFilter? navigationFilter)
-        where TEntity : class =>
-        new()
+        where TEntity : class
+    {
+        var graphValidation = validation as GraphValidationOptions;
+        return new()
         {
             Validator = (WinnowValidator<TEntity>)validation.Validator,
             RecordFailure = recordFailure,
             ThrowOnAny = validation.FailureBehavior == ValidationFailureBehavior.Throw,
-            IncludeNavigations = validation.ShouldWalkNavigations,
-            NavigationDepthLimit = validation.NavigationDepthLimit,
+            IncludeNavigations = graphValidation?.IncludeNavigations ?? false,
+            NavigationDepthLimit = graphValidation?.MaxNavigationDepth ?? 0,
             NavigationFilter = navigationFilter,
             InlineBuffer = new ValidationError[ValidationCollector.InlineCapacity],
             Survivors = new List<TEntity>(inputCount),
             Indices = new int[inputCount],
         };
+    }
 
     private static void ScanEntities<TEntity>(
         List<TEntity> entities, int interval, CancellationToken cancellationToken,
@@ -223,23 +227,26 @@ internal static class PreValidationRunner
 
 /// <summary>
 /// Per-batch state for <see cref="PreValidationRunner.Run{TEntity}"/>. Holds
-/// the loop-invariant validator configuration plus the mutable accumulators
-/// (survivor list, original-index map, thrown-failures buffer). Passed by
-/// <c>ref</c> so the scan-and-record helpers can mutate <see cref="SurvivorCount"/>
-/// and <see cref="ThrownFailures"/> without taking a dozen ref parameters each.
+/// the loop-invariant validator configuration as <c>init</c>-only properties
+/// plus the mutable accumulators (<see cref="SurvivorCount"/>,
+/// <see cref="ThrownFailures"/>) as public fields. Passed by <c>ref</c> so the
+/// scan-and-record helpers can mutate the accumulators without taking a dozen
+/// ref parameters each. The accumulators are fields rather than properties so
+/// the hot loop avoids any property-setter overhead the JIT might fail to inline.
 /// </summary>
 internal struct ValidationRunContext<TEntity>
     where TEntity : class
 {
-    public WinnowValidator<TEntity> Validator;
-    public Action<int, string, IReadOnlyList<ValidationError>> RecordFailure;
-    public bool ThrowOnAny;
-    public bool IncludeNavigations;
-    public int NavigationDepthLimit;
-    public NavigationFilter? NavigationFilter;
-    public ValidationError[] InlineBuffer;
-    public List<TEntity> Survivors;
-    public int[] Indices;
+    public required WinnowValidator<TEntity> Validator { get; init; }
+    public required Action<int, string, IReadOnlyList<ValidationError>> RecordFailure { get; init; }
+    public required bool ThrowOnAny { get; init; }
+    public required bool IncludeNavigations { get; init; }
+    public required int NavigationDepthLimit { get; init; }
+    public NavigationFilter? NavigationFilter { get; init; }
+    public required ValidationError[] InlineBuffer { get; init; }
+    public required List<TEntity> Survivors { get; init; }
+    public required int[] Indices { get; init; }
+
     public List<WinnowEntityFailure>? ThrownFailures;
     public int SurvivorCount;
 }

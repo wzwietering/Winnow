@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0]
 
+### Breaking changes (soft)
+
+- **New `FailureReason.PreValidationError` enum value.** The addition is binary-additive, but consumers with exhaustive `switch` expressions over `FailureReason` compiled with warning-as-error on `CS8509` will need to add a `default` arm or an explicit case for `PreValidationError`. No runtime behaviour changes for existing reasons.
+
 ### Added
 
 - **Pre-validation pipeline.** Attach a `WinnowValidator<TEntity>` via `WithValidation<TEntity>(...)`, or wire DataAnnotations via `WithDataAnnotations<TEntity>()`, on any options object to reject entities in-process before any database round trip. Invalid entities become failures with `FailureReason.PreValidationError` and never reach the strategy, restoring `DivideAndConquer`'s speed advantage at moderate-to-high failure rates. New public surface: `ValidationOptions`, `ValidationError` (readonly record struct), `ValidationCollector` (allocation-light ref struct with pooled buffer), `ValidationFailureBehavior` (`RecordAsFailure` / `Throw`), `WinnowValidationException`, `WinnowEntityFailure`, and the `ValidationOptionsExtensions` / `GraphValidationOptionsExtensions` fluent helpers. See [docs/pre-validation.md](docs/pre-validation.md).

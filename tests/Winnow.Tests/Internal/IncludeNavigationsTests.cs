@@ -324,4 +324,54 @@ public class IncludeNavigationsTests
         Should.Throw<ArgumentOutOfRangeException>(() => options.Validation!.MaxNavigationDepth = 0);
         Should.Throw<ArgumentOutOfRangeException>(() => options.Validation!.MaxNavigationDepth = -1);
     }
+
+    private sealed class FilteredGrandparent
+    {
+        [Required] public string? Code { get; set; }
+        public FilteredChild? Child { get; set; }
+    }
+
+    private sealed class FilteredChild
+    {
+        [Required] public string? Name { get; set; }
+        public FilteredGrandchild? Grandchild { get; set; }
+    }
+
+    private sealed class FilteredGrandchild
+    {
+        [Required] public string? Tag { get; set; }
+    }
+
+    // Regression: when the filter excludes the navigation that would otherwise be
+    // descended into, HasTraversableNavigations must return false so DescendOrFlag
+    // does NOT emit a spurious WINNOW_NAV_DEPTH_LIMIT. Without the filter check,
+    // reaching maxDepth at a node whose only further navigation is excluded would
+    // produce a false-positive depth-limit error on a graph the user has explicitly
+    // pruned from validation.
+    [Fact]
+    public void IncludeNavigationsTrue_DepthLimitNode_AllNavigationsFilteredOut_DoesNotEmitDepthLimitError()
+    {
+        var options = BuildGraphOptions<FilteredGrandparent>(includeNavigations: true);
+        options.Validation!.MaxNavigationDepth = 1;
+
+        var filter = NavigationFilter.Exclude()
+            .Navigation<FilteredChild>(c => c.Grandchild)
+            .Build();
+
+        var root = new FilteredGrandparent
+        {
+            Code = "ok",
+            Child = new FilteredChild
+            {
+                Name = "ok",
+                Grandchild = new FilteredGrandchild { Tag = "ok" },
+            },
+        };
+
+        var failures = new List<(int Index, string Message, IReadOnlyList<ValidationError> Errors)>();
+        Run([root], options.Validation!, (i, m, e) => failures.Add((i, m, e)),
+            navigationFilter: filter);
+
+        failures.ShouldBeEmpty();
+    }
 }

@@ -87,6 +87,7 @@ internal static class DataAnnotationsValidatorFactory
         var context = new ValidationContext(entity);
         foreach (var result in ((IValidatableObject)entity).Validate(context))
         {
+            if (result is null) continue;
             AddResult(result, ValidatableObjectErrorCode, ref collector, pathPrefix);
         }
     }

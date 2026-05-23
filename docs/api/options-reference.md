@@ -43,6 +43,8 @@ Used with `InsertGraph`.
 | `ThrowOnUnsupportedValidation` | `bool` | `false` | Throws if M2M validation can't be performed for composite key entities |
 | `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
 | `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
+| `Validation` | `GraphValidationOptions?` | `null` | Pre-validation pipeline — set via `WithValidation<T>(...)` or `WithDataAnnotations<T>(includeNavigations: ...)`. See [GraphValidationOptions](#graphvalidationoptions) |
+| `ResultDetail` | `ResultDetail` | `Full` | How much per-entity detail the result captures. See [ResultDetail](#resultdetail) |
 
 ## GraphOptions
 
@@ -59,6 +61,8 @@ Used with `UpdateGraph`.
 | `CircularReferenceHandling` | `CircularReferenceHandling` | `Throw` | How to handle circular references |
 | `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
 | `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
+| `Validation` | `GraphValidationOptions?` | `null` | Pre-validation pipeline — set via `WithValidation<T>(...)` or `WithDataAnnotations<T>(includeNavigations: ...)`. See [GraphValidationOptions](#graphvalidationoptions) |
+| `ResultDetail` | `ResultDetail` | `Full` | How much per-entity detail the result captures. See [ResultDetail](#resultdetail) |
 
 ## DeleteOptions
 
@@ -84,6 +88,8 @@ Used with `DeleteGraph`.
 | `ValidateReferencedEntitiesExist` | `bool` | `true` | Validate referenced entities exist before deletion |
 | `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
 | `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
+| `Validation` | `GraphValidationOptions?` | `null` | Pre-validation pipeline — set via `WithValidation<T>(...)` or `WithDataAnnotations<T>(includeNavigations: ...)`. See [GraphValidationOptions](#graphvalidationoptions) |
+| `ResultDetail` | `ResultDetail` | `Full` | How much per-entity detail the result captures. See [ResultDetail](#resultdetail) |
 
 ## UpsertOptions
 
@@ -117,6 +123,8 @@ Used with `UpsertGraph`.
 | `ThrowOnUnsupportedValidation` | `bool` | `false` | Throws if M2M validation can't be performed for composite key entities |
 | `MaxManyToManyCollectionSize` | `int` | `0` | Max M2M collection size (0 = no limit) |
 | `Retry` | `RetryOptions?` | `null` | Enables automatic retry with exponential backoff |
+| `Validation` | `GraphValidationOptions?` | `null` | Pre-validation pipeline — set via `WithValidation<T>(...)` or `WithDataAnnotations<T>(includeNavigations: ...)`. See [GraphValidationOptions](#graphvalidationoptions) |
+| `ResultDetail` | `ResultDetail` | `Full` | How much per-entity detail the result captures. See [ResultDetail](#resultdetail) |
 
 ## RetryOptions
 
@@ -230,13 +238,14 @@ var options = new InsertGraphOptions().WithDataAnnotations<CustomerOrder>(includ
 
 | Value | Description |
 |-------|-------------|
-| `ValidationError` | Entity failed validation. |
+| `ValidationError` | Entity failed EF Core's save-time validation (not Winnow pre-validation). `failure.ValidationErrors` is always `null` for this reason — use `PreValidationError` when you need structured per-property errors. |
 | `ConcurrencyConflict` | Optimistic concurrency conflict (row was modified). |
 | `DatabaseConstraint` | Database constraint violation (FK, check, etc.). |
 | `DuplicateKey` | Primary key or unique constraint violation. |
 | `Cancelled` | Operation was cancelled via CancellationToken. |
 | `UnknownError` | Unclassified error. |
 | `BusinessKeyConflictLost` | Under `MatchBy` with `DuplicateKeyStrategy.RetryAsUpdate`, a concurrent process won a race: the row matching our business key existed long enough to cause our INSERT to fail, but was gone by the time we re-queried for the retry. The entity is not persisted; inspect `UpsertFailure.EntityIndex` and decide whether to discard or re-queue. |
+| `PreValidationError` | Entity was rejected in-process by Winnow pre-validation before any database round trip. `failure.ValidationErrors` carries the structured per-property errors; drive UI / API responses off that list rather than parsing `ErrorMessage`. See [Pre-Validation](../pre-validation.md). |
 
 ### ResultDetail
 

@@ -56,7 +56,12 @@ public ref struct ValidationCollector
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>Always wrap the result in a <c>using</c> declaration:</b>
+    /// Most tests should call <see cref="WinnowValidatorTester.Validate{TEntity}(WinnowValidator{TEntity}, TEntity)"/>
+    /// instead — it wraps the <c>using</c> discipline so the leak below cannot
+    /// happen by accident.
+    /// </para>
+    /// <para>
+    /// If you must call this directly, <b>always wrap the result in a <c>using</c> declaration:</b>
     /// </para>
     /// <code language="csharp">
     /// using var collector = ValidationCollector.Create();
@@ -67,8 +72,7 @@ public ref struct ValidationCollector
     /// ref-struct disposal — if you write <c>var collector = ValidationCollector.Create();</c>
     /// the rented <see cref="ArrayPool{T}"/> buffer leaks whenever the collector
     /// grows past <see cref="InlineCapacity"/> errors. There is no analyzer
-    /// warning today for that mistake, so reviewers should treat a bare
-    /// <c>ValidationCollector.Create()</c> without <c>using</c> as a bug.
+    /// warning today for that mistake.
     /// </para>
     /// </remarks>
     public static ValidationCollector Create() =>

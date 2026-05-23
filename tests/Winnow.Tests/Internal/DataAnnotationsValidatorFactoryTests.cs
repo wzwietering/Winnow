@@ -54,4 +54,50 @@ public class DataAnnotationsValidatorFactoryTests
         getter(new AnnotatedEntity { Name = "x" }).ShouldBe("x");
         getter(new AnnotatedEntity { Name = null }).ShouldBeNull();
     }
+
+    // Regression: IValidatableObject.Validate may yield ValidationResult.Success
+    // (which is null). The runner used to deref result.ErrorMessage unconditionally,
+    // which would NRE the moment a user's validator yielded a Success sentinel
+    // (a common pattern when conditionally short-circuiting cross-field checks).
+    [Fact]
+    public void IValidatableObject_YieldsValidationResultSuccess_DoesNotThrow()
+    {
+        var errors = WinnowValidatorTester.Validate(
+            DataAnnotationsValidatorFactory.Create<EntityYieldingSuccess>(),
+            new EntityYieldingSuccess());
+
+        errors.ShouldBeEmpty();
+    }
+
+    // Regression: BuildUntyped / CollectAnnotatedProperties pass inherit:true so
+    // [Required] on a base property surfaces on a derived entity. Without this,
+    // any DataAnnotation defined on a non-leaf type would silently fail to validate.
+    [Fact]
+    public void Derived_InheritsPropertyAttributeFromBase_FiresRequired()
+    {
+        var errors = WinnowValidatorTester.Validate(
+            DataAnnotationsValidatorFactory.Create<DerivedEntity>(),
+            new DerivedEntity { Name = null });
+
+        errors.ShouldContain(e =>
+            e.PropertyName == nameof(BaseEntity.Name) && e.Code == nameof(RequiredAttribute));
+    }
+
+    private sealed class EntityYieldingSuccess : IValidatableObject
+    {
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            yield return ValidationResult.Success!; // public sentinel that is `null`
+        }
+    }
+
+    private class BaseEntity
+    {
+        [Required]
+        public string? Name { get; set; }
+    }
+
+    private sealed class DerivedEntity : BaseEntity
+    {
+    }
 }

@@ -18,15 +18,11 @@ namespace Winnow;
 public sealed class GraphValidationOptions : ValidationOptions
 {
     /// <summary>
-    /// Default depth cap for <see cref="MaxNavigationDepth"/>. Picked to match the
-    /// recursion-depth budget commonly used by EF Core graph traversals — deep
-    /// enough for any realistic entity tree, shallow enough to surface a
-    /// configuration error rather than a process-terminating <c>StackOverflowException</c>.
-    /// Exposed as <c>static readonly</c> rather than <c>const</c> so a future
-    /// tuning is observed by already-compiled consumer assemblies (matching
-    /// <see cref="ValidationOptions.DefaultCancellationCheckInterval"/>).
+    /// Default depth cap for <see cref="MaxNavigationDepth"/>. Internal so the
+    /// value is not part of the public API surface; the JIT can fold it as a
+    /// compile-time constant inside the library.
     /// </summary>
-    public static readonly int DefaultMaxNavigationDepth = 32;
+    internal const int DefaultMaxNavigationDepth = 32;
 
     private bool _includeNavigations;
     private int _maxNavigationDepth = DefaultMaxNavigationDepth;
@@ -68,7 +64,7 @@ public sealed class GraphValidationOptions : ValidationOptions
     /// descending further into child entities. When the cap is reached, a
     /// <see cref="ValidationError"/> with code <c>WINNOW_NAV_DEPTH_LIMIT</c> is
     /// recorded on the property path where the walk stopped. Default:
-    /// <see cref="DefaultMaxNavigationDepth"/>. Must be positive.
+    /// <c>32</c>. Must be positive.
     /// </summary>
     public int MaxNavigationDepth
     {
@@ -79,9 +75,6 @@ public sealed class GraphValidationOptions : ValidationOptions
             _maxNavigationDepth = value;
         }
     }
-
-    internal override bool ShouldWalkNavigations => _includeNavigations;
-    internal override int NavigationDepthLimit => _maxNavigationDepth;
 
     private GraphValidationOptions(Type entityType, object validator, bool isDataAnnotationsValidator)
         : base(entityType, validator, isDataAnnotationsValidator)

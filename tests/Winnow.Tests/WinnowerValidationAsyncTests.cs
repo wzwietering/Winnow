@@ -181,6 +181,41 @@ public class WinnowerValidationAsyncTests : TestBase
             () => saver.UpsertAsync(products, options, cts.Token));
     }
 
+    // Locks the contract: CancellationCheckInterval > 1 honours cancellation at the
+    // NEXT poll boundary, not the next entity. With interval=5 and cancellation
+    // signalled after entity 7 (index 6), the loop continues through indices 7,8,9
+    // (no poll) and throws on the index 10 poll. Without this test, the existing
+    // cancellation suite only exercises interval=1 (poll every entity), which makes
+    // the latency-vs-throughput tradeoff invisible — and would silently regress if
+    // the polling logic changed.
+    [Fact]
+    public async Task InsertAsync_CancellationInterval5_HonoursCancellationAtNextPollBoundary()
+    {
+        using var context = CreateContext();
+        var products = Enumerable.Range(0, 20).Select(i => new Product
+        {
+            Name = $"p{i}", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow,
+        }).ToList();
+
+        using var cts = new CancellationTokenSource();
+        int seen = 0;
+        var options = new InsertOptions();
+        options.WithValidation<Product>((Product _, ref ValidationCollector _) =>
+        {
+            if (Interlocked.Increment(ref seen) == 7) cts.Cancel();
+        });
+        options.Validation!.CancellationCheckInterval = 5;
+
+        var saver = new Winnower<Product, int>(context);
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => saver.InsertAsync(products, options, cts.Token));
+
+        // Indices 0..9 must all have been validated before the index-10 poll throws.
+        // If `seen` were < 10 the poll would have fired before the contract's
+        // boundary; if > 10 the loop ignored cancellation past a poll point.
+        seen.ShouldBe(10);
+    }
+
     private static List<Product> LargeProductBatch() =>
         Enumerable.Range(0, 1_000).Select(i => new Product
         {
