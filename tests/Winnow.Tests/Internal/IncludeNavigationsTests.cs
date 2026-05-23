@@ -284,6 +284,39 @@ public class IncludeNavigationsTests
         errors.ShouldContain(e => e.Code == NavigationWalker.DepthLimitErrorCode);
     }
 
+    private sealed class LeafChild
+    {
+        [Required] public string? Name { get; set; }
+    }
+
+    private sealed class ParentWithLeafChild
+    {
+        [Required] public string? Title { get; set; }
+        public LeafChild? Child { get; set; }
+    }
+
+    [Fact]
+    public void IncludeNavigationsTrue_MaxDepth1_LeafChild_DoesNotEmitDepthLimitError()
+    {
+        // Regression: DescendOrFlag previously fired WINNOW_NAV_DEPTH_LIMIT for any
+        // child reached at maxDepth, even when the child had no further navigations.
+        // A leaf child is a terminating node — descending isn't needed and the
+        // depth-limit code should not be emitted.
+        var options = BuildGraphOptions<ParentWithLeafChild>(includeNavigations: true);
+        options.Validation!.MaxNavigationDepth = 1;
+
+        var root = new ParentWithLeafChild
+        {
+            Title = "ok",
+            Child = new LeafChild { Name = "ok" },
+        };
+
+        var failures = new List<(int Index, string Message, IReadOnlyList<ValidationError> Errors)>();
+        Run([root], options.Validation!, (i, m, e) => failures.Add((i, m, e)));
+
+        failures.ShouldBeEmpty();
+    }
+
     [Fact]
     public void GraphValidationOptions_MaxNavigationDepth_RejectsNonPositive()
     {

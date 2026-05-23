@@ -11,7 +11,7 @@ namespace Winnow.Internal.Validation;
 internal static class PreValidationRunner
 {
     private const string NullEntityMessage = "Entity was null.";
-    private const string NullEntityCode = "WINNOW_NULL_ENTITY";
+    private const string NullEntityCode = ValidationErrorCodes.NullEntity;
 
     /// <summary>
     /// Validates <paramref name="entities"/> using <paramref name="validation"/>.
@@ -126,7 +126,7 @@ internal static class PreValidationRunner
         var message = BuildMessage(errors);
         if (ctx.ThrowOnAny)
         {
-            (ctx.ThrownFailures ??= []).Add(new WinnowEntityFailure(index, message, errors));
+            (ctx.ThrownFailures ??= []).Add(new WinnowEntityFailure(index, errors, message));
         }
         else
         {
@@ -141,7 +141,7 @@ internal static class PreValidationRunner
         var errors = new[] { new ValidationError(string.Empty, NullEntityMessage, NullEntityCode) };
         if (ctx.ThrowOnAny)
         {
-            (ctx.ThrownFailures ??= []).Add(new WinnowEntityFailure(index, NullEntityMessage, errors));
+            (ctx.ThrownFailures ??= []).Add(new WinnowEntityFailure(index, errors, NullEntityMessage));
         }
         else
         {

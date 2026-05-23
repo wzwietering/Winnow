@@ -75,6 +75,54 @@ public class WinnowerValidationAsyncTests : TestBase
     }
 
     [Fact]
+    public async Task UpdateAsync_PreValidation_RecordsFailureByEntityId()
+    {
+        using var context = CreateContext();
+        SeedData(context, 3);
+        var products = context.Products.AsNoTracking().ToList();
+        products[1].Price = -1m;
+
+        var options = new WinnowOptions();
+        options.WithValidation(RejectNonPositivePrice());
+
+        var saver = new Winnower<Product, int>(context);
+        var result = await saver.UpdateAsync(products, options);
+
+        result.SuccessCount.ShouldBe(2);
+        result.FailureCount.ShouldBe(1);
+        var failure = result.Failures.ShouldHaveSingleItem();
+        failure.EntityId.ShouldBe(products[1].Id);
+        failure.Reason.ShouldBe(FailureReason.ValidationError);
+        failure.ValidationErrors.ShouldNotBeNull();
+        failure.ValidationErrors!.ShouldContain(e => e.PropertyName == "Price");
+    }
+
+    [Fact]
+    public async Task DeleteAsync_PreValidation_RecordsFailureAndEntityStaysInDb()
+    {
+        using var context = CreateContext();
+        SeedData(context, 3);
+        var products = context.Products.AsNoTracking().ToList();
+        var invalidId = products[1].Id;
+        products[1].Price = -1m;
+
+        var options = new DeleteOptions();
+        options.WithValidation(RejectNonPositivePrice());
+
+        var saver = new Winnower<Product, int>(context);
+        var result = await saver.DeleteAsync(products, options);
+
+        result.SuccessCount.ShouldBe(2);
+        result.FailureCount.ShouldBe(1);
+        var failure = result.Failures.ShouldHaveSingleItem();
+        failure.EntityId.ShouldBe(invalidId);
+        failure.Reason.ShouldBe(FailureReason.ValidationError);
+
+        context.ChangeTracker.Clear();
+        context.Products.Find(invalidId).ShouldNotBeNull();
+    }
+
+    [Fact]
     public async Task UpdateAsync_CancelledBeforeStart_ThrowsOperationCanceled()
     {
         using var context = CreateContext();

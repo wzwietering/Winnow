@@ -25,7 +25,10 @@ public class WinnowerDeleteValidationTests : TestBase
 
         result.SuccessCount.ShouldBe(2);
         result.FailureCount.ShouldBe(1);
-        result.Failures.ShouldHaveSingleItem().EntityId.ShouldBe(products[1].Id);
+        var failure = result.Failures.ShouldHaveSingleItem();
+        failure.EntityId.ShouldBe(products[1].Id);
+        failure.ValidationErrors.ShouldNotBeNull();
+        failure.ValidationErrors!.ShouldContain(e => e.PropertyName == "Id");
 
         // The validated-out entity should still be in the database.
         context.ChangeTracker.Clear();

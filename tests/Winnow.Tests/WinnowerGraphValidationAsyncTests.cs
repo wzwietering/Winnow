@@ -207,6 +207,83 @@ public class WinnowerGraphValidationAsyncTests : TestBase
     }
 
     [Fact]
+    public async Task DeleteGraphAsync_CancelledMidValidation_ThrowsOperationCanceled()
+    {
+        using var context = CreateContext();
+        var seeded = NewOrder("seed-0");
+        context.CustomerOrders.Add(seeded);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var attached = await context.CustomerOrders.AsNoTracking().Include(o => o.OrderItems).SingleAsync();
+        var orders = new List<CustomerOrder> { attached };
+        for (int i = 1; i < 500; i++)
+            orders.Add(new CustomerOrder
+            {
+                Id = i + 20_000,
+                OrderNumber = $"d{i}",
+                CustomerName = "C",
+                CustomerId = 1,
+                TotalAmount = 1m,
+                OrderDate = DateTimeOffset.UtcNow,
+                OrderItems = [],
+            });
+
+        using var cts = new CancellationTokenSource();
+        var holder = new Counter();
+        var options = new DeleteGraphOptions();
+        options.WithValidation<CustomerOrder>((CustomerOrder _, ref ValidationCollector _) =>
+        {
+            if (Interlocked.Increment(ref holder.Value) == 50) cts.Cancel();
+        });
+        options.Validation!.CancellationCheckInterval = 1;
+
+        var saver = new Winnower<CustomerOrder, int>(context);
+        await Should.ThrowAsync<OperationCanceledException>(
+            () => saver.DeleteGraphAsync(orders, options, cts.Token));
+    }
+
+    [Fact]
+    public async Task UpdateGraphAsync_ThrowBehavior_ThrowsWinnowValidationException()
+    {
+        using var context = CreateContext();
+        var order = NewOrder("ORIG");
+        context.CustomerOrders.Add(order);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        order.OrderNumber = "BAD";
+        var options = new GraphOptions()
+            .WithValidation(RejectOrderNumber("BAD"), ValidationFailureBehavior.Throw);
+
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var ex = await Should.ThrowAsync<WinnowValidationException>(
+            () => saver.UpdateGraphAsync([order], options));
+        ex.Failures.ShouldHaveSingleItem().EntityIndex.ShouldBe(0);
+
+        context.ChangeTracker.Clear();
+        (await context.CustomerOrders.AsNoTracking().SingleAsync()).OrderNumber.ShouldBe("ORIG");
+    }
+
+    [Fact]
+    public async Task UpsertGraphAsync_ThrowBehavior_ThrowsWinnowValidationException()
+    {
+        using var context = CreateContext();
+        var orders = new[] { NewOrder("OK"), NewOrder("BAD") };
+
+        var options = new UpsertGraphOptions()
+            .WithValidation(RejectOrderNumber("BAD"), ValidationFailureBehavior.Throw);
+
+        var saver = new Winnower<CustomerOrder, int>(context);
+        var ex = await Should.ThrowAsync<WinnowValidationException>(
+            () => saver.UpsertGraphAsync(orders, options));
+        ex.Failures.ShouldHaveSingleItem().EntityIndex.ShouldBe(1);
+
+        context.ChangeTracker.Clear();
+        (await context.CustomerOrders.CountAsync()).ShouldBe(0);
+    }
+
+    [Fact]
     public async Task InsertGraphAsync_ThrowBehavior_ThrowsWinnowValidationException()
     {
         using var context = CreateContext();

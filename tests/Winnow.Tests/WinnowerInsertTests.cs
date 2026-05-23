@@ -90,7 +90,7 @@ public class WinnowerInsertTests : TestBase
         result.SuccessCount.ShouldBe(2);
         result.FailureCount.ShouldBe(1);
         result.Failures[0].EntityIndex.ShouldBe(1);
-        result.Failures[0].Reason.ShouldBe(FailureReason.ValidationError);
+        result.Failures[0].Reason.ShouldBe(FailureReason.EfValidationError);
     }
 
     [Fact]

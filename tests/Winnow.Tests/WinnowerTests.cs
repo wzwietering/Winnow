@@ -79,7 +79,7 @@ public class WinnowerTests : TestBase
         result.FailureCount.ShouldBe(2);
         result.FailedIds.ShouldContain(productsToUpdate[0].Id);
         result.FailedIds.ShouldContain(productsToUpdate[2].Id);
-        result.Failures.All(f => f.Reason == FailureReason.ValidationError).ShouldBeTrue();
+        result.Failures.All(f => f.Reason == FailureReason.EfValidationError).ShouldBeTrue();
     }
 
     [Fact]

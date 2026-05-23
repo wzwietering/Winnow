@@ -108,7 +108,7 @@ public class ValidationReleaseFollowupTests
         {
             var errors = new ValidationError[] { new("X", "bad", "B") };
             var failures = Enumerable.Range(0, 8)
-                .Select(i => new WinnowEntityFailure(i, "bad", errors))
+                .Select(i => new WinnowEntityFailure(i, errors, "bad"))
                 .ToList();
 
             var ex = new WinnowValidationException(failures);
@@ -124,7 +124,7 @@ public class ValidationReleaseFollowupTests
         {
             var errors = new ValidationError[] { new("X", "bad", "B") };
             var failures = Enumerable.Range(0, 5)
-                .Select(i => new WinnowEntityFailure(i, "bad", errors))
+                .Select(i => new WinnowEntityFailure(i, errors, "bad"))
                 .ToList();
 
             var ex = new WinnowValidationException(failures);

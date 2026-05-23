@@ -33,10 +33,10 @@ internal static class NavigationWalker
     /// <summary>
     /// Error code emitted when the navigation walk reaches
     /// <see cref="GraphValidationOptions.MaxNavigationDepth"/> and stops descending
-    /// further. Distinguishable from real validation failures so callers can
-    /// surface a depth-limit hit as a configuration issue rather than bad data.
+    /// further. Alias for the public
+    /// <see cref="ValidationErrorCodes.NavigationDepthLimit"/>.
     /// </summary>
-    internal const string DepthLimitErrorCode = "WINNOW_NAV_DEPTH_LIMIT";
+    internal const string DepthLimitErrorCode = ValidationErrorCodes.NavigationDepthLimit;
 
     /// <summary>
     /// Walks <paramref name="root"/>'s reachable children and adds any validation
@@ -112,13 +112,29 @@ internal static class NavigationWalker
         var nextDepth = depth + 1;
         if (nextDepth >= maxDepth)
         {
-            collector.Add(new ValidationError(
-                TrimTrailingDot(childPrefix),
-                $"Navigation depth limit ({maxDepth}) reached; descendants of this entity were not validated.",
-                DepthLimitErrorCode));
+            if (HasTraversableNavigations(child, filter))
+            {
+                collector.Add(new ValidationError(
+                    TrimTrailingDot(childPrefix),
+                    $"Navigation depth limit ({maxDepth}) reached; descendants of this entity were not validated.",
+                    DepthLimitErrorCode));
+            }
             return;
         }
         WalkChildrenOf(child, ref collector, visited, filter, childPrefix, nextDepth, maxDepth);
+    }
+
+    private static bool HasTraversableNavigations(object child, NavigationFilter? filter)
+    {
+        var childType = child.GetType();
+        var navs = GetNavigations(childType);
+        if (navs.Length == 0) return false;
+        if (filter is null) return true;
+        foreach (var nav in navs)
+        {
+            if (filter.ShouldTraverse(childType, nav.Name)) return true;
+        }
+        return false;
     }
 
     private static string TrimTrailingDot(string path) =>

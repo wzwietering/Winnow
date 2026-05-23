@@ -42,10 +42,11 @@ public class UpsertFailure<TKey> where TKey : notnull, IEquatable<TKey>
     public bool IsDefaultKey { get; init; }
 
     /// <summary>
-    /// Structured per-property errors recorded by pre-validation. Populated only
-    /// when <see cref="Reason"/> is <see cref="FailureReason.ValidationError"/>;
-    /// <c>null</c> otherwise. Use this to drive structured UI / API responses
-    /// instead of parsing <see cref="ErrorMessage"/>.
+    /// Structured per-property errors recorded by Winnow pre-validation. Populated
+    /// only when <see cref="Reason"/> is <see cref="FailureReason.ValidationError"/>;
+    /// <c>null</c> for every other reason — including
+    /// <see cref="FailureReason.EfValidationError"/>, which originates from EF
+    /// Core's save-time validation and does not produce structured errors.
     /// </summary>
     public IReadOnlyList<ValidationError>? ValidationErrors { get; init; }
 }

@@ -106,10 +106,13 @@ public class WinnowFailure<TKey> where TKey : notnull, IEquatable<TKey>
     public Exception? Exception { get; init; }
 
     /// <summary>
-    /// Structured per-property errors recorded by pre-validation. Populated only
-    /// when <see cref="Reason"/> is <see cref="FailureReason.ValidationError"/>;
-    /// <c>null</c> otherwise. Use this to drive structured UI / API responses
-    /// instead of parsing <see cref="ErrorMessage"/>.
+    /// Structured per-property errors recorded by Winnow pre-validation. Populated
+    /// only when <see cref="Reason"/> is <see cref="FailureReason.ValidationError"/>;
+    /// <c>null</c> for every other reason — including
+    /// <see cref="FailureReason.EfValidationError"/>, which originates from EF
+    /// Core's save-time validation and does not produce structured errors. Use
+    /// this to drive structured UI / API responses instead of parsing
+    /// <see cref="ErrorMessage"/>.
     /// </summary>
     public IReadOnlyList<ValidationError>? ValidationErrors { get; init; }
 }
@@ -120,9 +123,21 @@ public class WinnowFailure<TKey> where TKey : notnull, IEquatable<TKey>
 public enum FailureReason
 {
     /// <summary>
-    /// Entity failed model or business rule validation.
+    /// Entity was rejected by Winnow pre-validation (a
+    /// <see cref="ValidationOptions.Validator"/> delegate or the DataAnnotations
+    /// adapter). Carries a populated <see cref="WinnowFailure{TKey}.ValidationErrors"/>
+    /// list with per-property details.
     /// </summary>
     ValidationError,
+
+    /// <summary>
+    /// EF Core itself rejected the entity at save time (e.g. unmapped property,
+    /// model mismatch, or other <see cref="InvalidOperationException"/> raised
+    /// from <c>SaveChanges</c>). <see cref="WinnowFailure{TKey}.ValidationErrors"/>
+    /// is <c>null</c> — only <see cref="WinnowFailure{TKey}.ErrorMessage"/> and
+    /// <see cref="WinnowFailure{TKey}.Exception"/> describe the issue.
+    /// </summary>
+    EfValidationError,
 
     /// <summary>
     /// Optimistic concurrency conflict detected.

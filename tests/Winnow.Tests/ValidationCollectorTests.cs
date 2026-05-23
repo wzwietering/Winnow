@@ -84,6 +84,35 @@ public class ValidationCollectorTests
     }
 
     [Fact]
+    public void Dispose_CalledTwice_DoesNotThrow()
+    {
+        var collector = ValidationCollector.Create();
+        collector.Dispose();
+        collector.Dispose(); // second call must not throw
+    }
+
+    [Fact]
+    public void Dispose_AfterGrow_DoesNotThrowAndCanBeUsedThroughAnotherInstance()
+    {
+        // Forces the collector to rent a pool buffer (count > 4) and then return
+        // it on Dispose. We don't have direct access to ArrayPool to verify the
+        // return, but disposing the grown collector must not throw, and a new
+        // collector immediately afterwards must work correctly — guards against
+        // accidental sharing of the rented buffer between independent collectors.
+        var grown = ValidationCollector.Create();
+        for (int i = 0; i < ValidationCollector.InlineCapacity + 2; i++)
+            grown.Add($"P{i}", $"M{i}");
+        grown.Count.ShouldBe(ValidationCollector.InlineCapacity + 2);
+        grown.Dispose();
+
+        var fresh = ValidationCollector.Create();
+        fresh.IsValid.ShouldBeTrue();
+        fresh.Count.ShouldBe(0);
+        fresh.Add("After", "ok");
+        fresh.AsSpan()[0].PropertyName.ShouldBe("After");
+    }
+
+    [Fact]
     public void Add_NewError_AppendsAfterPrevious()
     {
         var buffer = new ValidationError[ValidationCollector.InlineCapacity];

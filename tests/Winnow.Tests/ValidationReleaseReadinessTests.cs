@@ -154,6 +154,39 @@ public class ValidationReleaseReadinessTests
             }
         }
 
+        // Regression: in parallel ThrowAfterBatch recovery at ResultDetail.None,
+        // BuildInsertValidationFailures returned an empty list (detail-gated) and
+        // the merger then computed FailureCount = survivor + 0, silently dropping
+        // the count of validation-rejected entities. Locking the merger to use
+        // the raw failure count rather than the gated list's length.
+        [Fact]
+        public async Task InsertAsync_ThrowBehavior_ResultDetailNone_FailureCountStillAccurate()
+        {
+            EnsureDatabaseCreated();
+
+            var products = Enumerable.Range(0, 8).Select(i => new Product
+            {
+                Name = $"p{i}",
+                Price = i % 3 == 0 ? -1m : 1m, // invalid at 0, 3, 6 → 3 failures
+                Stock = 1,
+                LastModified = DateTimeOffset.UtcNow,
+            }).ToList();
+
+            var saver = CreateSaver(maxDegreeOfParallelism: 2);
+            var options = new InsertOptions { ResultDetail = ResultDetail.None }
+                .WithValidation<Product>(
+                    (Product p, ref ValidationCollector c) =>
+                    {
+                        if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
+                    },
+                    ValidationFailureBehavior.Throw);
+
+            var result = await saver.InsertAsync(products, options);
+
+            result.FailureCount.ShouldBe(3);
+            result.SuccessCount.ShouldBe(5);
+        }
+
         // Regression for the parallel ThrowAfterBatch recovery path: when a
         // partition's WinnowValidationException fires, the orchestrator re-runs
         // the survivors through the strategy, which assigns them fresh

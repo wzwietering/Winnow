@@ -16,7 +16,7 @@ internal static class FailureClassifier
 {
     internal static FailureReason Classify(Exception ex) => ex switch
     {
-        InvalidOperationException => FailureReason.ValidationError,
+        InvalidOperationException => FailureReason.EfValidationError,
         DbUpdateConcurrencyException => FailureReason.ConcurrencyConflict,
         DbUpdateException dbEx when IsDuplicateKeyError(dbEx) => FailureReason.DuplicateKey,
         DbUpdateException => FailureReason.DatabaseConstraint,

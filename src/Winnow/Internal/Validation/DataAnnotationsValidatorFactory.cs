@@ -18,9 +18,10 @@ internal static class DataAnnotationsValidatorFactory
     /// <summary>
     /// Code applied to errors emitted by <see cref="IValidatableObject.Validate"/>
     /// — distinguishes them from property-attribute failures (whose code is the
-    /// attribute type name, e.g. <c>RequiredAttribute</c>).
+    /// attribute type name, e.g. <c>RequiredAttribute</c>). Alias for the public
+    /// <see cref="ValidationErrorCodes.ValidatableObject"/>.
     /// </summary>
-    internal const string ValidatableObjectErrorCode = "WINNOW_VALIDATABLE_OBJECT";
+    internal const string ValidatableObjectErrorCode = ValidationErrorCodes.ValidatableObject;
 
     private static readonly ConcurrentDictionary<Type, object> _cache = new();
     private static readonly ConcurrentDictionary<Type, UntypedAnnotatedProperty[]> _untypedCache = new();
