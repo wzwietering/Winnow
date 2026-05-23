@@ -108,7 +108,7 @@ public class ValidationReleaseFollowupTests
         {
             var errors = new ValidationError[] { new("X", "bad", "B") };
             var failures = Enumerable.Range(0, 8)
-                .Select(i => new WinnowValidationException.EntityFailure(i, "bad", errors))
+                .Select(i => new WinnowEntityFailure(i, "bad", errors))
                 .ToList();
 
             var ex = new WinnowValidationException(failures);
@@ -124,7 +124,7 @@ public class ValidationReleaseFollowupTests
         {
             var errors = new ValidationError[] { new("X", "bad", "B") };
             var failures = Enumerable.Range(0, 5)
-                .Select(i => new WinnowValidationException.EntityFailure(i, "bad", errors))
+                .Select(i => new WinnowEntityFailure(i, "bad", errors))
                 .ToList();
 
             var ex = new WinnowValidationException(failures);
@@ -313,7 +313,7 @@ public class ValidationReleaseFollowupTests
                     if (Interlocked.Increment(ref holder.Value) == 50) cts.Cancel();
                     c.Add(nameof(Product.Price), "always", "ALWAYS");
                 },
-                ValidationFailureBehavior.ThrowAfterBatch);
+                ValidationFailureBehavior.Throw);
             options.Validation!.CancellationCheckInterval = 1;
 
             var saver = new Winnower<Product, int>(context);

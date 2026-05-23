@@ -10,6 +10,9 @@ namespace Winnow.Internal.Validation;
 /// </summary>
 internal static class PreValidationRunner
 {
+    private const string NullEntityMessage = "Entity was null.";
+    private const string NullEntityCode = "WINNOW_NULL_ENTITY";
+
     /// <summary>
     /// Validates <paramref name="entities"/> using <paramref name="validation"/>.
     /// </summary>
@@ -45,39 +48,34 @@ internal static class PreValidationRunner
         where TEntity : class
     {
         EnsureEntityTypeMatches<TEntity>(validation);
-        var includeNavigations = validation.ShouldWalkNavigations;
-        var navigationDepthLimit = validation.NavigationDepthLimit;
-        var validator = (ValidatorDelegate<TEntity>)validation.Validator;
-        var throwOnAny = validation.FailureBehavior == ValidationFailureBehavior.ThrowAfterBatch;
-        var survivors = new List<TEntity>(entities.Count);
-        var indices = new int[entities.Count];
-        List<WinnowValidationException.EntityFailure>? thrownFailures = null;
-        var inlineBuffer = new ValidationError[ValidationCollector.InlineCapacity];
-        int survivorCount = 0;
-
-        ScanEntities(entities, validator, recordFailure, validation.CancellationCheckInterval,
-            cancellationToken, throwOnAny, includeNavigations, navigationDepthLimit, navigationFilter,
-            inlineBuffer, survivors, indices, ref thrownFailures, ref survivorCount);
-
-        ThrowIfAnyFailed(thrownFailures);
-        return BuildResult(entities.Count, survivors, indices, survivorCount);
+        var ctx = BuildContext<TEntity>(entities.Count, validation, recordFailure, navigationFilter);
+        ScanEntities(entities, validation.CancellationCheckInterval, cancellationToken, ref ctx);
+        ThrowIfAnyFailed(ctx.ThrownFailures);
+        return BuildResult<TEntity>(entities.Count, ctx.Survivors, ctx.Indices, ctx.SurvivorCount);
     }
 
-    private static void ScanEntities<TEntity>(
-        List<TEntity> entities,
-        ValidatorDelegate<TEntity> validator,
+    private static ValidationRunContext<TEntity> BuildContext<TEntity>(
+        int inputCount,
+        ValidationOptions validation,
         Action<int, string, IReadOnlyList<ValidationError>> recordFailure,
-        int interval,
-        CancellationToken cancellationToken,
-        bool throwOnAny,
-        bool includeNavigations,
-        int navigationDepthLimit,
-        NavigationFilter? navigationFilter,
-        ValidationError[] inlineBuffer,
-        List<TEntity> survivors,
-        int[] indices,
-        ref List<WinnowValidationException.EntityFailure>? thrownFailures,
-        ref int survivorCount)
+        NavigationFilter? navigationFilter)
+        where TEntity : class =>
+        new()
+        {
+            Validator = (ValidatorDelegate<TEntity>)validation.Validator,
+            RecordFailure = recordFailure,
+            ThrowOnAny = validation.FailureBehavior == ValidationFailureBehavior.Throw,
+            IncludeNavigations = validation.ShouldWalkNavigations,
+            NavigationDepthLimit = validation.NavigationDepthLimit,
+            NavigationFilter = navigationFilter,
+            InlineBuffer = new ValidationError[ValidationCollector.InlineCapacity],
+            Survivors = new List<TEntity>(inputCount),
+            Indices = new int[inputCount],
+        };
+
+    private static void ScanEntities<TEntity>(
+        List<TEntity> entities, int interval, CancellationToken cancellationToken,
+        ref ValidationRunContext<TEntity> ctx)
         where TEntity : class
     {
         for (int i = 0; i < entities.Count; i++)
@@ -86,48 +84,34 @@ internal static class PreValidationRunner
             {
                 cancellationToken.ThrowIfCancellationRequested();
             }
-            ProcessEntity(entities[i], i, validator, recordFailure, throwOnAny, includeNavigations,
-                navigationDepthLimit, navigationFilter,
-                inlineBuffer, survivors, indices, ref thrownFailures, ref survivorCount);
+            ProcessEntity(entities[i], i, ref ctx);
         }
     }
 
     private static void ProcessEntity<TEntity>(
-        TEntity? entity,
-        int index,
-        ValidatorDelegate<TEntity> validator,
-        Action<int, string, IReadOnlyList<ValidationError>> recordFailure,
-        bool throwOnAny,
-        bool includeNavigations,
-        int navigationDepthLimit,
-        NavigationFilter? navigationFilter,
-        ValidationError[] inlineBuffer,
-        List<TEntity> survivors,
-        int[] indices,
-        ref List<WinnowValidationException.EntityFailure>? thrownFailures,
-        ref int survivorCount)
+        TEntity? entity, int index, ref ValidationRunContext<TEntity> ctx)
         where TEntity : class
     {
         if (entity is null)
         {
-            RecordNullEntity(index, recordFailure, ref thrownFailures, throwOnAny);
+            RecordNullEntity(index, ref ctx);
             return;
         }
 
-        var collector = new ValidationCollector(inlineBuffer);
+        var collector = new ValidationCollector(ctx.InlineBuffer);
         try
         {
-            validator(entity, ref collector);
-            if (includeNavigations)
+            ctx.Validator(entity, ref collector);
+            if (ctx.IncludeNavigations)
             {
-                NavigationWalker.Walk(entity, ref collector, navigationDepthLimit, navigationFilter);
+                NavigationWalker.Walk(entity, ref collector, ctx.NavigationDepthLimit, ctx.NavigationFilter);
             }
             if (collector.IsValid)
             {
-                AddSurvivor(survivors, indices, ref survivorCount, entity, index);
+                AddSurvivor(ref ctx, entity, index);
                 return;
             }
-            DispatchFailure(index, collector.AsSpan().ToArray(), recordFailure, throwOnAny, ref thrownFailures);
+            DispatchFailure(index, collector.AsSpan().ToArray(), ref ctx);
         }
         finally
         {
@@ -135,25 +119,47 @@ internal static class PreValidationRunner
         }
     }
 
-    private static void DispatchFailure(
-        int index,
-        ValidationError[] errors,
-        Action<int, string, IReadOnlyList<ValidationError>> recordFailure,
-        bool throwOnAny,
-        ref List<WinnowValidationException.EntityFailure>? thrownFailures)
+    private static void DispatchFailure<TEntity>(
+        int index, ValidationError[] errors, ref ValidationRunContext<TEntity> ctx)
+        where TEntity : class
     {
         var message = BuildMessage(errors);
-        if (throwOnAny)
+        if (ctx.ThrowOnAny)
         {
-            (thrownFailures ??= []).Add(new WinnowValidationException.EntityFailure(index, message, errors));
+            (ctx.ThrownFailures ??= []).Add(new WinnowEntityFailure(index, message, errors));
         }
         else
         {
-            recordFailure(index, message, errors);
+            ctx.RecordFailure(index, message, errors);
         }
     }
 
-    private static void ThrowIfAnyFailed(List<WinnowValidationException.EntityFailure>? thrownFailures)
+    private static void RecordNullEntity<TEntity>(
+        int index, ref ValidationRunContext<TEntity> ctx)
+        where TEntity : class
+    {
+        var errors = new[] { new ValidationError(string.Empty, NullEntityMessage, NullEntityCode) };
+        if (ctx.ThrowOnAny)
+        {
+            (ctx.ThrownFailures ??= []).Add(new WinnowEntityFailure(index, NullEntityMessage, errors));
+        }
+        else
+        {
+            ctx.RecordFailure(index, NullEntityMessage, errors);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void AddSurvivor<TEntity>(
+        ref ValidationRunContext<TEntity> ctx, TEntity entity, int originalIndex)
+        where TEntity : class
+    {
+        ctx.Survivors.Add(entity);
+        ctx.Indices[ctx.SurvivorCount] = originalIndex;
+        ctx.SurvivorCount++;
+    }
+
+    private static void ThrowIfAnyFailed(List<WinnowEntityFailure>? thrownFailures)
     {
         if (thrownFailures is { Count: > 0 })
         {
@@ -172,39 +178,6 @@ internal static class PreValidationRunner
             _ => indices.AsSpan(0, survivorCount).ToArray(),
         };
         return new PreValidationResult<TEntity>(survivors, trimmed);
-    }
-
-    private const string NullEntityMessage = "Entity was null.";
-    private const string NullEntityCode = "WINNOW_NULL_ENTITY";
-
-    private static void RecordNullEntity(
-        int index,
-        Action<int, string, IReadOnlyList<ValidationError>> recordFailure,
-        ref List<WinnowValidationException.EntityFailure>? thrownFailures,
-        bool throwOnAny)
-    {
-        var errors = new[] { new ValidationError(string.Empty, NullEntityMessage, NullEntityCode) };
-        if (throwOnAny)
-        {
-            (thrownFailures ??= []).Add(new WinnowValidationException.EntityFailure(index, NullEntityMessage, errors));
-        }
-        else
-        {
-            recordFailure(index, NullEntityMessage, errors);
-        }
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static void AddSurvivor<TEntity>(
-        List<TEntity> survivors,
-        int[] indices,
-        ref int survivorCount,
-        TEntity entity,
-        int originalIndex)
-    {
-        survivors.Add(entity);
-        indices[survivorCount] = originalIndex;
-        survivorCount++;
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -246,4 +219,27 @@ internal static class PreValidationRunner
         string.IsNullOrEmpty(error.PropertyName)
             ? error.Message
             : $"{error.PropertyName}: {error.Message}";
+}
+
+/// <summary>
+/// Per-batch state for <see cref="PreValidationRunner.Run{TEntity}"/>. Holds
+/// the loop-invariant validator configuration plus the mutable accumulators
+/// (survivor list, original-index map, thrown-failures buffer). Passed by
+/// <c>ref</c> so the scan-and-record helpers can mutate <see cref="SurvivorCount"/>
+/// and <see cref="ThrownFailures"/> without taking a dozen ref parameters each.
+/// </summary>
+internal struct ValidationRunContext<TEntity>
+    where TEntity : class
+{
+    public ValidatorDelegate<TEntity> Validator;
+    public Action<int, string, IReadOnlyList<ValidationError>> RecordFailure;
+    public bool ThrowOnAny;
+    public bool IncludeNavigations;
+    public int NavigationDepthLimit;
+    public NavigationFilter? NavigationFilter;
+    public ValidationError[] InlineBuffer;
+    public List<TEntity> Survivors;
+    public int[] Indices;
+    public List<WinnowEntityFailure>? ThrownFailures;
+    public int SurvivorCount;
 }

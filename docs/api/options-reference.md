@@ -16,6 +16,8 @@ Used with `Update`.
 
 All options classes that inherit from `WinnowOptions` also support `Strategy`, `ValidateNavigationProperties`, `Retry`, `Validation`, and `ResultDetail`. All options classes that inherit from `GraphOptionsBase` also support `Retry`, `Validation`, and `ResultDetail`.
 
+> **Type note:** `WinnowOptions.Validation` is typed as `ValidationOptions?`. `GraphOptionsBase.Validation` is typed as `GraphValidationOptions?` (a `ValidationOptions` subclass that adds `IncludeNavigations` / `MaxNavigationDepth`). The two property types are different so navigation walking is unreachable from a flat operation by construction.
+
 ## InsertOptions
 
 Used with `Insert`. Inherits from `WinnowOptions`.
@@ -140,6 +142,35 @@ var result = saver.Update(entities, new WinnowOptions
 
 > **Note:** The retry handler re-invokes `SaveChanges` on the same `DbContext`. For providers that do not automatically recover entity state after transient failures, consider using the provider's built-in retry strategy (e.g., `EnableRetryOnFailure`) instead.
 
+## ValidationOptions
+
+Configures the pre-validation pipeline that runs in-process before any database round trip. Attach via the `WithValidation<TEntity>(...)` or `WithDataAnnotations<TEntity>()` extension methods on any `WinnowOptions` (or `WinnowOptions`-derived) instance — never instantiate this type directly. See [Pre-Validation](../pre-validation.md) for the full usage guide.
+
+```csharp
+var options = new InsertOptions().WithDataAnnotations<Product>(ValidationFailureBehavior.Throw);
+options.Validation!.CancellationCheckInterval = 64; // optional tuning
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `FailureBehavior` | `ValidationFailureBehavior` | `RecordAsFailure` | What happens when at least one entity fails validation. See [ValidationFailureBehavior](#validationfailurebehavior). |
+| `CancellationCheckInterval` | `int` | `256` | How often (in entities) the validation pipeline polls the cancellation token. Lower values give faster cancellation at a small throughput cost; must be positive. |
+
+## GraphValidationOptions
+
+Subclass of `ValidationOptions` used on graph operations (`InsertGraph`, `UpdateGraph`, `DeleteGraph`, `UpsertGraph`). Adds navigation-walk controls so the validator can descend into reachable child entities. Attach via the `WithValidation` / `WithDataAnnotations` extensions on a `GraphOptionsBase` subtype; `IncludeNavigations` requires the `WithDataAnnotations` form.
+
+```csharp
+var options = new InsertGraphOptions().WithDataAnnotations<CustomerOrder>(includeNavigations: true);
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `FailureBehavior` | `ValidationFailureBehavior` | `RecordAsFailure` | Inherited from `ValidationOptions`. |
+| `CancellationCheckInterval` | `int` | `256` | Inherited from `ValidationOptions`. |
+| `IncludeNavigations` | `bool` | `false` | When `true`, descend into navigation properties and validate each reachable entity. Requires a DataAnnotations validator; setting this to `true` with a delegate-only validator throws `InvalidOperationException` at configuration time. The walk honours `GraphOptionsBase.NavigationFilter`. |
+| `MaxNavigationDepth` | `int` | `32` | Recursion-depth cap for the navigation walk. When the cap is reached, a `ValidationError` with code `WINNOW_NAV_DEPTH_LIMIT` is recorded at the cut-off point. Must be positive. |
+
 ## Enums
 
 ### BatchStrategy
@@ -187,6 +218,13 @@ var result = saver.Update(entities, new WinnowOptions
 | `Fail` | Record in Failures collection (default). |
 | `RetryAsUpdate` | Retry failed INSERT as UPDATE. Handles race conditions. |
 | `Skip` | Skip silently without recording as failure. |
+
+### ValidationFailureBehavior
+
+| Value | Description |
+|-------|-------------|
+| `RecordAsFailure` | Default. Each invalid entity becomes a failure with `FailureReason.ValidationError`. Valid entities in the same batch still hit the database. Matches the "winnow out the failures" model the rest of the library follows. |
+| `Throw` | After validating every entity in the batch, throw a `WinnowValidationException` aggregating all failures. Valid entities in the same batch are not sent to the database — the throw pre-empts the entire round trip. The scan is not short-circuited on the first failure; every offending entity is included so callers can react to them all without re-running the validator. |
 
 ### FailureReason
 

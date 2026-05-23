@@ -135,7 +135,7 @@ public class WinnowerGraphValidationTests : TestBase
         order.OrderNumber = "BAD";
 
         var options = new GraphOptions()
-            .WithValidation(RejectOrderNumber("BAD"), ValidationFailureBehavior.ThrowAfterBatch);
+            .WithValidation(RejectOrderNumber("BAD"), ValidationFailureBehavior.Throw);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         var ex = Should.Throw<WinnowValidationException>(() => saver.UpdateGraph([order], options));
@@ -157,7 +157,7 @@ public class WinnowerGraphValidationTests : TestBase
         var attached = context.CustomerOrders.AsNoTracking().Include(o => o.OrderItems).Single();
 
         var options = new DeleteGraphOptions()
-            .WithValidation(RejectOrderNumber("KEEP-ME"), ValidationFailureBehavior.ThrowAfterBatch);
+            .WithValidation(RejectOrderNumber("KEEP-ME"), ValidationFailureBehavior.Throw);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         Should.Throw<WinnowValidationException>(() => saver.DeleteGraph([attached], options));
@@ -173,7 +173,7 @@ public class WinnowerGraphValidationTests : TestBase
         var orders = new[] { NewOrder("OK"), NewOrder("BAD") };
 
         var options = new UpsertGraphOptions()
-            .WithValidation(RejectOrderNumber("BAD"), ValidationFailureBehavior.ThrowAfterBatch);
+            .WithValidation(RejectOrderNumber("BAD"), ValidationFailureBehavior.Throw);
 
         var saver = new Winnower<CustomerOrder, int>(context);
         var ex = Should.Throw<WinnowValidationException>(() => saver.UpsertGraph(orders, options));
@@ -181,5 +181,51 @@ public class WinnowerGraphValidationTests : TestBase
 
         context.ChangeTracker.Clear();
         context.CustomerOrders.Count().ShouldBe(0);
+    }
+
+    // Locks the many-to-many + validation intersection. Student.Courses is an
+    // EF Core skip navigation: a custom validator runs on the parent and may
+    // inspect the navigation collection. The join-table writes should only
+    // happen for survivors of pre-validation — rejected students must produce
+    // no rows in StudentCourse. Without this test the M2M code path went
+    // through pre-validation untested.
+    [Fact]
+    public void InsertGraph_ManyToMany_PreValidationRejectsParent_NoJoinRowsWritten()
+    {
+        using var context = CreateContext();
+
+        ValidatorDelegate<Student> rejectEmptyCourseList = (Student s, ref ValidationCollector c) =>
+        {
+            if (s.Courses.Count == 0) c.Add(nameof(Student.Courses), "Must enroll in at least one course", "EMPTY");
+        };
+
+        var students = new[]
+        {
+            new Student { Name = "Alice", Email = "a@t", Courses = [new Course { Code = "C1", Title = "T1", Credits = 1 }] },
+            new Student { Name = "Bob", Email = "b@t", Courses = [] }, // rejected
+        };
+
+        var options = new InsertGraphOptions
+        {
+            IncludeManyToMany = true,
+            ManyToManyInsertBehavior = ManyToManyInsertBehavior.InsertIfNew,
+        };
+        options.WithValidation(rejectEmptyCourseList);
+
+        var saver = new Winnower<Student, int>(context);
+        var result = saver.InsertGraph(students, options);
+
+        result.SuccessCount.ShouldBe(1);
+        result.FailureCount.ShouldBe(1);
+        var failure = result.Failures.ShouldHaveSingleItem();
+        failure.EntityIndex.ShouldBe(1);
+        failure.Reason.ShouldBe(FailureReason.ValidationError);
+        failure.ValidationErrors!.ShouldContain(e => e.Code == "EMPTY");
+
+        context.ChangeTracker.Clear();
+        context.Students.Count(s => s.Name == "Bob").ShouldBe(0);
+        var alice = context.Students.Include(s => s.Courses).Single(s => s.Name == "Alice");
+        alice.Courses.Count.ShouldBe(1);
+        alice.Courses.Single().Code.ShouldBe("C1");
     }
 }

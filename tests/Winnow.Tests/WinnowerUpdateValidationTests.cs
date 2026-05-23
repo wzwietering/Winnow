@@ -44,7 +44,7 @@ public class WinnowerUpdateValidationTests : TestBase
         {
             if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive");
         });
-        options.Validation!.FailureBehavior = ValidationFailureBehavior.ThrowAfterBatch;
+        options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
 
         var saver = new Winnower<Product, int>(context);
         var ex = Should.Throw<WinnowValidationException>(() => saver.Update(products, options));

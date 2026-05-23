@@ -58,6 +58,33 @@ internal class EntityKeyService<TEntity, TKey>
         return ReadCompositeKey(entity, keyProperties);
     }
 
+    /// <summary>
+    /// True when every primary-key CLR property on <paramref name="entity"/> is its
+    /// type's default value — the same condition <c>UpsertOperation</c> uses to
+    /// classify an entity as an INSERT before any tracker work happens.
+    /// Reflection-only: does not attach the entity to the underlying
+    /// <see cref="DbContext"/>, so it is safe to call from the parallel
+    /// validation-recovery path where the original strategy context has already
+    /// been disposed. Throws if a primary-key column is a shadow property, in
+    /// line with the rest of the instance-read API.
+    /// </summary>
+    internal bool HasDefaultKeyValueFromInstance(TEntity entity)
+    {
+        foreach (var keyProperty in KeyProperties)
+        {
+            var propertyInfo = keyProperty.PropertyInfo
+                ?? throw new InvalidOperationException(
+                    $"Primary key '{keyProperty.Name}' on {typeof(TEntity).Name} is a shadow property; " +
+                    $"default-key detection requires CLR properties.");
+            var value = propertyInfo.GetValue(entity);
+            if (!DefaultValueHelper.IsDefault(value, keyProperty.ClrType))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static TKey ReadSimpleKey(TEntity entity, IProperty keyProperty)
     {
         var propertyInfo = keyProperty.PropertyInfo

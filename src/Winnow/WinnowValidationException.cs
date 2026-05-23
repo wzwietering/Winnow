@@ -1,11 +1,9 @@
-using System.ComponentModel;
-
 namespace Winnow;
 
 /// <summary>
 /// Thrown by the pre-validation pipeline when
 /// <see cref="ValidationOptions.FailureBehavior"/> is
-/// <see cref="ValidationFailureBehavior.ThrowAfterBatch"/> and one or more entities
+/// <see cref="ValidationFailureBehavior.Throw"/> and one or more entities
 /// fail validation. Carries the aggregated per-entity failures so callers can
 /// react to them without re-running the validator.
 /// </summary>
@@ -23,14 +21,14 @@ public sealed class WinnowValidationException : Exception
     /// failures-list overload; empty when the exception was constructed via the
     /// message-only or message-plus-inner overloads (use those for re-throw scenarios).
     /// </summary>
-    public IReadOnlyList<EntityFailure> Failures { get; }
+    public IReadOnlyList<WinnowEntityFailure> Failures { get; }
 
     /// <summary>
     /// Creates an exception carrying the supplied per-entity failures. Throws
     /// <see cref="ArgumentException"/> if the list is empty — a validation
     /// exception without failures from the pipeline is semantically incoherent.
     /// </summary>
-    public WinnowValidationException(IReadOnlyList<EntityFailure> failures)
+    public WinnowValidationException(IReadOnlyList<WinnowEntityFailure> failures)
         : base(BuildMessage(RequireFailures(failures)))
     {
         Failures = failures;
@@ -42,7 +40,7 @@ public sealed class WinnowValidationException : Exception
     /// </summary>
     public WinnowValidationException()
     {
-        Failures = Array.Empty<EntityFailure>();
+        Failures = Array.Empty<WinnowEntityFailure>();
     }
 
     /// <summary>
@@ -53,7 +51,7 @@ public sealed class WinnowValidationException : Exception
     public WinnowValidationException(string message)
         : base(message)
     {
-        Failures = Array.Empty<EntityFailure>();
+        Failures = Array.Empty<WinnowEntityFailure>();
     }
 
     /// <summary>
@@ -63,10 +61,10 @@ public sealed class WinnowValidationException : Exception
     public WinnowValidationException(string message, Exception innerException)
         : base(message, innerException)
     {
-        Failures = Array.Empty<EntityFailure>();
+        Failures = Array.Empty<WinnowEntityFailure>();
     }
 
-    private static IReadOnlyList<EntityFailure> RequireFailures(IReadOnlyList<EntityFailure> failures)
+    private static IReadOnlyList<WinnowEntityFailure> RequireFailures(IReadOnlyList<WinnowEntityFailure> failures)
     {
         ArgumentNullException.ThrowIfNull(failures);
         if (failures.Count == 0)
@@ -78,7 +76,7 @@ public sealed class WinnowValidationException : Exception
         return failures;
     }
 
-    private static string BuildMessage(IReadOnlyList<EntityFailure> failures)
+    private static string BuildMessage(IReadOnlyList<WinnowEntityFailure> failures)
     {
         if (failures.Count == 1)
         {
@@ -88,7 +86,7 @@ public sealed class WinnowValidationException : Exception
         return $"Pre-validation failed for {failures.Count} entities at {FormatIndices(failures)}.";
     }
 
-    private static string FormatIndices(IReadOnlyList<EntityFailure> failures)
+    private static string FormatIndices(IReadOnlyList<WinnowEntityFailure> failures)
     {
         var take = Math.Min(failures.Count, MaxIndicesInMessage);
         var indices = new string[take];
@@ -99,24 +97,4 @@ public sealed class WinnowValidationException : Exception
         var joined = $"indices {string.Join(", ", indices)}";
         return failures.Count > MaxIndicesInMessage ? joined + ", ..." : joined;
     }
-
-    /// <summary>
-    /// A snapshot of one entity's pre-validation failure, surfaced via
-    /// <see cref="WinnowValidationException.Failures"/>. Drive UI / API
-    /// responses off <see cref="Errors"/> — the structured per-property list —
-    /// rather than parsing <see cref="Message"/>, which is a debug-only
-    /// concatenation whose exact format is not part of the API contract.
-    /// </summary>
-    /// <param name="EntityIndex">Zero-based position in the original input batch.</param>
-    /// <param name="Message">
-    /// Human-readable summary built from <paramref name="Errors"/>. Format is intentionally
-    /// underspecified and may change between minor releases. Hidden from IntelliSense
-    /// to steer callers to <paramref name="Errors"/>; still accessible programmatically
-    /// for logging.
-    /// </param>
-    /// <param name="Errors">Structured per-property errors recorded by the validator.</param>
-    public sealed record EntityFailure(
-        int EntityIndex,
-        [property: EditorBrowsable(EditorBrowsableState.Never)] string Message,
-        IReadOnlyList<ValidationError> Errors);
 }

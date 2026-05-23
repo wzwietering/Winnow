@@ -23,7 +23,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     /// <see cref="WinnowValidationException"/>. Implementations re-execute the
     /// partition without the validation-failed entities and merge the per-entity
     /// failures into the resulting payload, so that
-    /// <see cref="ValidationFailureBehavior.ThrowAfterBatch"/> in parallel mode
+    /// <see cref="ValidationFailureBehavior.Throw"/> in parallel mode
     /// matches single-context semantics: only the offending entities fail; valid
     /// siblings still reach the database.
     /// </summary>
@@ -218,20 +218,37 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         }
     }
 
-    private static (HashSet<int> FailedIndices, List<TEntity> Survivors) PartitionByValidation(
-        List<TEntity> partition, IReadOnlyList<WinnowValidationException.EntityFailure> failures)
+    /// <summary>
+    /// Splits a partition into validation-failed entities (carried inside
+    /// <paramref name="failures"/>) and survivors that must be re-run.
+    /// </summary>
+    /// <returns>
+    /// The survivor list plus an array mapping each survivor's position in that
+    /// list to its position in the original <paramref name="partition"/>. The
+    /// strategy re-run re-indexes survivors from 0..N-1; the caller uses this
+    /// map to remap result <c>EntityIndex</c> / <c>OriginalIndex</c> values back
+    /// to partition-relative positions before the top-level
+    /// <see cref="ResultMerger"/> applies its partition offset. Without this
+    /// remap, result entries point at the wrong original entity.
+    /// </returns>
+    private static (List<TEntity> Survivors, int[] SurvivorOriginalIndices) PartitionByValidation(
+        List<TEntity> partition, IReadOnlyList<WinnowEntityFailure> failures)
     {
-        var failedIndices = new HashSet<int>();
+        var failedIndices = new HashSet<int>(failures.Count);
         foreach (var f in failures)
             failedIndices.Add(f.EntityIndex);
 
-        var survivors = new List<TEntity>(Math.Max(0, partition.Count - failedIndices.Count));
+        var survivorCount = Math.Max(0, partition.Count - failedIndices.Count);
+        var survivors = new List<TEntity>(survivorCount);
+        var survivorOriginalIndices = new int[survivorCount];
+        var j = 0;
         for (int i = 0; i < partition.Count; i++)
         {
-            if (!failedIndices.Contains(i))
-                survivors.Add(partition[i]);
+            if (failedIndices.Contains(i)) continue;
+            survivors.Add(partition[i]);
+            survivorOriginalIndices[j++] = i;
         }
-        return (failedIndices, survivors);
+        return (survivors, survivorOriginalIndices);
     }
 
     private async Task<(TResult? Result, int RoundTrips, int Retries)> RerunSurvivorsAsync<TResult>(
@@ -263,7 +280,9 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<WinnowResult<TKey>>> execute,
         CancellationToken cancellationToken)
     {
-        var (_, survivors) = PartitionByValidation(partition, validationEx.Failures);
+        var (survivors, _) = PartitionByValidation(partition, validationEx.Failures);
+        // WinnowResult failures are keyed by EntityId, not index, so no remap
+        // is required after the survivor re-run.
         var (survivorResult, rt, retries) = await RerunSurvivorsAsync(survivors, execute, cancellationToken);
 
         var validationFailures = BuildWinnowValidationFailures(partition, validationEx.Failures);
@@ -277,11 +296,12 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<InsertResult<TKey>>> execute,
         CancellationToken cancellationToken)
     {
-        var (_, survivors) = PartitionByValidation(partition, validationEx.Failures);
+        var (survivors, survivorOriginalIndices) = PartitionByValidation(partition, validationEx.Failures);
         var (survivorResult, rt, retries) = await RerunSurvivorsAsync(survivors, execute, cancellationToken);
+        var remapped = RemapInsertSurvivors(survivorResult, survivorOriginalIndices);
 
         var validationFailures = BuildInsertValidationFailures(validationEx.Failures);
-        var merged = MergeInsertWithValidationFailures(survivorResult, validationFailures);
+        var merged = MergeInsertWithValidationFailures(remapped, validationFailures);
         return new PartitionResult<InsertResult<TKey>>(merged, rt, retries);
     }
 
@@ -291,18 +311,155 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
         Func<List<TEntity>, StrategyContext<TEntity, TKey>, CancellationToken, Task<UpsertResult<TKey>>> execute,
         CancellationToken cancellationToken)
     {
-        var (_, survivors) = PartitionByValidation(partition, validationEx.Failures);
+        var (survivors, survivorOriginalIndices) = PartitionByValidation(partition, validationEx.Failures);
         var (survivorResult, rt, retries) = await RerunSurvivorsAsync(survivors, execute, cancellationToken);
+        var remapped = RemapUpsertSurvivors(survivorResult, survivorOriginalIndices);
 
-        var validationFailures = BuildUpsertValidationFailures(validationEx.Failures);
-        var merged = MergeUpsertWithValidationFailures(survivorResult, validationFailures);
+        var validationFailures = BuildUpsertValidationFailures(partition, validationEx.Failures);
+        var merged = MergeUpsertWithValidationFailures(remapped, validationFailures);
         return new PartitionResult<UpsertResult<TKey>>(merged, rt, retries);
+    }
+
+    /// <summary>
+    /// Translates EntityIndex / OriginalIndex on a survivor-only <see cref="InsertResult{TKey}"/>
+    /// from survivor-list positions (0..N-1) back to partition-relative positions
+    /// (0..partition.Count-1). The top-level <see cref="ResultMerger"/> then adds
+    /// the partition offset to reach the user-visible input position. Without
+    /// this remap, callers would receive failures attributed to the wrong entity
+    /// in <see cref="ValidationFailureBehavior.Throw"/> + parallel mode.
+    /// </summary>
+    private static InsertResult<TKey>? RemapInsertSurvivors(
+        InsertResult<TKey>? survivor, int[] survivorOriginalIndices)
+    {
+        if (survivor is null) return null;
+        var remappedEntities = RemapInsertedEntities(survivor.InsertedEntitiesRaw, survivorOriginalIndices);
+        var remappedFailures = RemapInsertFailures(survivor.FailuresRaw, survivorOriginalIndices);
+        return new InsertResult<TKey>
+        {
+            ResultDetail = survivor.ResultDetail,
+            InsertedEntities = remappedEntities,
+            InsertedIds = survivor.InsertedIdsRaw,
+            Failures = remappedFailures,
+            SuccessCount = survivor.SuccessCount,
+            FailureCount = survivor.FailureCount,
+            Duration = survivor.Duration,
+            DatabaseRoundTrips = survivor.DatabaseRoundTrips,
+            WasCancelled = survivor.WasCancelled,
+            TotalRetries = survivor.TotalRetries,
+            GraphHierarchy = survivor.GraphHierarchyRaw,
+            TraversalInfo = survivor.TraversalInfoRaw,
+        };
+    }
+
+    /// <summary>
+    /// Upsert counterpart of <see cref="RemapInsertSurvivors"/>; see that method
+    /// for the rationale.
+    /// </summary>
+    private static UpsertResult<TKey>? RemapUpsertSurvivors(
+        UpsertResult<TKey>? survivor, int[] survivorOriginalIndices)
+    {
+        if (survivor is null) return null;
+        var remappedInserted = RemapUpsertedEntities(survivor.InsertedEntitiesRaw, survivorOriginalIndices);
+        var remappedUpdated = RemapUpsertedEntities(survivor.UpdatedEntitiesRaw, survivorOriginalIndices);
+        var remappedFailures = RemapUpsertFailures(survivor.FailuresRaw, survivorOriginalIndices);
+        return new UpsertResult<TKey>
+        {
+            ResultDetail = survivor.ResultDetail,
+            InsertedEntities = remappedInserted,
+            UpdatedEntities = remappedUpdated,
+            InsertedIds = survivor.InsertedIdsRaw,
+            UpdatedIds = survivor.UpdatedIdsRaw,
+            Failures = remappedFailures,
+            SuccessCount = survivor.SuccessCount,
+            FailureCount = survivor.FailureCount,
+            InsertedCount = survivor.InsertedCount,
+            UpdatedCount = survivor.UpdatedCount,
+            InsertedWithNullMatchKeyCount = survivor.InsertedWithNullMatchKeyCount,
+            Duration = survivor.Duration,
+            DatabaseRoundTrips = survivor.DatabaseRoundTrips,
+            WasCancelled = survivor.WasCancelled,
+            TotalRetries = survivor.TotalRetries,
+            GraphHierarchy = survivor.GraphHierarchyRaw,
+            TraversalInfo = survivor.TraversalInfoRaw,
+        };
+    }
+
+    private static List<InsertedEntity<TKey>> RemapInsertedEntities(
+        IReadOnlyList<InsertedEntity<TKey>> entities, int[] survivorOriginalIndices)
+    {
+        var list = new List<InsertedEntity<TKey>>(entities.Count);
+        foreach (var e in entities)
+        {
+            list.Add(new InsertedEntity<TKey>
+            {
+                Id = e.Id,
+                OriginalIndex = survivorOriginalIndices[e.OriginalIndex],
+                Entity = e.Entity,
+            });
+        }
+        return list;
+    }
+
+    private static List<InsertFailure> RemapInsertFailures(
+        IReadOnlyList<InsertFailure> failures, int[] survivorOriginalIndices)
+    {
+        var list = new List<InsertFailure>(failures.Count);
+        foreach (var f in failures)
+        {
+            list.Add(new InsertFailure
+            {
+                EntityIndex = survivorOriginalIndices[f.EntityIndex],
+                ErrorMessage = f.ErrorMessage,
+                Reason = f.Reason,
+                Exception = f.Exception,
+                ValidationErrors = f.ValidationErrors,
+            });
+        }
+        return list;
+    }
+
+    private static List<UpsertedEntity<TKey>> RemapUpsertedEntities(
+        IReadOnlyList<UpsertedEntity<TKey>> entities, int[] survivorOriginalIndices)
+    {
+        var list = new List<UpsertedEntity<TKey>>(entities.Count);
+        foreach (var e in entities)
+        {
+            list.Add(new UpsertedEntity<TKey>
+            {
+                Id = e.Id,
+                OriginalIndex = survivorOriginalIndices[e.OriginalIndex],
+                Entity = e.Entity,
+                Operation = e.Operation,
+            });
+        }
+        return list;
+    }
+
+    private static List<UpsertFailure<TKey>> RemapUpsertFailures(
+        IReadOnlyList<UpsertFailure<TKey>> failures, int[] survivorOriginalIndices)
+    {
+        var list = new List<UpsertFailure<TKey>>(failures.Count);
+        foreach (var f in failures)
+        {
+            list.Add(new UpsertFailure<TKey>
+            {
+                EntityIndex = survivorOriginalIndices[f.EntityIndex],
+                EntityId = f.EntityId,
+                ErrorMessage = f.ErrorMessage,
+                Reason = f.Reason,
+                Exception = f.Exception,
+                AttemptedOperation = f.AttemptedOperation,
+                IsDefaultKey = f.IsDefaultKey,
+                ValidationErrors = f.ValidationErrors,
+            });
+        }
+        return list;
     }
 
     // === Failure builders / mergers ====================================
 
     private List<WinnowFailure<TKey>> BuildWinnowValidationFailures(
-        List<TEntity> partition, IReadOnlyList<WinnowValidationException.EntityFailure> failures)
+        List<TEntity> partition, IReadOnlyList<WinnowEntityFailure> failures)
     {
         if (_resultDetail < ResultDetail.Minimal) return [];
         var keyService = _keyService.Value.Service;
@@ -328,7 +485,7 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     }
 
     private List<InsertFailure> BuildInsertValidationFailures(
-        IReadOnlyList<WinnowValidationException.EntityFailure> failures)
+        IReadOnlyList<WinnowEntityFailure> failures)
     {
         if (_resultDetail < ResultDetail.Minimal) return [];
         var list = new List<InsertFailure>(failures.Count);
@@ -346,22 +503,58 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     }
 
     private List<UpsertFailure<TKey>> BuildUpsertValidationFailures(
-        IReadOnlyList<WinnowValidationException.EntityFailure> failures)
+        List<TEntity> partition, IReadOnlyList<WinnowEntityFailure> failures)
     {
         if (_resultDetail < ResultDetail.Minimal) return [];
+        var keyService = _keyService.Value.Service;
         var list = new List<UpsertFailure<TKey>>(failures.Count);
         foreach (var f in failures)
         {
+            var (attempted, isDefaultKey, entityId) = ClassifyUpsertFailure(partition[f.EntityIndex], keyService);
             list.Add(new UpsertFailure<TKey>
             {
                 EntityIndex = f.EntityIndex,
+                EntityId = entityId,
                 ErrorMessage = f.Message,
                 Reason = FailureReason.ValidationError,
-                AttemptedOperation = UpsertOperationType.Insert,
+                AttemptedOperation = attempted,
+                IsDefaultKey = isDefaultKey,
                 ValidationErrors = f.Errors,
             });
         }
         return list;
+    }
+
+    /// <summary>
+    /// Classifies a validation-failed upsert entity as INSERT vs UPDATE by reading
+    /// its primary-key CLR properties through the cached
+    /// <see cref="EntityKeyService{TEntity, TKey}"/> — no tracker attach, no
+    /// allocations beyond the local tuple. Mirrors what the non-parallel
+    /// <c>OperationPreValidationHelper.RecordUpsertFailure</c> does so the
+    /// parallel <see cref="ValidationFailureBehavior.Throw"/> recovery path
+    /// produces equivalent <see cref="UpsertFailure{TKey}"/> shapes.
+    /// </summary>
+    private static (UpsertOperationType Attempted, bool IsDefaultKey, TKey EntityId) ClassifyUpsertFailure(
+        TEntity? entity, EntityKeyService<TEntity, TKey> keyService)
+    {
+        if (entity is null)
+        {
+            return (UpsertOperationType.Insert, IsDefaultKey: true, default!);
+        }
+        bool isDefault;
+        try
+        {
+            isDefault = keyService.HasDefaultKeyValueFromInstance(entity);
+        }
+        catch
+        {
+            // Shadow-PK or model-misconfiguration thrown from the instance read:
+            // collapse to the single safe assumption — treat as INSERT with
+            // default key — mirroring SafeReadKey's defensiveness.
+            return (UpsertOperationType.Insert, IsDefaultKey: true, default!);
+        }
+        var entityId = isDefault ? default! : SafeReadKey(entity, keyService);
+        return (isDefault ? UpsertOperationType.Insert : UpsertOperationType.Update, isDefault, entityId);
     }
 
     private WinnowResult<TKey> MergeWinnowWithValidationFailures(
@@ -369,6 +562,11 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     {
         if (survivor is null)
         {
+            // Duration / DatabaseRoundTrips / TotalRetries / WasCancelled are
+            // overwritten by ResultMerger.MergeWinnowResults at the orchestrator
+            // level, so leaving them at default here is intentional — the
+            // top-level merge sources them from the orchestrator stopwatch and
+            // the PartitionResult tuple.
             return new WinnowResult<TKey>
             {
                 ResultDetail = _resultDetail,
@@ -399,6 +597,9 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     {
         if (survivor is null)
         {
+            // See note on MergeWinnowWithValidationFailures: the partition-level
+            // timing/round-trip/retry fields are overwritten by ResultMerger at
+            // the top level, so the defaults here are deliberate.
             return new InsertResult<TKey>
             {
                 ResultDetail = _resultDetail,
@@ -430,6 +631,9 @@ internal class ParallelExecutionOrchestrator<TEntity, TKey> : IDisposable
     {
         if (survivor is null)
         {
+            // See note on MergeWinnowWithValidationFailures: the partition-level
+            // timing/round-trip/retry fields are overwritten by ResultMerger at
+            // the top level, so the defaults here are deliberate.
             return new UpsertResult<TKey>
             {
                 ResultDetail = _resultDetail,

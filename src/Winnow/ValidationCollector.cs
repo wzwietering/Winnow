@@ -55,11 +55,21 @@ public ref struct ValidationCollector
     /// this factory.
     /// </summary>
     /// <remarks>
-    /// Wrap the result in <c>using var c = ValidationCollector.Create();</c> —
-    /// required if more than <see cref="InlineCapacity"/> errors may be pushed,
-    /// because the rented <see cref="ArrayPool{T}"/> buffer otherwise leaks. The
-    /// collector implements ref-struct disposal so the <c>using</c> form is the
-    /// supported pattern.
+    /// <para>
+    /// <b>Always wrap the result in a <c>using</c> declaration:</b>
+    /// </para>
+    /// <code language="csharp">
+    /// using var collector = ValidationCollector.Create();
+    /// validator(entity, ref collector);
+    /// </code>
+    /// <para>
+    /// The <c>using</c> form is the only safety net the compiler provides for
+    /// ref-struct disposal — if you write <c>var collector = ValidationCollector.Create();</c>
+    /// the rented <see cref="ArrayPool{T}"/> buffer leaks whenever the collector
+    /// grows past <see cref="InlineCapacity"/> errors. There is no analyzer
+    /// warning today for that mistake, so reviewers should treat a bare
+    /// <c>ValidationCollector.Create()</c> without <c>using</c> as a bug.
+    /// </para>
     /// </remarks>
     public static ValidationCollector Create() =>
         new(new ValidationError[InlineCapacity]);

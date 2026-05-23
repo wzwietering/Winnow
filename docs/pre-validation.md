@@ -94,29 +94,29 @@ var options = new InsertOptions();
 options.WithValidation(Wrap(new ProductValidator()));
 ```
 
-## Failure Behaviour
+## Failure Behavior
 
 `ValidationOptions.FailureBehavior` controls what happens when at least one
 entity is rejected:
 
-| Value | Behaviour |
+| Value | Behavior |
 |---|---|
 | `RecordAsFailure` (default) | Each invalid entity becomes a failure with `FailureReason.ValidationError`. Valid entities still hit the database. Matches the "winnow out the failures" model the rest of the library follows. |
-| `ThrowAfterBatch` | A `WinnowValidationException` is thrown after the entire batch is scanned. The exception carries every failure reported. No database round trips occur. Use this when validation failures indicate a bug rather than a data-quality issue you want to capture per-entity. The name disambiguates from a hypothetical fail-on-first mode, which would short-circuit the scan. |
+| `Throw` | A `WinnowValidationException` is thrown after the entire batch is scanned. The exception carries every failure reported. No database round trips occur. Use this when validation failures indicate a bug rather than a data-quality issue you want to capture per-entity. The scan is not short-circuited on the first failure — every offending entity is included so callers can react to them all. |
 
-Pass the behaviour inline so the whole thing is configured in one call:
+Pass the behavior inline so the whole thing is configured in one call:
 
 ```csharp
-options.WithValidation<Product>(validator, ValidationFailureBehavior.ThrowAfterBatch);
+options.WithValidation<Product>(validator, ValidationFailureBehavior.Throw);
 // or:
-options.WithDataAnnotations<Product>(ValidationFailureBehavior.ThrowAfterBatch);
+options.WithDataAnnotations<Product>(ValidationFailureBehavior.Throw);
 ```
 
-The two-step form remains valid for code that needs to flip the behaviour after construction:
+The two-step form remains valid for code that needs to flip the behavior after construction:
 
 ```csharp
 options.WithValidation<Product>(validator);
-options.Validation!.FailureBehavior = ValidationFailureBehavior.ThrowAfterBatch;
+options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
 ```
 
 ## Cancellation

@@ -137,7 +137,7 @@ public class ValidationReleaseReadinessTests
                     {
                         if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
                     },
-                    ValidationFailureBehavior.ThrowAfterBatch);
+                    ValidationFailureBehavior.Throw);
 
             var result = await saver.InsertAsync(products, options);
 
@@ -152,6 +152,149 @@ public class ValidationReleaseReadinessTests
                 failure.ValidationErrors.ShouldNotBeNull();
                 failure.ValidationErrors!.ShouldContain(e => e.Code == "RANGE");
             }
+        }
+
+        // Regression for the parallel ThrowAfterBatch recovery path: when a
+        // partition's WinnowValidationException fires, the orchestrator re-runs
+        // the survivors through the strategy, which assigns them fresh
+        // 0..N-1 indices in the survivor list. Without the orchestrator-side
+        // remap to partition-relative positions, InsertedEntity.OriginalIndex
+        // pointed at the wrong source entity once ResultMerger added the
+        // partition offset. The Product.Name carries its source index so we
+        // can confirm each surviving InsertedEntity is paired with the entity
+        // it actually came from.
+        [Fact]
+        public async Task InsertAsync_ThrowBehavior_InsertedEntities_RetainCorrectOriginalIndex()
+        {
+            EnsureDatabaseCreated();
+
+            var products = Enumerable.Range(0, 8).Select(i => new Product
+            {
+                Name = $"p{i}",
+                Price = i % 3 == 0 ? -1m : 1m, // invalid at 0, 3, 6
+                Stock = 1,
+                LastModified = DateTimeOffset.UtcNow,
+            }).ToList();
+
+            var saver = CreateSaver(maxDegreeOfParallelism: 2);
+            var options = new InsertOptions()
+                .WithValidation<Product>(
+                    (Product p, ref ValidationCollector c) =>
+                    {
+                        if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
+                    },
+                    ValidationFailureBehavior.Throw);
+
+            var result = await saver.InsertAsync(products, options);
+
+            var expectedSurvivorIndices = Enumerable.Range(0, 8).Where(i => i % 3 != 0).ToList();
+            result.InsertedEntities.Select(e => e.OriginalIndex).OrderBy(x => x)
+                .ShouldBe(expectedSurvivorIndices);
+
+            foreach (var inserted in result.InsertedEntities)
+            {
+                var product = (Product)inserted.Entity;
+                product.Name.ShouldBe($"p{inserted.OriginalIndex}");
+                products[inserted.OriginalIndex].ShouldBeSameAs(product);
+            }
+        }
+
+        // Same regression for the upsert recovery path. Upsert results carry
+        // EntityIndex on UpsertFailure, OriginalIndex on UpsertedEntity, and
+        // AttemptedOperation / IsDefaultKey on each upsert failure — all three
+        // were corrupted before the fix (Index pointed at wrong entity;
+        // AttemptedOperation was always Insert; IsDefaultKey was always false).
+        [Fact]
+        public async Task UpsertAsync_ThrowBehavior_AttributesUpsertResultsToCorrectEntity()
+        {
+            EnsureDatabaseCreated();
+
+            var products = Enumerable.Range(0, 8).Select(i => new Product
+            {
+                Name = $"p{i}",
+                Price = i % 3 == 0 ? -1m : 1m, // invalid at 0, 3, 6
+                Stock = 1,
+                LastModified = DateTimeOffset.UtcNow,
+            }).ToList();
+
+            var saver = CreateSaver(maxDegreeOfParallelism: 2);
+            var options = new UpsertOptions()
+                .WithValidation<Product>(
+                    (Product p, ref ValidationCollector c) =>
+                    {
+                        if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
+                    },
+                    ValidationFailureBehavior.Throw);
+
+            var result = await saver.UpsertAsync(products, options);
+
+            var expectedInvalid = new[] { 0, 3, 6 };
+            var expectedValid = new[] { 1, 2, 4, 5, 7 };
+
+            result.Failures.Select(f => f.EntityIndex).OrderBy(x => x).ShouldBe(expectedInvalid);
+            result.InsertedEntities.Select(e => e.OriginalIndex).OrderBy(x => x).ShouldBe(expectedValid);
+
+            // Validation-failed upserts all had default keys (Id = 0), so they
+            // were attempted as INSERTs — IsDefaultKey must be true.
+            foreach (var failure in result.Failures)
+            {
+                failure.Reason.ShouldBe(FailureReason.ValidationError);
+                failure.AttemptedOperation.ShouldBe(UpsertOperationType.Insert);
+                failure.IsDefaultKey.ShouldBeTrue();
+            }
+
+            foreach (var inserted in result.InsertedEntities)
+            {
+                var product = (Product)inserted.Entity;
+                product.Name.ShouldBe($"p{inserted.OriginalIndex}");
+            }
+        }
+
+        // Asymmetric variant: pre-seed some entities so the upsert mixes
+        // INSERT (default key) and UPDATE (real key) candidates. After
+        // validation rejects one of the existing-key entities, the failure
+        // must report AttemptedOperation = Update, not Insert.
+        [Fact]
+        public async Task UpsertAsync_ThrowBehavior_ExistingKeyFailure_ReportsUpdateAttempt()
+        {
+            EnsureDatabaseCreated();
+            SeedWithFactory(c =>
+            {
+                c.Products.Add(new Product
+                {
+                    Id = 9_999, Name = "existing", Price = 5m, Stock = 1,
+                    LastModified = DateTimeOffset.UtcNow,
+                });
+                c.SaveChanges();
+            });
+
+            var products = new List<Product>
+            {
+                new() { Name = "new-ok-0", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+                new() { Id = 9_999, Name = "existing-bad", Price = -1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+                new() { Name = "new-ok-2", Price = 1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+                new() { Name = "new-bad-3", Price = -1m, Stock = 1, LastModified = DateTimeOffset.UtcNow },
+            };
+
+            var saver = CreateSaver(maxDegreeOfParallelism: 2);
+            var options = new UpsertOptions()
+                .WithValidation<Product>(
+                    (Product p, ref ValidationCollector c) =>
+                    {
+                        if (p.Price <= 0) c.Add(nameof(Product.Price), "Must be positive", "RANGE");
+                    },
+                    ValidationFailureBehavior.Throw);
+
+            var result = await saver.UpsertAsync(products, options);
+
+            var failureByIndex = result.Failures.ToDictionary(f => f.EntityIndex);
+            failureByIndex.ShouldContainKey(1);
+            failureByIndex[1].AttemptedOperation.ShouldBe(UpsertOperationType.Update);
+            failureByIndex[1].IsDefaultKey.ShouldBeFalse();
+
+            failureByIndex.ShouldContainKey(3);
+            failureByIndex[3].AttemptedOperation.ShouldBe(UpsertOperationType.Insert);
+            failureByIndex[3].IsDefaultKey.ShouldBeTrue();
         }
     }
 
@@ -237,7 +380,7 @@ public class ValidationReleaseReadinessTests
 
             var options = new InsertGraphOptions();
             options.WithValidation(RejectOrderNumber("BAD"));
-            options.Validation!.FailureBehavior = ValidationFailureBehavior.ThrowAfterBatch;
+            options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
 
             var saver = new Winnower<CustomerOrder, int>(context);
             var ex = Should.Throw<WinnowValidationException>(() => saver.InsertGraph(orders, options));
@@ -260,7 +403,7 @@ public class ValidationReleaseReadinessTests
 
             var options = new InsertOptions();
             options.WithValidation(AlwaysFail());
-            options.Validation!.FailureBehavior = ValidationFailureBehavior.ThrowAfterBatch;
+            options.Validation!.FailureBehavior = ValidationFailureBehavior.Throw;
 
             var saver = new Winnower<Product, int>(context);
             await Should.ThrowAsync<WinnowValidationException>(

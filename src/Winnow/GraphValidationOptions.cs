@@ -22,8 +22,11 @@ public sealed class GraphValidationOptions : ValidationOptions
     /// recursion-depth budget commonly used by EF Core graph traversals — deep
     /// enough for any realistic entity tree, shallow enough to surface a
     /// configuration error rather than a process-terminating <c>StackOverflowException</c>.
+    /// Exposed as <c>static readonly</c> rather than <c>const</c> so a future
+    /// tuning is observed by already-compiled consumer assemblies (matching
+    /// <see cref="ValidationOptions.DefaultCancellationCheckInterval"/>).
     /// </summary>
-    public const int DefaultMaxNavigationDepth = 32;
+    public static readonly int DefaultMaxNavigationDepth = 32;
 
     private bool _includeNavigations;
     private int _maxNavigationDepth = DefaultMaxNavigationDepth;
@@ -86,9 +89,12 @@ public sealed class GraphValidationOptions : ValidationOptions
     }
 
     /// <summary>
-    /// Typed factory for adapter authors and tests. Production callers should
-    /// prefer the <c>WithValidation</c> / <c>WithDataAnnotations</c> extension
-    /// methods on a <see cref="GraphOptionsBase"/> subtype.
+    /// Typed factory for in-assembly callers (extension methods, tests).
+    /// External code should always go through the <c>WithValidation</c> /
+    /// <c>WithDataAnnotations</c> extension methods on a
+    /// <see cref="GraphOptionsBase"/> subtype — the <c>Validation</c> setter is
+    /// itself <c>internal</c>, so a directly-constructed instance can never be
+    /// attached to options through the public surface.
     /// </summary>
     /// <typeparam name="TEntity">
     /// Entity type the validator applies to. The pipeline rejects mismatches at
@@ -102,7 +108,7 @@ public sealed class GraphValidationOptions : ValidationOptions
     /// <see cref="IncludeNavigations"/>. Defaults to <c>false</c> for callers
     /// who want a typed delegate.
     /// </param>
-    public static GraphValidationOptions Create<TEntity>(
+    internal static GraphValidationOptions Create<TEntity>(
         ValidatorDelegate<TEntity> validator,
         bool isDataAnnotations = false)
         where TEntity : class

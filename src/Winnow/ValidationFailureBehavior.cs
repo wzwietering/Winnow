@@ -17,10 +17,11 @@ public enum ValidationFailureBehavior
     /// After validating every entity in the batch, throw a
     /// <see cref="WinnowValidationException"/> aggregating all failures. Valid
     /// entities in the same batch are not sent to the database — the throw
-    /// pre-empts the entire round trip. Use when "any failure aborts the batch"
-    /// is the right contract; if you want partial progress, use
-    /// <see cref="RecordAsFailure"/> instead. The name disambiguates from a
-    /// hypothetical fail-on-first mode, which would short-circuit the scan.
+    /// pre-empts the entire round trip. The scan is not short-circuited on the
+    /// first failure: the exception carries every offending entity so callers
+    /// can react to them all without re-running the validator. Use when "any
+    /// failure aborts the batch" is the right contract; if you want partial
+    /// progress, use <see cref="RecordAsFailure"/> instead.
     /// </summary>
-    ThrowAfterBatch = 1,
+    Throw = 1,
 }
